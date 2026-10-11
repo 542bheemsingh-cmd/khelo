@@ -19,6 +19,22 @@ static files, so the whole thing hosts on GitHub Pages.
 
 The dashboard at the root lists them all and links into each game.
 
+## Playing on a phone
+
+Every game is built for touch as well as a keyboard:
+
+- **Full-screen button** in the top bar of each game — one tap fills the screen
+  (and asks for landscape on the wide games where the browser allows it).
+- **The canvas always keeps its exact shape.** It is fitted to whatever space is
+  left and letterboxed rather than stretched or cropped, so taps land where you
+  meant them to.
+- **On-screen keyboard** for the two puzzle levels that need typing (Riddle and
+  Number Sequence) — no physical keyboard required.
+- **Rotate hint** on the landscape games (Climb, Puzzles) when you're holding the
+  phone upright; Fly is portrait and needs no turning.
+- **Tap-friendly controls** — gas/brake pedals in Climb, tap-to-flap in Fly, and a
+  canvas-tap Menu button so you are never stuck without an `Esc` key.
+
 ## Khelo Puzzles levels
 
 Ten levels, a **different kind of puzzle each time**, unlocked one at a time and
