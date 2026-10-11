@@ -813,6 +813,10 @@ def tap(x, y):
                 return
     elif screen in ("over", "won"):
         back_to_menu()
+    elif screen == "playing":
+        # the on-canvas Menu button (there is no Esc key on a phone)
+        if W / 2 - 78 <= x <= W / 2 - 78 + 156 and H - 58 <= y <= H - 58 + 42:
+            back_to_menu()
 
 
 # ---------------------------------------------------------------------------
@@ -1515,8 +1519,8 @@ def _draw_hud():
 
     _draw_speedo()
 
-    # menu button
-    _button(W - 186, H - 62, 168, 44, "Menu  (Esc)", False, False, "#ffb703")
+    # menu button - kept clear of the pedals, which sit in the bottom corners
+    _button(W / 2 - 78, H - 58, 156, 42, "Menu", False, False, "#ffb703")
 
 
 def _draw_ready():
