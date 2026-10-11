@@ -32,9 +32,11 @@ The dashboard at the root lists them all and links into each game.
   Flatten out before you land, or over-rotate and flip.
 - 🪨 **Obstacles that change as you progress** — every location has its own set
   of 2–5 obstacle types (rocks, fallen logs, cacti, launch ramps, boulders, ice
-  blocks, oil barrels, traffic cones, tyre stacks and craters). New types are
-  introduced as you unlock new locations, and each new one gets a short demo
-  before the level starts.
+  blocks, oil barrels, traffic cones, tyre stacks and spike strips). New types
+  are introduced as you unlock new locations, and each new one gets a short
+  demo before the level starts.
+- ⚠️ **Spike strips end runs** — the lethal obstacle: crawl over them slowly,
+  or launch off a ramp and clear them. Hit one at speed and it's game over.
 - 🛞 **Different surfaces** — each location has its own grip, so Frozen Peaks is
   slippery while Sunset Hills bites.
 - 📊 **In-game HUD** — location, distance to target with a progress bar, coins,
