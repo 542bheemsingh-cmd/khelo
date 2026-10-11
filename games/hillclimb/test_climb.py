@@ -1,5 +1,5 @@
 """
-Headless harness for the hill-climb game.py (stubs out the browser `js`).
+Headless harness for the upgraded hill-climb game (stubs out the browser `js`).
 """
 import sys, os, types, math
 
@@ -45,68 +45,145 @@ def check(label, cond):
 FRAME = 1.0 / 60.0
 
 # --- boot ---
-check("starts in ready state", game.state == "ready")
-check("canvas scaled by DPR", CANVAS.width == 1800 and CANVAS.height == 1120)
-check("car sits on the terrain at start",
-      abs(game.rear["y"] - (game.terrain(game.rear["x"]) - game.WHEEL_R)) < 1.0)
-check("draw() runs in ready state", (lambda: (CALLS.clear(), game.draw(), len(CALLS) > 30)[-1])())
+check("boots into the menu", game.screen == "menu")
+check("has 5 locations", len(game.LEVELS) == 5)
+check("has 4 vehicles", len(game.VEHICLES) == 4)
+check("only the first location starts unlocked", game.unlocked == [0])
+check("only the first vehicle starts owned", game.owned == [0])
+CALLS.clear(); game.draw()
+check("menu draws (buttons hit-tested)", len(CALLS) > 30 and len(game._menu_hit) >= 6)
 
-# --- no throttle: the car must not drive itself forward ---
-game.reset_game(); game.state = "playing"
+# --- level / vehicle selection rules ---
+game.select_level(2)
+check("cannot select a locked location", game.level_index == 0)
+game.select_level(0)
+check("can select the unlocked location", game.level_index == 0)
+
+game.wallet = 0
+game.select_vehicle(2)
+check("cannot buy a vehicle without coins", 2 not in game.owned)
+game.wallet = 1000
+game.select_vehicle(2)
+check("buying a vehicle deducts its price",
+      game.wallet == 1000 - game.VEHICLES[2]["price"] and 2 in game.owned and game.vehicle_index == 2)
+
+# --- start + drive ---
+game.start_game()
+check("start enters playing", game.screen == "playing" and game.playing())
+check("track items were built",
+      len(game.coins) > 0 and len(game.fuels) > 0 and len(game.rocks) > 0)
 x0 = game._car_x()
-for _ in range(120): game.update(FRAME)
-check("does not drive forward with no throttle", game._car_x() - x0 < 15.0)
-
-# --- throttle: car drives forward and climbs ---
-game.reset_game()
 game.gas(True)
-check("gas starts the game", game.state == "playing")
-x_start = game._car_x()
-min_y = 1e9
-frames = 0
-for _ in range(1800):                      # up to 30 s
-    if game.state != "playing": break
+for _ in range(600):
     game.update(FRAME)
-    frames += 1
-    min_y = min(min_y, game._car_y())
-    # wheels must not sink through the ground
-    for w in (game.rear, game.front):
-        assert w["y"] <= game.terrain(w["x"]) - game.WHEEL_R + 1.5, "wheel sank through ground"
+    if game.screen != "playing": break
+check("car drives forward under gas", game._car_x() - x0 > 300)
+check("fuel drained while driving", game.fuel < game.FUEL_MAX)
 
-check("car drives forward under gas", game._car_x() - x_start > 300)
-check("distance meter climbed", game._meters() > 0)
-check("car climbed a hill (its y rose well above start)",
-      (game.terrain(x_start) - min_y) > 40)
-check("fuel drained", game.fuel < game.FUEL_MAX)
-check("run ended (out of fuel or crash)", game.state == "over")
-print("   ended after %.1fs, reason=%s, distance=%dm" % (frames / 60.0, game.over_reason, game._meters()))
-check("over_reason is set", game.over_reason in ("fuel", "crash"))
+# --- coins ---
+game.start_game()
+game.wallet = 0; game.run_coins = 0
+c = game.coins[0]
+c["x"] = game._car_x(); c["y"] = game._car_y(); c["got"] = False
+game._collect()
+check("driving over a coin adds it to the wallet",
+      c["got"] and game.run_coins == 1 and game.wallet == game.COIN_VALUE)
+game._collect()
+check("a coin is only collected once", game.wallet == game.COIN_VALUE)
 
-# --- best score recorded ---
-check("best score recorded", game.best >= 1 and STORE.get("khelo_climb_best") is not None)
+# --- fuel refill ---
+game.start_game()
+game.fuel = 20.0
+f = game.fuels[0]
+f["x"] = game._car_x(); f["y"] = game._car_y(); f["got"] = False
+game._collect()
+check("fuel can refills the tank", game.fuel == game.FUEL_MAX and f["got"])
 
-# --- crash detection: flip the car so the driver's head hits the ground ---
-game.reset_game(); game.state = "playing"
-game.rear["x"] = 300.0
-game.rear["y"] = game.terrain(300.0) - game.WHEEL_R
-game.front["x"] = 300.0 - game.WHEELBASE
-game.front["y"] = game.rear["y"]
-for w in (game.rear, game.front):
-    w["vx"] = 0.0; w["vy"] = 0.0
-hx, hy = game._head_point()
-check("flipped car puts the head below ground", hy > game.terrain(hx))
-game.update(FRAME)
-check("head-on-ground crash ends the run", game.state == "over")
-check("crash reason recorded", game.over_reason == "crash")
-
-# --- restart ---
+# --- obstacles ---
+game.start_game()
+game.rocks = [{"x": game._car_x() + 150.0, "w": 40.0, "h": 18.0}]
+rock = game.rocks[0]
 game.gas(True)
-check("gas after game over restarts", game.state == "playing")
-check("restart refills fuel", game.fuel == game.FUEL_MAX)
+for _ in range(420):
+    game.update(FRAME)
+    if game.screen != "playing": break
+check("the car rides over a small rock bump without getting stuck",
+      game.screen == "playing" and game._car_x() > rock["x"] + 80.0)
 
-# --- slope sanity ---
-check("slope() matches a numeric derivative of terrain()",
-      abs(game.slope(500.0) - (game.terrain(500.5) - game.terrain(499.5))) < 0.02)
+game.start_game()
+game.rocks = [{"x": game._car_x() + 150.0, "w": 70.0, "h": 34.0}]
+rock = game.rocks[0]
+game.gas(True)
+for _ in range(420):
+    game.update(FRAME)
+    if game.screen != "playing": break
+check("a boulder is passable too, not a wall",
+      game.screen == "playing" and game._car_x() > rock["x"] + 80.0)
+
+# --- reaching the target wins + unlocks the next location ---
+game.start_game()
+game.wallet = 0
+lv = game.LEVELS[game.level_index]
+game.rear["x"] = game.START_X + lv["target"] * game.PIXELS_PER_METER + 10
+game.front["x"] = game.rear["x"] + game.VEHICLES[game.vehicle_index]["wheelbase"]
+game.update(FRAME)
+check("reaching the target wins the level", game.screen == "won")
+check("winning pays a bonus", game.wallet >= 50)
+check("winning unlocks the next location", 1 in game.unlocked)
+
+# --- crash ---
+game.start_game()
+game.rear["x"] = 300.0
+game.rear["y"] = game.terrain(300.0) - game.VEHICLES[game.vehicle_index]["wheel_r"]
+game.front["x"] = 300.0 - game.VEHICLES[game.vehicle_index]["wheelbase"]
+game.front["y"] = game.rear["y"]
+for w in (game.rear, game.front): w["vx"] = 0.0; w["vy"] = 0.0
+game.update(FRAME)
+check("flipping ends the run as a crash", game.screen == "over" and game.over_reason == "crash")
+
+# --- out of fuel ---
+game.start_game()
+game.fuel = 0.001
+game.gas(True)
+game.update(FRAME)
+check("running out of fuel ends the run", game.screen == "over" and game.over_reason == "fuel")
+
+# --- every location generates a playable track ---
+ok_tracks = True
+for i in range(len(game.LEVELS)):
+    game.unlocked = list(range(len(game.LEVELS)))
+    game.level_index = i
+    game.start_game()
+    if not (len(game.coins) and len(game.fuels) and len(game.rocks)):
+        ok_tracks = False
+    for _ in range(120):
+        game.gas(True)
+        game.update(FRAME)
+        if game.screen != "playing": break
+check("all 5 locations build tracks and run", ok_tracks)
+
+# --- persistence round trip ---
+game.wallet = 777; game.owned = [0, 1]; game.unlocked = [0, 1, 2]
+game.best = {0: 123}; game.level_index = 1; game.vehicle_index = 1
+game._save()
+game.wallet = 0; game.owned = [0]; game.unlocked = [0]; game.best = {}
+game._load()
+check("save/load round-trips the wallet, garage and progress",
+      game.wallet == 777 and game.owned == [0, 1] and game.unlocked == [0, 1, 2]
+      and game.best.get(0) == 123 and game.level_index == 1)
+
+# --- menu tap hit-testing ---
+game.screen = "menu"
+game.wallet = 0; game.owned = [0]; game.unlocked = [0]; game.level_index = 0
+game.draw()                       # populates _menu_hit
+start_btn = [h for h in game._menu_hit if h[0] == "start"][0]
+game.tap(start_btn[2] + 5, start_btn[3] + 5)
+check("tapping START begins the game", game.screen == "playing")
+game.back_to_menu()
+game.draw()
+lvl_btn = [h for h in game._menu_hit if h[0] == "level"][0]
+game.tap(lvl_btn[2] + 5, lvl_btn[3] + 5)
+check("tapping a location selects it", game.level_index == lvl_btn[1])
 
 print()
 if fails:
