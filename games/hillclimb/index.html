@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Khelo Climb - a 2D hill-climb driving game written in Python and played in the browser.">
+  <meta name="description" content="Khelo Climb - a 2D hill-climb driving game written in Python: levels, vehicles, coins, fuel and obstacles.">
   <title>Khelo Climb - Python 2D Game</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -17,7 +17,7 @@
       <span id="mute-icon" aria-hidden="true">&#128266;</span>
     </button>
 
-    <div class="pedals">
+    <div class="pedals is-hidden" id="pedals">
       <button class="pedal brake" id="pedal-brake" type="button" aria-label="Brake"><span>BRAKE</span></button>
       <button class="pedal gas" id="pedal-gas" type="button" aria-label="Gas"><span>GAS</span></button>
     </div>
@@ -43,8 +43,14 @@
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
         if (actx.state === "suspended") actx.resume();
         var cfg = {
-          start: { type: "square",   f0: 180, f1: 420, dur: 0.30, vol: 0.06 },
-          crash: { type: "sawtooth", f0: 260, f1: 60,  dur: 0.40, vol: 0.10 }
+          start:  { type: "square",   f0: 180, f1: 420, dur: 0.30, vol: 0.06 },
+          crash:  { type: "sawtooth", f0: 260, f1: 60,  dur: 0.40, vol: 0.10 },
+          coin:   { type: "triangle", f0: 1100, f1: 1760, dur: 0.12, vol: 0.08 },
+          refuel: { type: "sine",     f0: 420, f1: 880, dur: 0.22, vol: 0.08 },
+          win:    { type: "triangle", f0: 660, f1: 1320, dur: 0.35, vol: 0.09 },
+          click:  { type: "square",   f0: 640, f1: 640, dur: 0.05, vol: 0.05 },
+          buy:    { type: "triangle", f0: 520, f1: 1040, dur: 0.25, vol: 0.09 },
+          deny:   { type: "sawtooth", f0: 220, f1: 140, dur: 0.18, vol: 0.07 }
         }[name] || { type: "sine", f0: 300, f1: 300, dur: 0.1, vol: 0.05 };
         var t = actx.currentTime;
         var osc = actx.createOscillator();
@@ -59,7 +65,10 @@
       } catch (err) { /* audio is optional */ }
     };
 
-    var gasFn = null, brakeFn = null, ready = false;
+    var gasFn = null, brakeFn = null, tapFn = null, enterFn = null, menuFn = null, playingFn = null;
+    var ready = false;
+    var canvas = document.getElementById("game");
+    var pedals = document.getElementById("pedals");
 
     async function boot() {
       var msg = document.getElementById("loader-msg");
@@ -77,6 +86,10 @@
       var draw = pyodide.globals.get("draw");
       gasFn = pyodide.globals.get("gas");
       brakeFn = pyodide.globals.get("brake");
+      tapFn = pyodide.globals.get("tap");
+      enterFn = pyodide.globals.get("enter_key");
+      menuFn = pyodide.globals.get("back_to_menu");
+      playingFn = pyodide.globals.get("playing");
 
       bar.style.width = "100%";
       ready = true;
@@ -88,6 +101,8 @@
         last = now;
         update(dt);
         draw();
+        // pedals only make sense while actually driving
+        pedals.classList.toggle("is-hidden", !playingFn());
         requestAnimationFrame(frame);
       }
       requestAnimationFrame(frame);
@@ -96,23 +111,35 @@
     function setGas(on) { if (ready && gasFn) gasFn(on); }
     function setBrake(on) { if (ready && brakeFn) brakeFn(on); }
 
-    // keyboard
+    // ---- keyboard ----
     window.addEventListener("keydown", function (e) {
       if (e.code === "ArrowRight" || e.code === "KeyD") { setGas(true); e.preventDefault(); }
       if (e.code === "ArrowLeft" || e.code === "KeyA") { setBrake(true); e.preventDefault(); }
+      if (e.code === "Enter" || e.code === "Space") { if (ready && enterFn) enterFn(); e.preventDefault(); }
+      if (e.code === "Escape") { if (ready && menuFn) menuFn(); }
     });
     window.addEventListener("keyup", function (e) {
       if (e.code === "ArrowRight" || e.code === "KeyD") setGas(false);
       if (e.code === "ArrowLeft" || e.code === "KeyA") setBrake(false);
     });
 
-    // touch / click pedals
+    // ---- canvas taps (menu buttons) ----
+    function canvasPoint(e) {
+      var r = canvas.getBoundingClientRect();
+      return [ (e.clientX - r.left) / r.width * 900,
+               (e.clientY - r.top) / r.height * 560 ];
+    }
+    canvas.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      if (!ready || !tapFn) return;
+      var p = canvasPoint(e);
+      tapFn(p[0], p[1]);
+    });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+    // ---- pedals ----
     function bindPedal(el, fn) {
-      el.addEventListener("pointerdown", function (e) {
-        e.preventDefault();
-        el.classList.add("is-down");
-        fn(true);
-      });
+      el.addEventListener("pointerdown", function (e) { e.preventDefault(); el.classList.add("is-down"); fn(true); });
       var release = function () { el.classList.remove("is-down"); fn(false); };
       el.addEventListener("pointerup", release);
       el.addEventListener("pointercancel", release);
