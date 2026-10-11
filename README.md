@@ -15,8 +15,27 @@ static files, so the whole thing hosts on GitHub Pages.
 |---|---|---|
 | 🐦 **[Khelo Fly](https://542bheemsingh-cmd.github.io/khelo/games/fly/)** | Flappy-Bird-style flyer — tap to flap, dodge the pipes, best score saved | `Space` / `↑` / `W` / tap / click |
 | 🚙 **[Khelo Climb](https://542bheemsingh-cmd.github.io/khelo/games/hillclimb/)** | Hill-climb driving — 5 locations, 4 vehicles, coins, fuel and obstacles | `→` / `D` = gas, `←` / `A` = brake, or on-screen pedals |
+| 🧩 **[Khelo Puzzles](https://542bheemsingh-cmd.github.io/khelo/games/puzzle/)** | 10 logic puzzles of increasing difficulty, one new kind per level, each with a hint | click / tap, type for the word puzzles |
 
 The dashboard at the root lists them all and links into each game.
+
+## Khelo Puzzles levels
+
+Ten levels, a **different kind of puzzle each time**, unlocked one at a time and
+saved in your browser. Every level carries a one-line hint.
+
+| # | Puzzle | What you do |
+|---|---|---|
+| 1 | Lights Out (3×3) | Press tiles to switch every light off |
+| 2 | Memory Match | Find the matching pairs |
+| 3 | Number Sequence | Work out the next term |
+| 4 | Riddle | Answer a classic riddle |
+| 5 | Sliding Puzzle | Order the 8 tiles |
+| 6 | Tower of Hanoi | Move the stack, big never on small |
+| 7 | Code Breaker | Crack a 3-digit code from Mastermind-style clues |
+| 8 | Mini Sudoku (4×4) | Fill every row, column and box with 1-4 |
+| 9 | Nonogram (5×5) | Reveal the hidden picture from the clues |
+| 10 | N-Queens (6×6) | Place 6 queens with no two attacking |
 
 ## Khelo Climb features
 
