@@ -141,6 +141,7 @@ body {
 .thumb svg { width: 78px; height: 78px; display: block; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45)); }
 .thumb-fly { background: linear-gradient(135deg, #123a9e, #2f7ff0 55%, #9ad7ff); }
 .thumb-climb { background: linear-gradient(135deg, #7a3b12, #d97b23 50%, #ffd28a); }
+.thumb-puzzle { background: linear-gradient(135deg, #0c5f4a, #17a880 50%, #a9f5dc); }
 
 .card-body { padding: 20px 20px 22px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
 
