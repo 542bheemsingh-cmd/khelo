@@ -43,7 +43,7 @@ ctx.scale(DPR, DPR)
 # Physics constants
 # ---------------------------------------------------------------------------
 GRAVITY_DEFAULT = 2000.0
-MAX_REVERSE = 210.0
+MAX_REVERSE = 150.0
 ANG_DAMP = 30.0
 ROLL_DRAG = 0.5
 SUSP_K = 900.0          # suspension stiffness (softer -> smoother landings)
@@ -53,13 +53,13 @@ AIR_TORQUE = 55.0       # gas/brake pitch the car while airborne
 WHEELIE_TORQUE = 12.0   # gas lifts the nose on the ground
 CAM_UP_MAX = 220.0      # how far the camera may pan up on a big jump
 GROUND_FRICTION = 1.1   # light rolling grip, scaled by each level's surface
-SPIKE_SPEED = 255.0     # hitting a spike strip above this speed ends the run
+SPIKE_SPEED = 185.0     # hitting a spike strip above this speed ends the run
 FIXED = 1.0 / 120.0
 START_X = 130.0
 PIXELS_PER_METER = 50.0
 HEAD_OFF = 34.0
 FUEL_MAX = 100.0
-FUEL_RATE = 6.8
+FUEL_RATE = 6.2
 COIN_VALUE = 5
 
 # ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ LEVELS = [
         "target": 480,
         "base": 400.0,
         "gravity": 2000.0,
-        "terrain": [(126.0, 0.0030, 1.0), (63.0, 0.0064, 0.3), (23.0, 0.0145, 2.5)],
+        "terrain": [(108.0, 0.0030, 1.0), (54.0, 0.0064, 0.3), (19.0, 0.0145, 2.5)],
         "obstacle_rate": 330.0,
         "obstacles": ["rock", "cactus", "ice", "ramp", "spike"],
         "friction": 0.55,
@@ -122,7 +122,7 @@ LEVELS = [
         "target": 600,
         "base": 380.0,
         "gravity": 2100.0,
-        "terrain": [(146.0, 0.0034, 2.0), (78.0, 0.0072, 1.2), (29.0, 0.0175, 0.8)],
+        "terrain": [(118.0, 0.0034, 2.0), (64.0, 0.0072, 1.2), (23.0, 0.0175, 0.8)],
         "obstacle_rate": 290.0,
         "obstacles": ["rock", "boulder", "barrel", "cone", "spike"],
         "friction": 0.95,
@@ -139,7 +139,7 @@ LEVELS = [
         "target": 750,
         "base": 340.0,
         "gravity": 900.0,          # low gravity - big floaty jumps
-        "terrain": [(80.0, 0.0028, 0.2), (40.0, 0.0062, 1.9), (18.0, 0.0155, 1.4)],
+        "terrain": [(74.0, 0.0028, 0.2), (37.0, 0.0062, 1.9), (16.0, 0.0155, 1.4)],
         "obstacle_rate": 480.0,
         "obstacles": ["rock", "boulder", "tyre", "ramp", "spike"],
         "friction": 0.80,
@@ -158,16 +158,16 @@ LEVELS = [
 # ---------------------------------------------------------------------------
 VEHICLES = [
     {"name": "Rusty Jeep", "wheel_r": 17.0, "wheelbase": 64.0, "head": 34.0,
-     "drive": 2600.0, "damp": 16.0, "max_speed": 430.0, "price": 0,
+     "drive": 1850.0, "damp": 16.0, "max_speed": 275.0, "price": 0,
      "body": "#e63946", "trim": "#ff6b6b", "kind": "jeep"},
     {"name": "Dirt Bike", "wheel_r": 15.0, "wheelbase": 52.0, "head": 30.0,
-     "drive": 3100.0, "damp": 11.0, "max_speed": 470.0, "price": 150,
+     "drive": 2150.0, "damp": 11.0, "max_speed": 300.0, "price": 150,
      "body": "#2dd4bf", "trim": "#7ef0c0", "kind": "bike"},
     {"name": "Monster Truck", "wheel_r": 24.0, "wheelbase": 84.0, "head": 40.0,
-     "drive": 2500.0, "damp": 28.0, "max_speed": 380.0, "price": 400,
+     "drive": 1750.0, "damp": 28.0, "max_speed": 245.0, "price": 400,
      "body": "#a855f7", "trim": "#d8b4fe", "kind": "truck"},
     {"name": "Turbo Car", "wheel_r": 14.0, "wheelbase": 72.0, "head": 24.0,
-     "drive": 3500.0, "damp": 9.0, "max_speed": 520.0, "price": 800,
+     "drive": 2350.0, "damp": 9.0, "max_speed": 325.0, "price": 800,
      "body": "#f59e0b", "trim": "#fcd34d", "kind": "car"},
 ]
 
@@ -394,9 +394,9 @@ def _build_items():
         spec = OBSTACLES[oid]
         w = rng.uniform(*spec["w"])
         h = rng.uniform(*spec["h"])
-        # never make a shape so steep the car simply cannot climb it - a 45deg
+        # never make a shape so steep the car simply cannot climb it - a ~38deg
         # cap keeps every obstacle drivable
-        h = min(h, 0.60 * w)
+        h = min(h, 0.50 * w)
         gap = 250.0 if oid == "spike" else 70.0     # leave room to brake
         if ox - w < last_right + gap:
             ox = last_right + gap + w
@@ -436,9 +436,9 @@ def _bump_at(ob, x):
         # rises steadily across the ramp, then drops away -> a launch
         return h * (dx + w) / (2.0 * w)
     if shape == "plateau":
-        # lead-in must stay inside the footprint, otherwise the "flat top"
-        # never starts and the block turns into a wedge
-        lead = min(w * 0.9, max(12.0, h * 1.0))
+        # lead-in is a fixed fraction of the width, so the climb angle stays
+        # gentle no matter how tall the block is
+        lead = max(12.0, w * 0.7)
         if dx < -w + lead:
             return h * (dx + w) / lead
         return h
@@ -1420,7 +1420,7 @@ def _draw_car():
 def _draw_speedo():
     spd = math.hypot(rear["vx"], rear["vy"])
     kmh = spd * 0.36
-    frac = min(1.0, kmh / 190.0)
+    frac = min(1.0, kmh / 140.0)
     cx0, cy0, r = 96.0, H - 34.0, 46.0
 
     ctx.beginPath()
