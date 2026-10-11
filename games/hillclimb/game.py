@@ -46,6 +46,12 @@ GRAVITY_DEFAULT = 2000.0
 MAX_REVERSE = 210.0
 ANG_DAMP = 30.0
 ROLL_DRAG = 0.5
+SUSP_K = 900.0          # suspension stiffness (softer -> smoother landings)
+SUSP_D = 62.0           # suspension damping (absorbs the impact)
+MAX_PEN = 12.0          # a wheel never sinks deeper than this
+AIR_TORQUE = 55.0       # gas/brake pitch the car while airborne
+WHEELIE_TORQUE = 12.0   # gas lifts the nose on the ground
+CAM_UP_MAX = 220.0      # how far the camera may pan up on a big jump
 FIXED = 1.0 / 120.0
 START_X = 130.0
 PIXELS_PER_METER = 50.0
@@ -174,6 +180,7 @@ gas_pressed = False
 brake_pressed = False
 _acc = 0.0
 _cam = 0.0
+_cam_y = 0.0
 _flash = 0.0
 
 rear = {"x": START_X, "y": 0.0, "vx": 0.0, "vy": 0.0, "contact": True, "spin": 0.0}
@@ -286,7 +293,7 @@ def _head_point():
 
 
 def _place_car():
-    global _cam
+    global _cam, _cam_y
     v = _vehicle()
     rear["x"] = START_X
     rear["y"] = terrain(START_X) - v["wheel_r"]
@@ -298,6 +305,7 @@ def _place_car():
         w["contact"] = True
         w["spin"] = 0.0
     _cam = START_X - 260.0
+    _cam_y = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -309,17 +317,18 @@ def _build_items():
     rng = random.Random(1000 + level_index * 37)
     end = _target_px() + 900.0
 
-    # coins: little arcs floating above the ground
+    # coins: shallow arcs that sit inside a normal jump height, so every coin
+    # is actually reachable - nothing parked above the roof of a jump
     x = 420.0
     while x < end:
         if rng.random() < 0.55:
             for k in range(rng.randint(3, 6)):
                 cx = x + k * 46.0
-                coins.append({"x": cx, "y": terrain(cx) - 60.0 - 34.0 * math.sin(k * 0.7),
+                coins.append({"x": cx, "y": terrain(cx) - 34.0 - 18.0 * math.sin(k * 0.7),
                               "got": False})
             x += rng.randint(4, 6) * 46.0 + 260.0
         else:
-            coins.append({"x": x, "y": terrain(x) - 42.0, "got": False})
+            coins.append({"x": x, "y": terrain(x) - 32.0, "got": False})
             x += 150.0
 
     # fuel cans
@@ -378,19 +387,24 @@ def _ground_y(x):
     return h
 
 
-def _solve_ground(w):
+def _solve_ground(w, dt):
     r = _vehicle()["wheel_r"]
     floor = _ground_y(w["x"]) - r
-    if w["y"] > floor:
-        w["y"] = floor
+    pen = w["y"] - floor
+    if pen > 0:
         eps = 2.0
         s = (_ground_y(w["x"] + eps) - _ground_y(w["x"] - eps)) / (2.0 * eps)
         inv = 1.0 / math.hypot(1.0, s)
         nx, ny = s * inv, -inv
         vn = w["vx"] * nx + w["vy"] * ny
-        if vn < 0:
-            w["vx"] -= nx * vn
-            w["vy"] -= ny * vn
+        # suspension: a spring pushes the wheel out, a damper eats the impact.
+        # That is what makes landings smooth instead of a hard snap.
+        force = SUSP_K * pen - SUSP_D * vn
+        if force > 0.0:
+            w["vx"] += nx * force * dt
+            w["vy"] += ny * force * dt
+        if pen > MAX_PEN:                 # safety: never sink through the floor
+            w["y"] = floor + MAX_PEN
         w["contact"] = True
 
 
@@ -425,8 +439,8 @@ def _substep(dt, throttle):
     front["contact"] = False
     for _ in range(4):
         _solve_rod()
-        _solve_ground(rear)
-        _solve_ground(front)
+        _solve_ground(rear, dt)
+        _solve_ground(front, dt)
 
     # keep the rod velocity-consistent
     dx = front["x"] - rear["x"]
@@ -449,6 +463,17 @@ def _substep(dt, throttle):
     rear["vy"] += uy * fd * dt
     front["vx"] -= ux * fd * dt
     front["vy"] -= uy * fd * dt
+
+    # pitch control: gas lifts the nose, brake drops it. On the ground this is a
+    # wheelie; in the air it is air control - which is how you flatten a landing,
+    # and also how you over-rotate into an accidental flip.
+    if throttle:
+        on_ground = rear["contact"] or front["contact"]
+        fd_t = (WHEELIE_TORQUE if on_ground else AIR_TORQUE) * throttle
+        rear["vx"] += ux * fd_t * dt
+        rear["vy"] += uy * fd_t * dt
+        front["vx"] -= ux * fd_t * dt
+        front["vy"] -= uy * fd_t * dt
 
     for w in (rear, front):
         w["vx"] *= (1.0 - ROLL_DRAG * dt)
@@ -571,7 +596,7 @@ def _collect():
 
 
 def update(dt):
-    global _acc, fuel, _cam, _flash
+    global _acc, fuel, _cam, _cam_y, _flash
     dt = min(max(float(dt), 0.0), 0.05)
 
     if screen != "playing":
@@ -608,6 +633,10 @@ def update(dt):
 
     target_cam = _car_x() - 260.0
     _cam += (target_cam - _cam) * min(1.0, dt * 6.0)
+
+    # pan up smoothly on big jumps so the car stays in frame
+    target_cam_y = min(0.0, max(-CAM_UP_MAX, _car_y() - H * 0.56))
+    _cam_y += (target_cam_y - _cam_y) * min(1.0, dt * 4.0)
 
 
 # ---------------------------------------------------------------------------
@@ -1103,10 +1132,13 @@ def draw():
 
     theme = _level()["theme"]
     _draw_sky(theme)
+    ctx.save()
+    ctx.translate(0, -_cam_y)
     _draw_parallax(theme)
     _draw_terrain(theme)
     _draw_items()
     _draw_car()
+    ctx.restore()
     _draw_hud()
 
     if screen == "playing" and _meters() < 4 and not gas_pressed:
