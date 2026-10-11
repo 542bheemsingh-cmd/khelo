@@ -28,6 +28,8 @@ The dashboard at the root lists them all and links into each game.
   build a wallet, saved in your browser.
 - ⛽ **Fuel + refill cans** — the tank drains while you're on the gas; grab the
   red cans to keep going.
+- 🕹️ **Air control** — while airborne, gas lifts the nose and brake drops it.
+  Flatten out before you land, or over-rotate and flip.
 - 🪨 **Obstacles** — small rocks are just a nudge; boulders are tall enough to
   launch (and flip) you if you hit them flat out.
 - 📊 **In-game HUD** — location, distance to target with a progress bar, coins,
