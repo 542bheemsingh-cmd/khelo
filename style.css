@@ -212,3 +212,30 @@ code {
 }
 .foot a { color: #9fd0ff; text-decoration: none; }
 .foot a:hover { text-decoration: underline; }
+
+/* ---- small screens / phones ---- */
+@media (max-width: 720px) {
+  .topbar { padding: 16px clamp(14px, 5vw, 24px); gap: 10px; }
+  .tagline { display: none; }
+  .wrap { padding: 0 clamp(14px, 5vw, 24px) 40px; }
+  .hero { padding: 18px 0 26px; }
+  .lede { font-size: 16px; }
+  .grid { gap: 16px; grid-template-columns: 1fr; }
+  .card-body { padding: 16px 16px 18px; gap: 10px; }
+  .card-head h2 { font-size: 20px; }
+  .thumb { height: 140px; }
+  .foot { padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+}
+
+@media (max-width: 420px) {
+  .hero h1 { font-size: clamp(28px, 9vw, 38px); }
+  .lede { font-size: 15px; }
+  .eyebrow { letter-spacing: 2px; font-size: 11px; }
+  .thumb { height: 120px; }
+  .thumb svg { width: 64px; height: 64px; }
+}
+
+/* a little breathing room under the notch / home bar */
+@supports (padding: env(safe-area-inset-top)) {
+  .topbar { padding-top: calc(22px + env(safe-area-inset-top)); }
+}
