@@ -162,6 +162,22 @@ def _unlocked(i):
     return i == 0 or (i - 1) in solved
 
 
+def keyboard_mode():
+    """Which on-screen keyboard the page should show: 'none' | 'digits' | 'letters'.
+
+    The Riddle and Number Sequence levels need typing, which a phone has no
+    physical keyboard for - the page draws a soft keyboard for those.
+    """
+    if screen != "play":
+        return "none"
+    kind = LEVELS[level_index]["kind"]
+    if kind == "seq":
+        return "digits"
+    if kind == "riddle":
+        return "letters"
+    return "none"
+
+
 # ---------------------------------------------------------------------------
 # Puzzle set-up
 # ---------------------------------------------------------------------------
