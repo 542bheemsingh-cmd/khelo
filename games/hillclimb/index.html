@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Khelo Climb - a 2D hill-climb driving game written in Python and played in the browser.">
+  <title>Khelo Climb - Python 2D Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="back" href="../">&#8592; All games</a>
+
+  <main class="stage">
+    <canvas id="game" width="900" height="560" aria-label="Khelo Climb game"></canvas>
+
+    <button id="mute" class="mute" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
+      <span id="mute-icon" aria-hidden="true">&#128266;</span>
+    </button>
+
+    <div class="pedals">
+      <button class="pedal brake" id="pedal-brake" type="button" aria-label="Brake"><span>BRAKE</span></button>
+      <button class="pedal gas" id="pedal-gas" type="button" aria-label="Gas"><span>GAS</span></button>
+    </div>
+
+    <div id="loader" class="loader">
+      <div class="loader-card">
+        <h1>KHELO<span>CLIMB</span></h1>
+        <p id="loader-msg">Starting up…</p>
+        <div class="bar"><i id="loader-bar"></i></div>
+        <p class="loader-note">A Python game running in your browser via Pyodide.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script>
+    var actx = null;
+    var muted = false;
+
+    window.playSound = function (name) {
+      if (muted) return;
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state === "suspended") actx.resume();
+        var cfg = {
+          start: { type: "square",   f0: 180, f1: 420, dur: 0.30, vol: 0.06 },
+          crash: { type: "sawtooth", f0: 260, f1: 60,  dur: 0.40, vol: 0.10 }
+        }[name] || { type: "sine", f0: 300, f1: 300, dur: 0.1, vol: 0.05 };
+        var t = actx.currentTime;
+        var osc = actx.createOscillator();
+        var gain = actx.createGain();
+        osc.connect(gain); gain.connect(actx.destination);
+        osc.type = cfg.type;
+        osc.frequency.setValueAtTime(cfg.f0, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(1, cfg.f1), t + cfg.dur);
+        gain.gain.setValueAtTime(cfg.vol, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + cfg.dur);
+        osc.start(t); osc.stop(t + cfg.dur + 0.02);
+      } catch (err) { /* audio is optional */ }
+    };
+
+    var gasFn = null, brakeFn = null, ready = false;
+
+    async function boot() {
+      var msg = document.getElementById("loader-msg");
+      var bar = document.getElementById("loader-bar");
+
+      msg.textContent = "Downloading the Python runtime…";
+      var pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" });
+
+      bar.style.width = "65%";
+      msg.textContent = "Loading game.py…";
+      var source = await (await fetch("game.py", { cache: "no-store" })).text();
+      await pyodide.runPythonAsync(source);
+
+      var update = pyodide.globals.get("update");
+      var draw = pyodide.globals.get("draw");
+      gasFn = pyodide.globals.get("gas");
+      brakeFn = pyodide.globals.get("brake");
+
+      bar.style.width = "100%";
+      ready = true;
+      document.getElementById("loader").classList.add("is-hidden");
+
+      var last = performance.now();
+      function frame(now) {
+        var dt = (now - last) / 1000;
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    function setGas(on) { if (ready && gasFn) gasFn(on); }
+    function setBrake(on) { if (ready && brakeFn) brakeFn(on); }
+
+    // keyboard
+    window.addEventListener("keydown", function (e) {
+      if (e.code === "ArrowRight" || e.code === "KeyD") { setGas(true); e.preventDefault(); }
+      if (e.code === "ArrowLeft" || e.code === "KeyA") { setBrake(true); e.preventDefault(); }
+    });
+    window.addEventListener("keyup", function (e) {
+      if (e.code === "ArrowRight" || e.code === "KeyD") setGas(false);
+      if (e.code === "ArrowLeft" || e.code === "KeyA") setBrake(false);
+    });
+
+    // touch / click pedals
+    function bindPedal(el, fn) {
+      el.addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        el.classList.add("is-down");
+        fn(true);
+      });
+      var release = function () { el.classList.remove("is-down"); fn(false); };
+      el.addEventListener("pointerup", release);
+      el.addEventListener("pointercancel", release);
+      el.addEventListener("pointerleave", release);
+    }
+    bindPedal(document.getElementById("pedal-gas"), setGas);
+    bindPedal(document.getElementById("pedal-brake"), setBrake);
+
+    document.getElementById("mute").addEventListener("click", function (e) {
+      muted = !muted;
+      document.getElementById("mute-icon").innerHTML = muted ? "&#128263;" : "&#128266;";
+      e.currentTarget.setAttribute("aria-pressed", String(muted));
+      e.currentTarget.blur();
+    });
+
+    boot().catch(function (err) {
+      document.getElementById("loader-msg").textContent = "Could not start the game: " + err;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
