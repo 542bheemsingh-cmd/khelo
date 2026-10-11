@@ -86,6 +86,7 @@ body {
   padding: 0 18px;
   pointer-events: none;
 }
+.pedals.is-hidden { display: none; }
 
 .pedal {
   pointer-events: auto;
