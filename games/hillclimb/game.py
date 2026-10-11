@@ -52,6 +52,7 @@ MAX_PEN = 12.0          # a wheel never sinks deeper than this
 AIR_TORQUE = 55.0       # gas/brake pitch the car while airborne
 WHEELIE_TORQUE = 12.0   # gas lifts the nose on the ground
 CAM_UP_MAX = 220.0      # how far the camera may pan up on a big jump
+GROUND_FRICTION = 1.1   # light rolling grip, scaled by each level's surface
 FIXED = 1.0 / 120.0
 START_X = 130.0
 PIXELS_PER_METER = 50.0
@@ -71,6 +72,8 @@ LEVELS = [
         "gravity": 2000.0,
         "terrain": [(60.0, 0.0032, 0.0), (30.0, 0.0071, 1.7), (12.0, 0.0165, 0.5)],
         "obstacle_rate": 620.0,
+        "obstacles": ["rock", "log"],
+        "friction": 1.0,
         "theme": {
             "sky": ["#142a63", "#4a6bd0", "#f4a15e", "#ffd28a"],
             "sun": "#fff0bd", "sun_glow": "rgba(255, 236, 170, 0.45)",
@@ -86,6 +89,8 @@ LEVELS = [
         "gravity": 2000.0,
         "terrain": [(92.0, 0.0026, 0.5), (40.0, 0.0055, 2.0), (14.0, 0.0130, 1.0)],
         "obstacle_rate": 520.0,
+        "obstacles": ["rock", "log", "cactus", "ramp"],
+        "friction": 0.92,
         "theme": {
             "sky": ["#2a3f7a", "#7a6bb0", "#f0a868", "#ffd9a0"],
             "sun": "#fff2c4", "sun_glow": "rgba(255, 220, 150, 0.5)",
@@ -101,6 +106,8 @@ LEVELS = [
         "gravity": 2000.0,
         "terrain": [(112.0, 0.0030, 1.0), (55.0, 0.0062, 0.3), (20.0, 0.0140, 2.5)],
         "obstacle_rate": 460.0,
+        "obstacles": ["rock", "boulder", "ice", "ramp"],
+        "friction": 0.55,
         "theme": {
             "sky": ["#0e2a4a", "#3f7fb5", "#a9d6ee", "#e8f6ff"],
             "sun": "#ffffff", "sun_glow": "rgba(220, 245, 255, 0.45)",
@@ -116,6 +123,8 @@ LEVELS = [
         "gravity": 2100.0,
         "terrain": [(132.0, 0.0034, 2.0), (70.0, 0.0070, 1.2), (26.0, 0.0170, 0.8)],
         "obstacle_rate": 400.0,
+        "obstacles": ["rock", "boulder", "barrel", "cone", "ramp"],
+        "friction": 0.95,
         "theme": {
             "sky": ["#2a0a12", "#6b1d1d", "#c0431f", "#ffa23a"],
             "sun": "#ffd08a", "sun_glow": "rgba(255, 140, 60, 0.5)",
@@ -131,6 +140,8 @@ LEVELS = [
         "gravity": 900.0,          # low gravity - big floaty jumps
         "terrain": [(70.0, 0.0028, 0.2), (35.0, 0.0060, 1.9), (15.0, 0.0150, 1.4)],
         "obstacle_rate": 700.0,
+        "obstacles": ["rock", "boulder", "crater", "tyre", "ramp"],
+        "friction": 0.80,
         "theme": {
             "sky": ["#05060f", "#101a3a", "#2a2f5a", "#4a4f80"],
             "sun": "#dfe6ff", "sun_glow": "rgba(200, 210, 255, 0.35)",
@@ -159,12 +170,36 @@ VEHICLES = [
      "body": "#f59e0b", "trim": "#fcd34d", "kind": "car"},
 ]
 
-SAVE_KEY = "khelo_climb_save"
+# ---------------------------------------------------------------------------
+# Obstacle types. Each level draws from its own list, and each new level
+# introduces a couple more. "shape" decides how the ground profile is built:
+#   hill    - smooth rounded hump (rocks, boulders)
+#   log     - low rounded top
+#   wedge   - rises to the peak then drops away (a launch ramp)
+#   plateau - steep-ish lead-in and a flat top (blocks, barrels, cones)
+#   dip     - ground drops away (a crater)
+# ---------------------------------------------------------------------------
+OBSTACLES = {
+    "rock":    {"label": "Rocks",         "shape": "hill",    "w": (30, 48),  "h": (12, 22), "style": "rock"},
+    "log":     {"label": "Fallen Logs",   "shape": "log",     "w": (58, 88),  "h": (11, 17), "style": "log"},
+    "cactus":  {"label": "Cacti",         "shape": "plateau", "w": (22, 34),  "h": (34, 50), "style": "cactus"},
+    "ramp":    {"label": "Launch Ramps",  "shape": "wedge",   "w": (80, 124), "h": (32, 52), "style": "ramp"},
+    "boulder": {"label": "Boulders",      "shape": "hill",    "w": (52, 82),  "h": (36, 58), "style": "boulder"},
+    "ice":     {"label": "Ice Blocks",    "shape": "plateau", "w": (30, 46),  "h": (22, 36), "style": "ice"},
+    "barrel":  {"label": "Oil Barrels",   "shape": "plateau", "w": (24, 34),  "h": (26, 40), "style": "barrel"},
+    "cone":    {"label": "Traffic Cones", "shape": "peak",    "w": (16, 24),  "h": (16, 26), "style": "cone"},
+    "tyre":    {"label": "Tyre Stacks",   "shape": "hill",    "w": (22, 32),  "h": (24, 36), "style": "tyre"},
+    "crater":  {"label": "Craters",       "shape": "dip",     "w": (64, 104), "h": (14, 24), "style": "crater"},
+}
 
+SAVE_KEY = "khelo_climb_save"
 # ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
-screen = "menu"          # menu | playing | over | won
+screen = "menu"          # menu | intro | playing | over | won
+intro_seen = []          # levels whose new-obstacle intro has been shown
+_intro_t = 0.0
+_intro_new = []
 level_index = 0
 vehicle_index = 0
 wallet = 0
@@ -230,6 +265,7 @@ def _save():
     data = {
         "wallet": wallet, "owned": owned, "unlocked": unlocked,
         "best": best, "level": level_index, "vehicle": vehicle_index,
+        "intro_seen": intro_seen,
     }
     try:
         js.window.localStorage.setItem(SAVE_KEY, json.dumps(data))
@@ -238,7 +274,7 @@ def _save():
 
 
 def _load():
-    global wallet, owned, unlocked, best, level_index, vehicle_index
+    global wallet, owned, unlocked, best, level_index, vehicle_index, intro_seen
     try:
         raw = js.window.localStorage.getItem(SAVE_KEY)
     except Exception:
@@ -250,6 +286,7 @@ def _load():
         wallet = int(data.get("wallet", 0))
         owned = list(data.get("owned", [0])) or [0]
         unlocked = list(data.get("unlocked", [0])) or [0]
+        intro_seen = list(data.get("intro_seen", []))
         best = {int(k): int(v) for k, v in (data.get("best") or {}).items()}
         level_index = min(int(data.get("level", 0)), len(LEVELS) - 1)
         vehicle_index = int(data.get("vehicle", 0))
@@ -337,15 +374,23 @@ def _build_items():
         fuels.append({"x": fx, "y": terrain(fx) - 26.0, "got": False})
         fx += rng.uniform(1300.0, 1900.0)
 
-    # obstacles are smooth bumps in the ground. small rocks are just a nudge;
-    # boulders are tall enough to launch (and flip) you if you hit them fast.
+    # obstacles: the level picks from its own set, spaced so they never overlap
+    ids = _level()["obstacles"]
     rate = _level()["obstacle_rate"]
     ox = 1150.0
+    last_right = -1e9
+    first = True
     while ox < end:
-        if rng.random() < 0.80:
-            rocks.append({"x": ox, "w": rng.uniform(30.0, 50.0), "h": rng.uniform(12.0, 20.0)})
-        else:
-            rocks.append({"x": ox, "w": rng.uniform(34.0, 54.0), "h": rng.uniform(34.0, 56.0)})
+        oid = ids[0] if first else ids[rng.randrange(len(ids))]
+        spec = OBSTACLES[oid]
+        w = rng.uniform(*spec["w"])
+        h = rng.uniform(*spec["h"])
+        if ox - w < last_right + 70.0:
+            ox = last_right + 70.0 + w
+        rocks.append({"x": ox, "w": w, "h": h, "shape": spec["shape"],
+                      "style": spec["style"], "id": oid})
+        last_right = ox + w
+        first = False
         ox += rate * rng.uniform(0.8, 1.5)
 
 
@@ -366,23 +411,42 @@ def _solve_rod():
     front["y"] -= dy * diff * 0.5
 
 
-def _bump_at(rock, x):
-    """Smooth cosine hill: 0 at the edges, rock['h'] at the peak."""
-    dx = x - rock["x"]
-    w = rock["w"]
-    if -w < dx < w:
-        return rock["h"] * 0.5 * (1.0 + math.cos(math.pi * dx / w))
-    return 0.0
+def _bump_at(ob, x):
+    """Height of an obstacle's profile at x (0 outside its footprint)."""
+    dx = x - ob["x"]
+    w = ob["w"]
+    if not (-w < dx < w):
+        return 0.0
+    h = ob["h"]
+    shape = ob["shape"]
+    if shape == "wedge":
+        # rises steadily across the ramp, then drops away -> a launch
+        return h * (dx + w) / (2.0 * w)
+    if shape == "plateau":
+        lead = max(14.0, h * 1.1)          # a climbable lead-in, then a flat top
+        if dx < -w + lead:
+            return h * (dx + w) / lead
+        return h
+    if shape == "log":
+        return h * (1.0 - (dx / w) ** 2)   # low, rounded top
+    if shape == "peak":
+        return h * (1.0 - abs(dx) / w)     # a triangular peak (cones)
+    if shape == "dip":
+        return -h * 0.5 * (1.0 + math.cos(math.pi * dx / w))
+    return h * 0.5 * (1.0 + math.cos(math.pi * dx / w))
 
 
 def _ground_y(x):
-    """Ground height including obstacle bumps - smooth hills, never walls."""
+    """Ground height including obstacle profiles - bumps and craters."""
     h = terrain(x)
-    for rock in rocks:
-        dx = x - rock["x"]
-        if -rock["w"] < dx < rock["w"]:
-            surface = terrain(x) - _bump_at(rock, x)
-            if surface < h:
+    for ob in rocks:
+        dx = x - ob["x"]
+        if -ob["w"] < dx < ob["w"]:
+            surface = terrain(x) - _bump_at(ob, x)
+            if ob["shape"] == "dip":
+                if surface > h:
+                    h = surface
+            elif surface < h:
                 h = surface
     return h
 
@@ -403,6 +467,13 @@ def _solve_ground(w, dt):
         if force > 0.0:
             w["vx"] += nx * force * dt
             w["vy"] += ny * force * dt
+        # a light touch of ground friction on the tangential motion
+        # (lower on ice and the moon, so it slides more)
+        tx, ty = -ny, nx
+        vt = w["vx"] * tx + w["vy"] * ty
+        grip = GROUND_FRICTION * _level()["friction"]
+        w["vx"] -= tx * vt * min(1.0, grip * dt)
+        w["vy"] -= ty * vt * min(1.0, grip * dt)
         if pen > MAX_PEN:                 # safety: never sink through the floor
             w["y"] = floor + MAX_PEN
         w["contact"] = True
@@ -501,11 +572,40 @@ def reset_run():
     _place_car()
 
 
-def start_game():
+def _new_obstacles(i):
+    """Obstacle types that appear in level i but not in the one before it."""
+    ids = LEVELS[i]["obstacles"]
+    if i == 0:
+        return list(ids)
+    prev = set(LEVELS[i - 1]["obstacles"])
+    return [x for x in ids if x not in prev]
+
+
+def _begin_play():
     global screen
     reset_run()
     screen = "playing"
     _sound("start")
+
+
+def _end_intro():
+    global screen
+    if level_index not in intro_seen:
+        intro_seen.append(level_index)
+        _save()
+    _begin_play()
+
+
+def start_game():
+    global screen, _intro_t, _intro_new
+    news = _new_obstacles(level_index)
+    if news and level_index not in intro_seen:
+        _intro_new = news
+        _intro_t = 0.0
+        screen = "intro"
+        _sound("click")
+        return
+    _begin_play()
 
 
 def back_to_menu():
@@ -596,12 +696,15 @@ def _collect():
 
 
 def update(dt):
-    global _acc, fuel, _cam, _cam_y, _flash
+    global _acc, fuel, _cam, _cam_y, _flash, _intro_t
     dt = min(max(float(dt), 0.0), 0.05)
+
+    if screen == "intro":
+        _intro_t += dt
+        return
 
     if screen != "playing":
         _flash = max(0.0, _flash - dt * 2.0)
-        # ease the camera so the menu background isn't jarring
         return
 
     throttle = 0
@@ -645,8 +748,8 @@ def update(dt):
 def gas(down):
     global gas_pressed
     gas_pressed = bool(down)
-    if down and screen == "playing" and fuel <= 0.0:
-        pass
+    if down and screen == "intro":
+        _end_intro()
 
 
 def brake(down):
@@ -655,7 +758,9 @@ def brake(down):
 
 
 def enter_key():
-    if screen == "menu":
+    if screen == "intro":
+        _end_intro()
+    elif screen == "menu":
         start_game()
     elif screen in ("over", "won"):
         back_to_menu()
@@ -663,7 +768,9 @@ def enter_key():
 
 def tap(x, y):
     """A canvas tap. In the menu it hits buttons; elsewhere it does nothing."""
-    if screen == "menu":
+    if screen == "intro":
+        _end_intro()
+    elif screen == "menu":
         for kind, index, bx, by, bw, bh in _menu_hit:
             if bx <= x <= bx + bw and by <= y <= by + bh:
                 if kind == "level":
@@ -827,25 +934,237 @@ def _draw_items():
         ctx.textAlign = "center"
         ctx.fillText("F", sx, f["y"] + 3)
 
-    # obstacles: draw the same smooth hill the physics rides over
-    for rock in rocks:
-        if not _visible(rock["x"]):
+    _draw_obstacles()
+
+
+def _profile_path(ob):
+    """The obstacle's silhouette, following the exact profile the physics uses."""
+    w = ob["w"]
+    ctx.beginPath()
+    ctx.moveTo(ob["x"] - w - _cam, terrain(ob["x"]) + 10)
+    steps = 18
+    for k in range(steps + 1):
+        dx = -w + (2.0 * w) * k / steps
+        px = ob["x"] + dx
+        ctx.lineTo(px - _cam, terrain(px) - _bump_at(ob, px))
+    ctx.lineTo(ob["x"] + w - _cam, terrain(ob["x"]) + 10)
+    ctx.closePath()
+
+
+def _draw_obstacles():
+    for ob in rocks:
+        if not _visible(ob["x"]):
             continue
-        w = rock["w"]
-        steps = 14
-        ctx.beginPath()
-        ctx.moveTo(rock["x"] - w - _cam, terrain(rock["x"]) + 8)
-        for k in range(steps + 1):
-            dx = -w + (2.0 * w) * k / steps
-            px = rock["x"] + dx
-            ctx.lineTo(px - _cam, terrain(px) - _bump_at(rock, px))
-        ctx.lineTo(rock["x"] + w - _cam, terrain(rock["x"]) + 8)
-        ctx.closePath()
-        ctx.fillStyle = "#5b6270" if rock["h"] < 24 else "#4a505d"
-        ctx.fill()
-        ctx.lineWidth = 3
-        ctx.strokeStyle = "rgba(200, 212, 228, 0.45)"
-        ctx.stroke()
+        style = ob["style"]
+        sx = ob["x"] - _cam
+        base = terrain(ob["x"])
+        w = ob["w"]
+        h = ob["h"]
+
+        if style == "crater":
+            _profile_path(ob)
+            ctx.fillStyle = "#2b1d12"
+            ctx.fill()
+            ctx.lineWidth = 3
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.10)"
+            ctx.stroke()
+
+        elif style in ("rock", "boulder"):
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#8b939f" if style == "rock" else "#79828f"
+            ctx.fill()
+            ctx.clip()
+            ctx.fillStyle = "rgba(255, 255, 255, 0.18)"
+            ctx.beginPath()
+            ctx.moveTo(sx - w, base - h * 0.10)
+            ctx.lineTo(sx - w * 0.15, base - h)
+            ctx.lineTo(sx + w * 0.35, base - h * 0.28)
+            ctx.closePath()
+            ctx.fill()
+            ctx.fillStyle = "rgba(0, 0, 0, 0.22)"
+            ctx.beginPath()
+            ctx.moveTo(sx - w * 0.20, base)
+            ctx.lineTo(sx + w * 0.50, base - h * 0.85)
+            ctx.lineTo(sx + w, base - h * 0.10)
+            ctx.closePath()
+            ctx.fill()
+            ctx.fillStyle = "rgba(0, 0, 0, 0.13)"
+            ctx.beginPath()
+            ctx.arc(sx + w * 0.45, base - h * 0.22, h * 0.28, 0, math.pi * 2)
+            ctx.fill()
+            ctx.restore()
+            _profile_path(ob)
+            ctx.lineWidth = 3
+            ctx.strokeStyle = "rgba(236, 243, 253, 0.5)"
+            ctx.stroke()
+
+        elif style == "log":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#7a4f28"
+            ctx.fill()
+            ctx.clip()
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.25)"
+            ctx.lineWidth = 3
+            for k in range(-3, 4):
+                bx = sx + k * w * 0.26
+                ctx.beginPath()
+                ctx.moveTo(bx, base - h * 1.5)
+                ctx.lineTo(bx, base + 12)
+                ctx.stroke()
+            ctx.restore()
+            ctx.fillStyle = "#a9793f"
+            ctx.beginPath()
+            ctx.ellipse(sx - w + 5, base - h * 0.5, 7, h * 0.5, 0, 0, math.pi * 2)
+            ctx.fill()
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.35)"
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.ellipse(sx - w + 5, base - h * 0.5, 3.5, h * 0.26, 0, 0, math.pi * 2)
+            ctx.stroke()
+
+        elif style == "ramp":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#8a6a3a"
+            ctx.fill()
+            ctx.clip()
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.30)"
+            ctx.lineWidth = 2
+            for k in range(9):
+                px = sx - w + (2.0 * w) * k / 8.0
+                top = terrain(px + _cam) - _bump_at(ob, px + _cam)
+                ctx.beginPath()
+                ctx.moveTo(px, top)
+                ctx.lineTo(px, base + 12)
+                ctx.stroke()
+            ctx.restore()
+            ctx.beginPath()
+            for k in range(19):
+                dx = -w + (2.0 * w) * k / 18.0
+                px = ob["x"] + dx
+                py = terrain(px) - _bump_at(ob, px)
+                if k == 0:
+                    ctx.moveTo(px - _cam, py)
+                else:
+                    ctx.lineTo(px - _cam, py)
+            ctx.lineWidth = 5
+            ctx.strokeStyle = "#c99a5a"
+            ctx.stroke()
+            ctx.fillStyle = "#5c4326"
+            ctx.fillRect(sx + w - 12, base - h * 0.85, 9, h * 0.85)
+
+        elif style == "cactus":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#2f8f4a"
+            ctx.fill()
+            ctx.clip()
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.20)"
+            ctx.lineWidth = 2
+            for k in (-1, 0, 1):
+                ctx.beginPath()
+                ctx.moveTo(sx + k * w * 0.38, base - h * 1.4)
+                ctx.lineTo(sx + k * w * 0.38, base + 10)
+                ctx.stroke()
+            ctx.fillStyle = "rgba(255, 255, 255, 0.16)"
+            ctx.fillRect(sx - w * 0.62, base - h * 0.85, w * 0.22, h * 0.85)
+            ctx.restore()
+            ctx.fillStyle = "#2f8f4a"
+            ctx.fillRect(sx - w - 7, base - h * 0.62, 7, h * 0.34)
+            ctx.fillRect(sx - w - 7, base - h * 0.70, w * 0.30, 7)
+            ctx.fillRect(sx + w, base - h * 0.52, 7, h * 0.26)
+            ctx.fillRect(sx + w * 0.72, base - h * 0.60, w * 0.30, 7)
+
+        elif style == "ice":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "rgba(176, 226, 246, 0.92)"
+            ctx.fill()
+            ctx.clip()
+            ctx.fillStyle = "rgba(255, 255, 255, 0.45)"
+            ctx.beginPath()
+            ctx.moveTo(sx - w, base)
+            ctx.lineTo(sx - w * 0.1, base - h)
+            ctx.lineTo(sx + w * 0.35, base - h * 0.55)
+            ctx.lineTo(sx + w, base)
+            ctx.closePath()
+            ctx.fill()
+            ctx.fillStyle = "rgba(120, 190, 220, 0.5)"
+            ctx.beginPath()
+            ctx.moveTo(sx + w * 0.1, base)
+            ctx.lineTo(sx + w * 0.5, base - h * 0.9)
+            ctx.lineTo(sx + w, base)
+            ctx.closePath()
+            ctx.fill()
+            ctx.restore()
+            _profile_path(ob)
+            ctx.lineWidth = 3
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.85)"
+            ctx.stroke()
+
+        elif style == "barrel":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#b23a2e"
+            ctx.fill()
+            ctx.clip()
+            ctx.fillStyle = "rgba(255, 255, 255, 0.16)"
+            ctx.fillRect(sx - w, base - h * 0.74, 2 * w, h * 0.13)
+            ctx.fillRect(sx - w, base - h * 0.32, 2 * w, h * 0.13)
+            ctx.fillStyle = "rgba(0, 0, 0, 0.20)"
+            ctx.fillRect(sx + w * 0.28, base - h * 1.2, w * 0.30, h * 1.4)
+            ctx.restore()
+            _profile_path(ob)
+            ctx.lineWidth = 2
+            ctx.strokeStyle = "rgba(255, 220, 210, 0.5)"
+            ctx.stroke()
+            ctx.fillStyle = "#d4534a"
+            ctx.beginPath()
+            ctx.ellipse(sx, base - h, w * 0.72, 5, 0, 0, math.pi * 2)
+            ctx.fill()
+
+        elif style == "cone":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#f06a1e"
+            ctx.fill()
+            ctx.clip()
+            ctx.fillStyle = "#ffffff"
+            ctx.fillRect(sx - w, base - h * 0.52, 2 * w, h * 0.20)
+            ctx.restore()
+            _profile_path(ob)
+            ctx.lineWidth = 2.5
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.55)"
+            ctx.stroke()
+            ctx.fillStyle = "#2b2f3a"
+            ctx.fillRect(sx - w * 1.25, base - 5, w * 2.5, 7)
+
+        elif style == "tyre":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#1f2430"
+            ctx.fill()
+            ctx.clip()
+            ctx.fillStyle = "#3a4150"
+            ctx.beginPath()
+            ctx.arc(sx, base - h * 0.72, h * 0.30, 0, math.pi * 2)
+            ctx.fill()
+            ctx.fillStyle = "#4a5261"
+            ctx.beginPath()
+            ctx.arc(sx, base - h * 0.30, h * 0.30, 0, math.pi * 2)
+            ctx.fill()
+            ctx.restore()
+            _profile_path(ob)
+            ctx.lineWidth = 2.5
+            ctx.strokeStyle = "rgba(190, 200, 215, 0.45)"
+            ctx.stroke()
+
+        else:
+            _profile_path(ob)
+            ctx.fillStyle = "#6b7280"
+            ctx.fill()
 
 
 def _draw_wheel(w, kind):
@@ -856,23 +1175,65 @@ def _draw_wheel(w, kind):
     ctx.save()
     ctx.translate(sx, sy)
     ctx.rotate(w["spin"])
-    ctx.fillStyle = "#1c2233"
+
+    # tyre
+    ctx.fillStyle = "#14171f"
     ctx.beginPath()
     ctx.arc(0, 0, r, 0, math.pi * 2)
     ctx.fill()
-    ctx.fillStyle = "#7b8798"
+    # tread blocks
+    ctx.strokeStyle = "rgba(125, 136, 156, 0.55)"
+    ctx.lineWidth = max(2.0, r * 0.15)
+    for i in range(8):
+        ang = i * math.pi / 4
+        ctx.beginPath()
+        ctx.moveTo(math.cos(ang) * r * 0.80, math.sin(ang) * r * 0.80)
+        ctx.lineTo(math.cos(ang) * r * 0.99, math.sin(ang) * r * 0.99)
+        ctx.stroke()
+    # rim
+    ctx.fillStyle = "#b9c2d0"
+    ctx.beginPath()
+    ctx.arc(0, 0, r * 0.54, 0, math.pi * 2)
+    ctx.fill()
+    ctx.fillStyle = "#8d97a8"
     ctx.beginPath()
     ctx.arc(0, 0, r * 0.45, 0, math.pi * 2)
     ctx.fill()
-    ctx.strokeStyle = "#cfd6e2"
-    ctx.lineWidth = 2
-    for i in range(4):
-        ang = i * math.pi / 2
+    # spokes
+    ctx.strokeStyle = "#eef2f9"
+    ctx.lineWidth = max(1.6, r * 0.11)
+    for i in range(5):
+        ang = i * math.pi * 2 / 5
         ctx.beginPath()
         ctx.moveTo(0, 0)
-        ctx.lineTo(math.cos(ang) * r * 0.85, math.sin(ang) * r * 0.85)
+        ctx.lineTo(math.cos(ang) * r * 0.43, math.sin(ang) * r * 0.43)
         ctx.stroke()
+    # hub
+    ctx.fillStyle = "#5b6472"
+    ctx.beginPath()
+    ctx.arc(0, 0, r * 0.17, 0, math.pi * 2)
+    ctx.fill()
     ctx.restore()
+
+
+def _driver(head_y, suit, x0=2.0):
+    """A simple seated driver whose head sits on the crash point."""
+    ctx.fillStyle = suit
+    ctx.beginPath()
+    ctx.moveTo(x0 - 8, head_y + 8)
+    ctx.lineTo(x0 + 6, head_y + 8)
+    ctx.lineTo(x0 + 8, head_y + 22)
+    ctx.lineTo(x0 - 10, head_y + 22)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = "#f2c14e"
+    ctx.beginPath()
+    ctx.arc(x0, head_y, 7, 0, math.pi * 2)
+    ctx.fill()
+    ctx.fillStyle = "#2b2d42"
+    ctx.beginPath()
+    ctx.arc(x0, head_y, 7, math.pi * 1.05, math.pi * 2.0)
+    ctx.fill()
 
 
 def _draw_car():
@@ -881,75 +1242,105 @@ def _draw_car():
     cy = _car_y()
     a = _car_angle()
     kind = v["kind"]
+    body = v["body"]
+    trim = v["trim"]
+    hy = -v["head"] + 4
 
     ctx.save()
     ctx.translate(cx, cy)
     ctx.rotate(a)
 
     if kind == "bike":
-        ctx.fillStyle = v["body"]
+        ctx.strokeStyle = "#2b2f3a"
+        ctx.lineWidth = 5
+        ctx.beginPath(); ctx.moveTo(-24, 4); ctx.lineTo(-6, -4); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(-2, -6); ctx.lineTo(18, -3); ctx.stroke()
+        ctx.fillStyle = "#3c4250"
+        ctx.fillRect(-13, -7, 17, 13)
+        ctx.fillStyle = body
         ctx.beginPath()
-        ctx.moveTo(-22, 2)
-        ctx.lineTo(-6, -12)
-        ctx.lineTo(16, -8)
-        ctx.lineTo(24, 2)
-        ctx.lineTo(24, 8)
-        ctx.lineTo(-22, 8)
-        ctx.closePath()
-        ctx.fill()
+        ctx.moveTo(-9, -8); ctx.lineTo(3, -15); ctx.lineTo(14, -12); ctx.lineTo(16, -6); ctx.lineTo(-7, -4)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = "#1f2430"
+        ctx.beginPath()
+        ctx.moveTo(-27, -7); ctx.lineTo(-9, -11); ctx.lineTo(-7, -4); ctx.lineTo(-27, 1)
+        ctx.closePath(); ctx.fill()
+        ctx.strokeStyle = "#c9ced8"
+        ctx.lineWidth = 4
+        ctx.beginPath(); ctx.moveTo(16, -9); ctx.lineTo(24, 6); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(11, -17); ctx.lineTo(25, -15); ctx.stroke()
+        ctx.strokeStyle = "#8d97a8"
+        ctx.beginPath(); ctx.moveTo(-14, 3); ctx.lineTo(-31, 1); ctx.stroke()
+        _driver(hy, "#2b2d42")
+
     elif kind == "truck":
-        ctx.fillStyle = v["body"]
-        ctx.fillRect(-40, -18, 80, 26)
-        ctx.fillStyle = v["trim"]
-        ctx.fillRect(-36, -26, 34, 12)
+        ctx.fillStyle = body
+        ctx.beginPath()
+        ctx.moveTo(-44, 6); ctx.lineTo(-44, -20); ctx.lineTo(12, -20)
+        ctx.lineTo(18, -46); ctx.lineTo(40, -46); ctx.lineTo(46, -16); ctx.lineTo(46, 6)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = "#2b3350"
+        ctx.beginPath()
+        ctx.moveTo(20, -43); ctx.lineTo(38, -43); ctx.lineTo(42, -24); ctx.lineTo(20, -24)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = trim
+        ctx.fillRect(-42, -20, 34, 7)
+        ctx.fillStyle = "#3c4250"
+        ctx.fillRect(-42, -10, 24, 12)
+        ctx.strokeStyle = "#c9ced8"
+        ctx.lineWidth = 4
+        ctx.beginPath(); ctx.moveTo(34, -46); ctx.lineTo(34, -62); ctx.stroke()
+        ctx.fillStyle = "#ffe9a3"
+        ctx.fillRect(42, -18, 5, 9)
+        _driver(hy, "#2b2d42", 28.0)
+
     elif kind == "car":
-        ctx.fillStyle = v["body"]
+        ctx.fillStyle = body
         ctx.beginPath()
-        ctx.moveTo(-36, 2)
-        ctx.lineTo(-24, -14)
-        ctx.lineTo(12, -18)
-        ctx.lineTo(30, -6)
-        ctx.lineTo(36, 2)
-        ctx.lineTo(36, 8)
-        ctx.lineTo(-36, 8)
-        ctx.closePath()
-        ctx.fill()
-        ctx.fillStyle = v["trim"]
-        ctx.fillRect(-24, -14, 40, 5)
+        ctx.moveTo(-40, 6); ctx.lineTo(-40, -8); ctx.lineTo(-26, -12)
+        ctx.lineTo(22, -12); ctx.lineTo(36, -4); ctx.lineTo(40, 6)
+        ctx.closePath(); ctx.fill()
+        ctx.beginPath()
+        ctx.moveTo(-20, -12); ctx.lineTo(-10, -34); ctx.lineTo(12, -34); ctx.lineTo(22, -12)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = "#22304d"
+        ctx.beginPath()
+        ctx.moveTo(-17, -14); ctx.lineTo(-8, -32); ctx.lineTo(10, -32); ctx.lineTo(19, -14)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = body
+        ctx.fillRect(-50, -31, 19, 5)
+        ctx.fillRect(-42, -31, 5, 19)
+        ctx.fillStyle = trim
+        ctx.fillRect(-36, -7, 70, 4)
+        ctx.fillStyle = "#ffe9a3"
+        ctx.fillRect(31, -10, 7, 6)
+        ctx.fillStyle = "#2b2f3a"
+        ctx.fillRect(-42, 6, 84, 4)
+        _driver(hy, "#1f2430", -4.0)
+
     else:  # jeep
-        ctx.fillStyle = v["body"]
+        ctx.fillStyle = body
         ctx.beginPath()
-        ctx.moveTo(-34, 2)
-        ctx.lineTo(-30, -12)
-        ctx.lineTo(6, -16)
-        ctx.lineTo(24, -8)
-        ctx.lineTo(34, 2)
-        ctx.lineTo(34, 8)
-        ctx.lineTo(-34, 8)
-        ctx.closePath()
-        ctx.fill()
-        ctx.fillStyle = v["trim"]
-        ctx.fillRect(-30, -12, 34, 6)
-
-    # cabin
-    ctx.fillStyle = "rgba(20, 26, 44, 0.85)"
-    ctx.beginPath()
-    ctx.moveTo(-12, -14)
-    ctx.lineTo(-4, -26)
-    ctx.lineTo(14, -26)
-    ctx.lineTo(20, -10)
-    ctx.closePath()
-    ctx.fill()
-
-    # driver
-    ctx.fillStyle = "#f2c14e"
-    ctx.beginPath()
-    ctx.arc(2, -30, 7, 0, math.pi * 2)
-    ctx.fill()
-    ctx.fillStyle = "#2b2d42"
-    ctx.beginPath()
-    ctx.arc(2, -30, 7, math.pi, math.pi * 2)
-    ctx.fill()
+        ctx.moveTo(-36, 6); ctx.lineTo(-36, -12); ctx.lineTo(-22, -14)
+        ctx.lineTo(-14, -30); ctx.lineTo(16, -30); ctx.lineTo(24, -12)
+        ctx.lineTo(38, -8); ctx.lineTo(38, 6)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = "#22304d"
+        ctx.beginPath()
+        ctx.moveTo(-12, -28); ctx.lineTo(14, -28); ctx.lineTo(20, -14); ctx.lineTo(-13, -14)
+        ctx.closePath(); ctx.fill()
+        ctx.fillStyle = trim
+        ctx.fillRect(-36, -12, 74, 5)
+        ctx.strokeStyle = "#c9ced8"
+        ctx.lineWidth = 4
+        ctx.beginPath(); ctx.moveTo(-14, -30); ctx.lineTo(18, -30); ctx.stroke()
+        ctx.fillStyle = "#ffe9a3"
+        ctx.fillRect(33, -6, 5, 7)
+        ctx.fillStyle = "#3c4250"
+        ctx.fillRect(28, -4, 11, 10)
+        ctx.fillStyle = "#1f2430"
+        ctx.fillRect(-40, 4, 78, 5)
+        _driver(hy, "#2b2d42")
 
     ctx.restore()
 
@@ -960,6 +1351,59 @@ def _draw_car():
 # ---------------------------------------------------------------------------
 # Drawing: HUD + screens
 # ---------------------------------------------------------------------------
+def _draw_speedo():
+    spd = math.hypot(rear["vx"], rear["vy"])
+    kmh = spd * 0.36
+    frac = min(1.0, kmh / 190.0)
+    cx0, cy0, r = 96.0, H - 34.0, 46.0
+
+    ctx.beginPath()
+    ctx.arc(cx0, cy0, r + 12, math.pi, math.pi * 2)
+    ctx.closePath()
+    ctx.fillStyle = "rgba(6, 14, 32, 0.62)"
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.arc(cx0, cy0, r, math.pi, math.pi * 2)
+    ctx.lineWidth = 9
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)"
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.arc(cx0, cy0, r, math.pi, math.pi + math.pi * frac)
+    ctx.strokeStyle = "#7ef0c0" if frac < 0.72 else "#ff8f5c"
+    ctx.stroke()
+
+    ctx.strokeStyle = "rgba(200, 215, 240, 0.45)"
+    ctx.lineWidth = 2
+    for i in range(9):
+        ang = math.pi + math.pi * i / 8.0
+        ctx.beginPath()
+        ctx.moveTo(cx0 + math.cos(ang) * (r - 10), cy0 + math.sin(ang) * (r - 10))
+        ctx.lineTo(cx0 + math.cos(ang) * (r - 2), cy0 + math.sin(ang) * (r - 2))
+        ctx.stroke()
+
+    ang = math.pi + math.pi * frac
+    ctx.beginPath()
+    ctx.moveTo(cx0, cy0)
+    ctx.lineTo(cx0 + math.cos(ang) * (r - 13), cy0 + math.sin(ang) * (r - 13))
+    ctx.lineWidth = 3
+    ctx.strokeStyle = "#ff5c5c"
+    ctx.stroke()
+    ctx.fillStyle = "#eaf2ff"
+    ctx.beginPath()
+    ctx.arc(cx0, cy0, 4, 0, math.pi * 2)
+    ctx.fill()
+
+    ctx.textAlign = "left"
+    ctx.fillStyle = "#ffffff"
+    ctx.font = "800 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    ctx.fillText(str(int(kmh)), cx0 + r + 14, cy0 - 2)
+    ctx.fillStyle = "#9fb3d9"
+    ctx.font = "700 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    ctx.fillText("km/h", cx0 + r + 14, cy0 + 14)
+
+
 def _draw_hud():
     lv = _level()
     # distance / progress
@@ -1002,6 +1446,8 @@ def _draw_hud():
     ratio = max(0.0, fuel / FUEL_MAX)
     ctx.fillStyle = "#ffd23f" if ratio > 0.25 else "#ff5c5c"
     ctx.fillRect(W - 172, 46, 140 * ratio, 10)
+
+    _draw_speedo()
 
     # menu button
     _button(W - 186, H - 62, 168, 44, "Menu  (Esc)", False, False, "#ffb703")
@@ -1071,6 +1517,176 @@ def _draw_won():
     ctx.fillText("Tap / Enter to continue", W / 2, 380)
 
 
+def _demo_car(x, base):
+    ctx.fillStyle = _vehicle()["body"]
+    ctx.beginPath()
+    ctx.moveTo(x - 22, base - 8)
+    ctx.lineTo(x - 15, base - 21)
+    ctx.lineTo(x + 8, base - 23)
+    ctx.lineTo(x + 22, base - 8)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = "#22304d"
+    ctx.beginPath()
+    ctx.moveTo(x - 11, base - 21)
+    ctx.lineTo(x + 6, base - 21)
+    ctx.lineTo(x + 11, base - 11)
+    ctx.lineTo(x - 13, base - 11)
+    ctx.closePath()
+    ctx.fill()
+    for wx in (x - 12, x + 12):
+        ctx.fillStyle = "#14171f"
+        ctx.beginPath()
+        ctx.arc(wx, base - 7, 7.5, 0, math.pi * 2)
+        ctx.fill()
+        ctx.fillStyle = "#8d97a8"
+        ctx.beginPath()
+        ctx.arc(wx, base - 7, 3, 0, math.pi * 2)
+        ctx.fill()
+
+
+def _demo_icon(style, cx, base, w, h):
+    if style in ("rock", "boulder"):
+        ctx.fillStyle = "#8b939f" if style == "rock" else "#79828f"
+        ctx.beginPath()
+        ctx.moveTo(cx - w, base)
+        ctx.quadraticCurveTo(cx - w * 0.55, base - h * 1.3, cx, base - h)
+        ctx.quadraticCurveTo(cx + w * 0.6, base - h * 1.2, cx + w, base)
+        ctx.closePath()
+        ctx.fill()
+        ctx.fillStyle = "rgba(255, 255, 255, 0.20)"
+        ctx.beginPath()
+        ctx.moveTo(cx - w * 0.6, base - h * 0.12)
+        ctx.lineTo(cx - w * 0.15, base - h * 0.92)
+        ctx.lineTo(cx + w * 0.25, base - h * 0.35)
+        ctx.closePath()
+        ctx.fill()
+    elif style == "log":
+        ctx.fillStyle = "#7a4f28"
+        ctx.fillRect(cx - w, base - h, 2 * w, h)
+        ctx.beginPath()
+        ctx.arc(cx - w, base - h * 0.5, h * 0.5, 0, math.pi * 2)
+        ctx.fill()
+        ctx.fillStyle = "#a9793f"
+        ctx.beginPath()
+        ctx.arc(cx - w, base - h * 0.5, h * 0.32, 0, math.pi * 2)
+        ctx.fill()
+    elif style == "ramp":
+        ctx.fillStyle = "#8a6a3a"
+        ctx.beginPath()
+        ctx.moveTo(cx - w, base)
+        ctx.lineTo(cx + w, base - h)
+        ctx.lineTo(cx + w, base)
+        ctx.closePath()
+        ctx.fill()
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.3)"
+        ctx.lineWidth = 2
+        for k in range(1, 5):
+            px = cx - w + (2 * w) * k / 5.0
+            py = base - h * (k / 5.0)
+            ctx.beginPath()
+            ctx.moveTo(px, py)
+            ctx.lineTo(px, base)
+            ctx.stroke()
+    elif style == "cactus":
+        ctx.fillStyle = "#2f8f4a"
+        ctx.fillRect(cx - w * 0.45, base - h, w * 0.9, h)
+        ctx.fillRect(cx - w * 1.2, base - h * 0.7, w * 0.5, h * 0.3)
+        ctx.fillRect(cx + w * 0.7, base - h * 0.55, w * 0.5, h * 0.25)
+    elif style == "ice":
+        ctx.fillStyle = "rgba(176, 226, 246, 0.92)"
+        ctx.fillRect(cx - w * 0.8, base - h, w * 1.6, h)
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)"
+        ctx.beginPath()
+        ctx.moveTo(cx - w * 0.8, base)
+        ctx.lineTo(cx, base - h)
+        ctx.lineTo(cx + w * 0.3, base)
+        ctx.closePath()
+        ctx.fill()
+    elif style == "barrel":
+        ctx.fillStyle = "#b23a2e"
+        ctx.fillRect(cx - w * 0.7, base - h, w * 1.4, h)
+        ctx.fillStyle = "rgba(255, 255, 255, 0.2)"
+        ctx.fillRect(cx - w * 0.7, base - h * 0.75, w * 1.4, h * 0.12)
+        ctx.fillRect(cx - w * 0.7, base - h * 0.35, w * 1.4, h * 0.12)
+    elif style == "cone":
+        ctx.fillStyle = "#f06a1e"
+        ctx.beginPath()
+        ctx.moveTo(cx, base - h)
+        ctx.lineTo(cx + w * 0.7, base)
+        ctx.lineTo(cx - w * 0.7, base)
+        ctx.closePath()
+        ctx.fill()
+        ctx.fillStyle = "#ffffff"
+        ctx.fillRect(cx - w * 0.42, base - h * 0.6, w * 0.84, h * 0.18)
+    elif style == "tyre":
+        for cy in (base - h * 0.72, base - h * 0.26):
+            ctx.fillStyle = "#1f2430"
+            ctx.beginPath()
+            ctx.arc(cx, cy, h * 0.28, 0, math.pi * 2)
+            ctx.fill()
+            ctx.fillStyle = "#4a5261"
+            ctx.beginPath()
+            ctx.arc(cx, cy, h * 0.12, 0, math.pi * 2)
+            ctx.fill()
+    elif style == "crater":
+        ctx.fillStyle = "#2b1d12"
+        ctx.beginPath()
+        ctx.ellipse(cx, base + h * 0.15, w * 0.8, h * 0.5, 0, 0, math.pi * 2)
+        ctx.fill()
+
+
+def _draw_intro():
+    theme = _level()["theme"]
+    _draw_sky(theme)
+    ctx.fillStyle = "rgba(5, 10, 24, 0.80)"
+    ctx.fillRect(0, 0, W, H)
+
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#7ef0c0"
+    ctx.font = "700 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    ctx.fillText("LEVEL " + str(level_index + 1) + "  ·  " + _level()["name"].upper(), W / 2.0, 54)
+    ctx.fillStyle = "#ffffff"
+    ctx.font = "800 34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    ctx.fillText("New obstacles ahead", W / 2.0, 96)
+    ctx.fillStyle = "#9fb3d9"
+    ctx.font = "600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    ctx.fillText("Watch how they behave before you drive", W / 2.0, 122)
+
+    n = max(1, len(_intro_new))
+    for i, oid in enumerate(_intro_new):
+        spec = OBSTACLES[oid]
+        x0 = W * (i + 0.5) / n
+        base = 320.0
+        ctx.strokeStyle = "rgba(150, 180, 230, 0.30)"
+        ctx.lineWidth = 3
+        ctx.beginPath()
+        ctx.moveTo(x0 - 130, base)
+        ctx.lineTo(x0 + 130, base)
+        ctx.stroke()
+
+        t = (_intro_t + i * 0.55) % 2.6
+        prog = min(1.0, t / 1.6)
+        carx = x0 - 100 + prog * 118
+        _demo_icon(spec["style"], x0 + 52, base, 30.0, 26.0)
+        _demo_car(carx, base)
+        if prog >= 1.0 and t < 1.9:
+            ctx.strokeStyle = "rgba(255, 220, 120, 0.9)"
+            ctx.lineWidth = 3
+            for a in range(6):
+                ang = a * math.pi / 3
+                ctx.beginPath()
+                ctx.moveTo(x0 + 34, base - 26)
+                ctx.lineTo(x0 + 34 + math.cos(ang) * 18, base - 26 + math.sin(ang) * 18)
+                ctx.stroke()
+
+        ctx.fillStyle = "#ffffff"
+        ctx.font = "700 16px system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        ctx.fillText(spec["label"], x0, base + 46)
+
+    _button(W / 2.0 - 150, H - 74, 300, 52, "Press gas / tap to start", True, False, "#7ef0c0")
+
+
 def _draw_menu():
     global _menu_hit
     theme = _level()["theme"]
@@ -1128,6 +1744,9 @@ def _draw_menu():
 def draw():
     if screen == "menu":
         _draw_menu()
+        return
+    if screen == "intro":
+        _draw_intro()
         return
 
     theme = _level()["theme"]
