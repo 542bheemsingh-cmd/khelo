@@ -37,6 +37,14 @@ sys.modules["js"] = js
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import game  # noqa: E402
 
+
+def begin():
+    """Start the level, skipping the new-obstacle intro if one appears."""
+    game.start_game()
+    if game.screen == "intro":
+        game._end_intro()
+
+
 fails = []
 def check(label, cond):
     print(("PASS " if cond else "FAIL ") + label)
@@ -68,7 +76,7 @@ check("buying a vehicle deducts its price",
       game.wallet == 1000 - game.VEHICLES[2]["price"] and 2 in game.owned and game.vehicle_index == 2)
 
 # --- start + drive ---
-game.start_game()
+begin()
 check("start enters playing", game.screen == "playing" and game.playing())
 check("track items were built",
       len(game.coins) > 0 and len(game.fuels) > 0 and len(game.rocks) > 0)
@@ -81,7 +89,7 @@ check("car drives forward under gas", game._car_x() - x0 > 300)
 check("fuel drained while driving", game.fuel < game.FUEL_MAX)
 
 # --- coins ---
-game.start_game()
+begin()
 game.wallet = 0; game.run_coins = 0
 c = game.coins[0]
 c["x"] = game._car_x(); c["y"] = game._car_y(); c["got"] = False
@@ -92,7 +100,7 @@ game._collect()
 check("a coin is only collected once", game.wallet == game.COIN_VALUE)
 
 # --- fuel refill ---
-game.start_game()
+begin()
 game.fuel = 20.0
 f = game.fuels[0]
 f["x"] = game._car_x(); f["y"] = game._car_y(); f["got"] = False
@@ -100,8 +108,8 @@ game._collect()
 check("fuel can refills the tank", game.fuel == game.FUEL_MAX and f["got"])
 
 # --- obstacles ---
-game.start_game()
-game.rocks = [{"x": game._car_x() + 150.0, "w": 40.0, "h": 18.0}]
+begin()
+game.rocks = [{"x": game._car_x() + 150.0, "w": 40.0, "h": 18.0, "shape": "hill", "style": "rock"}]
 rock = game.rocks[0]
 game.gas(True)
 for _ in range(420):
@@ -110,8 +118,8 @@ for _ in range(420):
 check("the car rides over a small rock bump without getting stuck",
       game.screen == "playing" and game._car_x() > rock["x"] + 80.0)
 
-game.start_game()
-game.rocks = [{"x": game._car_x() + 150.0, "w": 70.0, "h": 34.0}]
+begin()
+game.rocks = [{"x": game._car_x() + 150.0, "w": 70.0, "h": 34.0, "shape": "hill", "style": "boulder"}]
 rock = game.rocks[0]
 game.gas(True)
 for _ in range(420):
@@ -121,7 +129,7 @@ check("a boulder is passable too, not a wall",
       game.screen == "playing" and game._car_x() > rock["x"] + 80.0)
 
 # --- reaching the target wins + unlocks the next location ---
-game.start_game()
+begin()
 game.wallet = 0
 lv = game.LEVELS[game.level_index]
 game.rear["x"] = game.START_X + lv["target"] * game.PIXELS_PER_METER + 10
@@ -132,7 +140,7 @@ check("winning pays a bonus", game.wallet >= 50)
 check("winning unlocks the next location", 1 in game.unlocked)
 
 # --- crash ---
-game.start_game()
+begin()
 game.rear["x"] = 300.0
 game.rear["y"] = game.terrain(300.0) - game.VEHICLES[game.vehicle_index]["wheel_r"]
 game.front["x"] = 300.0 - game.VEHICLES[game.vehicle_index]["wheelbase"]
@@ -142,7 +150,7 @@ game.update(FRAME)
 check("flipping ends the run as a crash", game.screen == "over" and game.over_reason == "crash")
 
 # --- out of fuel ---
-game.start_game()
+begin()
 game.fuel = 0.001
 game.gas(True)
 game.update(FRAME)
@@ -153,7 +161,7 @@ ok_tracks = True
 for i in range(len(game.LEVELS)):
     game.unlocked = list(range(len(game.LEVELS)))
     game.level_index = i
-    game.start_game()
+    begin()
     if not (len(game.coins) and len(game.fuels) and len(game.rocks)):
         ok_tracks = False
     for _ in range(120):
@@ -184,6 +192,53 @@ game.draw()
 lvl_btn = [h for h in game._menu_hit if h[0] == "level"][0]
 game.tap(lvl_btn[2] + 5, lvl_btn[3] + 5)
 check("tapping a location selects it", game.level_index == lvl_btn[1])
+
+# --- per-level obstacle sets ---
+sets = [tuple(game.LEVELS[i]["obstacles"]) for i in range(5)]
+check("each level has 2-5 obstacle types", all(2 <= len(s) <= 5 for s in sets))
+check("the levels use different obstacle sets", len(set(sets)) == 5)
+check("every obstacle id has a spec", all(o in game.OBSTACLES for s in sets for o in s))
+check("new obstacle types are introduced as levels progress",
+      all(len(game._new_obstacles(i)) >= 1 for i in range(1, 5)))
+check("level 2 introduces cacti and ramps",
+      set(game._new_obstacles(1)) == {"cactus", "ramp"})
+
+# --- intro demo before a level with new obstacles ---
+game.screen = "menu"; game.level_index = 0; game.intro_seen = []
+game.start_game()
+check("a new level shows the obstacle intro first", game.screen == "intro")
+check("the intro lists the new obstacles", len(game._intro_new) >= 1)
+CALLS.clear(); game.draw()
+check("the intro screen draws", len(CALLS) > 30)
+game.update(FRAME)
+check("the intro demo animates", game._intro_t > 0)
+game.gas(True)
+check("gas starts the level from the intro", game.screen == "playing")
+check("the intro is remembered", 0 in game.intro_seen)
+game.back_to_menu(); game.start_game()
+check("the intro does not repeat once seen", game.screen == "playing")
+
+# --- every obstacle shape can be driven over ---
+bad = []
+for oid, spec in game.OBSTACLES.items():
+    game.unlocked = list(range(5)); game.level_index = 0
+    begin()
+    game.rocks = [{"x": game._car_x() + 170.0, "w": 70.0, "h": 24.0,
+                   "shape": spec["shape"], "style": spec["style"]}]
+    game.gas(True)
+    for _ in range(560):
+        game.update(FRAME)
+        if game.screen != "playing": break
+    if not (game.screen == "playing" and game._car_x() > game.rocks[0]["x"] + 90.0):
+        bad.append((oid, game.screen))
+check("every obstacle type is traversable", not bad)
+if bad:
+    print("   not traversable:", bad)
+
+# --- speedometer ---
+game.screen = "playing"; game.rear["vx"] = 400.0; game.rear["vy"] = 0.0
+CALLS.clear(); game._draw_speedo()
+check("the speedometer draws a readout", any(c[0] == "fillText" for c in CALLS))
 
 print()
 if fails:
