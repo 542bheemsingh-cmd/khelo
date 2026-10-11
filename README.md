@@ -14,9 +14,27 @@ static files, so the whole thing hosts on GitHub Pages.
 | Game | What it is | Controls |
 |---|---|---|
 | 🐦 **[Khelo Fly](https://542bheemsingh-cmd.github.io/khelo/games/fly/)** | Flappy-Bird-style flyer — tap to flap, dodge the pipes, best score saved | `Space` / `↑` / `W` / tap / click |
-| 🚙 **[Khelo Climb](https://542bheemsingh-cmd.github.io/khelo/games/hillclimb/)** | Hill-climb driving — hold the gas to climb, don't land on your head | `→` / `D` = gas, `←` / `A` = brake, or on-screen pedals |
+| 🚙 **[Khelo Climb](https://542bheemsingh-cmd.github.io/khelo/games/hillclimb/)** | Hill-climb driving — 5 locations, 4 vehicles, coins, fuel and obstacles | `→` / `D` = gas, `←` / `A` = brake, or on-screen pedals |
 
 The dashboard at the root lists them all and links into each game.
+
+## Khelo Climb features
+
+- 🗺️ **5 locations** — Sunset Hills, Desert Dunes, Frozen Peaks, Volcano Run and
+  low-gravity Moon Base, each with its own terrain, scenery and target distance.
+- 🚗 **4 vehicles** — Rusty Jeep, Dirt Bike, Monster Truck and Turbo Car, with
+  different power, grip and stability. Unlock them with coins.
+- 💰 **Coins** — collect them along the track (and for finishing a level) to
+  build a wallet, saved in your browser.
+- ⛽ **Fuel + refill cans** — the tank drains while you're on the gas; grab the
+  red cans to keep going.
+- 🪨 **Obstacles** — small rocks are just a nudge; boulders are tall enough to
+  launch (and flip) you if you hit them flat out.
+- 📊 **In-game HUD** — location, distance to target with a progress bar, coins,
+  wallet, best distance and fuel.
+- 🏁 **Level progression** — reach the target to unlock the next location.
+- 🖥️ **In-game menu** — pick a location and vehicle and buy new vehicles, all
+  drawn in Python on the canvas.
 
 ## How it works
 
