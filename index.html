@@ -2,142 +2,85 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Khelo Fly - a Flappy-Bird-style 2D game written in Python and played in the browser.">
-  <title>Khelo Fly - Python 2D Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Khelo - a little arcade of browser games, all written in Python and running in your browser.">
+  <title>Khelo - Play Python Games</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="stage">
-    <canvas id="game" width="480" height="720" aria-label="Khelo Fly game"></canvas>
+  <div class="glow" aria-hidden="true"></div>
 
-    <button id="mute" class="mute" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
-      <span id="mute-icon" aria-hidden="true">&#128266;</span>
-    </button>
+  <header class="topbar">
+    <a class="brand" href="./"><span>K</span>KHELO</a>
+    <span class="tagline">Browser games, written in Python</span>
+  </header>
 
-    <div id="loader" class="loader">
-      <div class="loader-card">
-        <h1>KHELO<span>FLY</span></h1>
-        <p id="loader-msg">Starting up…</p>
-        <div class="bar"><i id="loader-bar"></i></div>
-        <p class="loader-note">A Python game running in your browser via Pyodide.</p>
-      </div>
-    </div>
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Pick a game</p>
+      <h1>Small games. Big fun.</h1>
+      <p class="lede">
+        Every game on this page is written in <strong>Python</strong> and runs right here in
+        your browser through <strong>Pyodide</strong> — no installs, no server.
+      </p>
+    </section>
+
+    <!-- Add a new game by copying a <a class="card"> block and pointing it at
+         its folder under games/. -->
+    <section class="grid" aria-label="Games">
+
+      <a class="card" href="games/fly/" style="--accent:#36e7ff">
+        <div class="thumb thumb-fly" aria-hidden="true">
+          <span class="emoji">🐦</span>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <h2>Khelo Fly</h2>
+            <span class="chip">Arcade</span>
+          </div>
+          <p>Flappy-Bird-style flying. Tap to flap, dodge the pipes, and chase your best score as the gaps tighten.</p>
+          <div class="meta">
+            <span>Tap / Space</span>
+            <span>Best score saved</span>
+          </div>
+          <span class="play">Play <b>&#8594;</b></span>
+        </div>
+      </a>
+
+      <a class="card" href="games/hillclimb/" style="--accent:#ffb703">
+        <div class="thumb thumb-climb" aria-hidden="true">
+          <span class="emoji">🚙</span>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <h2>Khelo Climb</h2>
+            <span class="chip">Physics</span>
+          </div>
+          <p>Hill-climb driving. Hold the gas to conquer the slopes — but land on your head and it's over.</p>
+          <div class="meta">
+            <span>Arrows / D-A</span>
+            <span>Fuel + distance</span>
+          </div>
+          <span class="play">Play <b>&#8594;</b></span>
+        </div>
+      </a>
+
+    </section>
+
+    <section class="note">
+      <h3>How it works</h3>
+      <p>
+        Each game is a folder under <code>games/</code> containing a <code>game.py</code>
+        (all the logic) and an <code>index.html</code> that loads Pyodide and runs it.
+        Because it's all static files, the whole arcade hosts on GitHub Pages.
+      </p>
+    </section>
   </main>
 
-  <!-- Pyodide turns Python into WebAssembly so the game runs with no server. -->
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
-  <script>
-    // ---------------------------------------------------------------------
-    // Helpers exposed to Python: sound + small bits of browser glue.
-    // ---------------------------------------------------------------------
-    var actx = null;
-    var muted = false;
-
-    window.playSound = function (name) {
-      if (muted) return;
-      try {
-        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-        if (actx.state === "suspended") actx.resume();
-
-        var cfg = {
-          flap:  { type: "square",   f0: 520, f1: 900,  dur: 0.12, vol: 0.07 },
-          score: { type: "triangle", f0: 880, f1: 1320, dur: 0.14, vol: 0.09 },
-          hit:   { type: "sawtooth", f0: 300, f1: 80,   dur: 0.30, vol: 0.10 }
-        }[name] || { type: "sine", f0: 440, f1: 440, dur: 0.10, vol: 0.05 };
-
-        var t = actx.currentTime;
-        var osc = actx.createOscillator();
-        var gain = actx.createGain();
-        osc.connect(gain);
-        gain.connect(actx.destination);
-
-        osc.type = cfg.type;
-        osc.frequency.setValueAtTime(cfg.f0, t);
-        osc.frequency.exponentialRampToValueAtTime(Math.max(1, cfg.f1), t + cfg.dur);
-        gain.gain.setValueAtTime(cfg.vol, t);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + cfg.dur);
-
-        osc.start(t);
-        osc.stop(t + cfg.dur + 0.02);
-      } catch (err) {
-        /* Audio is a nicety; never let it stop the game. */
-      }
-    };
-
-    // ---------------------------------------------------------------------
-    // Boot: load Pyodide, run game.py, then drive the loop from here.
-    // ---------------------------------------------------------------------
-    var flap = null;
-    var ready = false;
-
-    async function boot() {
-      var msg = document.getElementById("loader-msg");
-      var bar = document.getElementById("loader-bar");
-
-      msg.textContent = "Downloading the Python runtime…";
-      var pyodide = await loadPyodide({
-        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/"
-      });
-
-      bar.style.width = "65%";
-      msg.textContent = "Loading game.py…";
-
-      var source = await (await fetch("game.py", { cache: "no-store" })).text();
-      await pyodide.runPythonAsync(source);
-
-      var update = pyodide.globals.get("update");
-      var draw = pyodide.globals.get("draw");
-      flap = pyodide.globals.get("flap");
-
-      bar.style.width = "100%";
-      ready = true;
-      document.getElementById("loader").classList.add("is-hidden");
-
-      var last = performance.now();
-      function frame(now) {
-        var dt = (now - last) / 1000;
-        last = now;
-        update(dt);
-        draw();
-        requestAnimationFrame(frame);
-      }
-      requestAnimationFrame(frame);
-    }
-
-    // ---------------------------------------------------------------------
-    // Input: keyboard + pointer (covers mouse and touch).
-    // ---------------------------------------------------------------------
-    var canvas = document.getElementById("game");
-    var muteButton = document.getElementById("mute");
-
-    function triggerFlap(event) {
-      if (event && event.cancelable) event.preventDefault();
-      if (ready && flap) flap();
-    }
-
-    window.addEventListener("keydown", function (event) {
-      if (event.target === muteButton) return;
-      if (event.code === "Space" || event.code === "ArrowUp" || event.code === "KeyW") {
-        triggerFlap(event);
-      }
-    });
-
-    canvas.addEventListener("pointerdown", triggerFlap);
-    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-
-    muteButton.addEventListener("click", function () {
-      muted = !muted;
-      document.getElementById("mute-icon").innerHTML = muted ? "&#128263;" : "&#128266;";
-      muteButton.setAttribute("aria-pressed", String(muted));
-      muteButton.blur();
-    });
-
-    boot().catch(function (err) {
-      document.getElementById("loader-msg").textContent =
-        "Could not start the game: " + err;
-      console.error(err);
-    });
-  </script>
+  <footer class="foot">
+    <span>Built with Python + Pyodide</span>
+    <span>·</span>
+    <a href="https://github.com/542bheemsingh-cmd/khelo">Source on GitHub</a>
+  </footer>
 </body>
 </html>
