@@ -218,9 +218,28 @@ check("the intro is remembered", 0 in game.intro_seen)
 game.back_to_menu(); game.start_game()
 check("the intro does not repeat once seen", game.screen == "playing")
 
-# --- every obstacle shape can be driven over ---
+# --- spike strips: the real crash hazard ---
+game.unlocked = list(range(5)); game.level_index = 0
+begin()
+sp = {"x": game._car_x(), "w": 25.0, "h": 18.0, "shape": "peak", "style": "spike", "id": "spike"}
+game.rocks = [sp]
+game.rear["vx"] = 400.0; game.rear["vy"] = 0.0
+game._collect()
+check("a spike strip ends the run when hit fast",
+      game.screen == "over" and game.over_reason == "spike")
+
+begin()
+sp = {"x": game._car_x(), "w": 25.0, "h": 18.0, "shape": "peak", "style": "spike", "id": "spike"}
+game.rocks = [sp]
+game.rear["vx"] = 60.0; game.rear["vy"] = 0.0
+game._collect()
+check("a spike strip can be crawled over slowly", game.screen == "playing")
+
+# --- every obstacle shape can be driven over (spikes excepted - they are fatal) ---
 bad = []
 for oid, spec in game.OBSTACLES.items():
+    if oid == "spike":
+        continue
     game.unlocked = list(range(5)); game.level_index = 0
     begin()
     game.rocks = [{"x": game._car_x() + 170.0, "w": 70.0, "h": 24.0,
@@ -234,11 +253,38 @@ for oid, spec in game.OBSTACLES.items():
 check("every obstacle type is traversable", not bad)
 if bad:
     print("   not traversable:", bad)
+check("at least one obstacle can end the run",
+      any(game.OBSTACLES[o]["style"] == "spike" for s in sets for o in s))
 
 # --- speedometer ---
 game.screen = "playing"; game.rear["vx"] = 400.0; game.rear["vy"] = 0.0
 CALLS.clear(); game._draw_speedo()
 check("the speedometer draws a readout", any(c[0] == "fillText" for c in CALLS))
+
+# --- no obstacle silhouette may dip below the ground line ---
+def profile_dips(ob):
+    CALLS.clear()
+    game._cam = 0.0
+    game._profile_path(ob)
+    for name, args in CALLS:
+        if name in ("lineTo", "moveTo") and args:
+            x, y = args[0], args[1]
+            if y > game.terrain(x + game._cam) + 0.6:
+                return True
+    return False
+
+game.level_index = 2
+xs = [x for x in range(1500, 8000) if abs(game.slope(x)) > 0.30]
+base_x = xs[0] if xs else 3000.0
+dippers = []
+for oid, spec in game.OBSTACLES.items():
+    ob = {"x": base_x, "w": 60.0, "h": 40.0,
+          "shape": spec["shape"], "style": spec["style"], "id": oid}
+    if profile_dips(ob):
+        dippers.append(oid)
+check("no obstacle silhouette dips below the ground line", not dippers)
+if dippers:
+    print("   dips below ground:", dippers)
 
 print()
 if fails:
