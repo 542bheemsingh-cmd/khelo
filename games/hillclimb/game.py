@@ -53,12 +53,13 @@ AIR_TORQUE = 55.0       # gas/brake pitch the car while airborne
 WHEELIE_TORQUE = 12.0   # gas lifts the nose on the ground
 CAM_UP_MAX = 220.0      # how far the camera may pan up on a big jump
 GROUND_FRICTION = 1.1   # light rolling grip, scaled by each level's surface
+SPIKE_SPEED = 255.0     # hitting a spike strip above this speed ends the run
 FIXED = 1.0 / 120.0
 START_X = 130.0
 PIXELS_PER_METER = 50.0
 HEAD_OFF = 34.0
 FUEL_MAX = 100.0
-FUEL_RATE = 6.0
+FUEL_RATE = 6.8
 COIN_VALUE = 5
 
 # ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ LEVELS = [
         "base": 380.0,
         "gravity": 2000.0,
         "terrain": [(60.0, 0.0032, 0.0), (30.0, 0.0071, 1.7), (12.0, 0.0165, 0.5)],
-        "obstacle_rate": 620.0,
+        "obstacle_rate": 470.0,
         "obstacles": ["rock", "log"],
         "friction": 1.0,
         "theme": {
@@ -88,7 +89,7 @@ LEVELS = [
         "base": 360.0,
         "gravity": 2000.0,
         "terrain": [(92.0, 0.0026, 0.5), (40.0, 0.0055, 2.0), (14.0, 0.0130, 1.0)],
-        "obstacle_rate": 520.0,
+        "obstacle_rate": 380.0,
         "obstacles": ["rock", "log", "cactus", "ramp"],
         "friction": 0.92,
         "theme": {
@@ -104,9 +105,9 @@ LEVELS = [
         "target": 480,
         "base": 400.0,
         "gravity": 2000.0,
-        "terrain": [(112.0, 0.0030, 1.0), (55.0, 0.0062, 0.3), (20.0, 0.0140, 2.5)],
-        "obstacle_rate": 460.0,
-        "obstacles": ["rock", "boulder", "ice", "ramp"],
+        "terrain": [(126.0, 0.0030, 1.0), (63.0, 0.0064, 0.3), (23.0, 0.0145, 2.5)],
+        "obstacle_rate": 330.0,
+        "obstacles": ["rock", "cactus", "ice", "ramp", "spike"],
         "friction": 0.55,
         "theme": {
             "sky": ["#0e2a4a", "#3f7fb5", "#a9d6ee", "#e8f6ff"],
@@ -121,9 +122,9 @@ LEVELS = [
         "target": 600,
         "base": 380.0,
         "gravity": 2100.0,
-        "terrain": [(132.0, 0.0034, 2.0), (70.0, 0.0070, 1.2), (26.0, 0.0170, 0.8)],
-        "obstacle_rate": 400.0,
-        "obstacles": ["rock", "boulder", "barrel", "cone", "ramp"],
+        "terrain": [(146.0, 0.0034, 2.0), (78.0, 0.0072, 1.2), (29.0, 0.0175, 0.8)],
+        "obstacle_rate": 290.0,
+        "obstacles": ["rock", "boulder", "barrel", "cone", "spike"],
         "friction": 0.95,
         "theme": {
             "sky": ["#2a0a12", "#6b1d1d", "#c0431f", "#ffa23a"],
@@ -138,9 +139,9 @@ LEVELS = [
         "target": 750,
         "base": 340.0,
         "gravity": 900.0,          # low gravity - big floaty jumps
-        "terrain": [(70.0, 0.0028, 0.2), (35.0, 0.0060, 1.9), (15.0, 0.0150, 1.4)],
-        "obstacle_rate": 700.0,
-        "obstacles": ["rock", "boulder", "crater", "tyre", "ramp"],
+        "terrain": [(80.0, 0.0028, 0.2), (40.0, 0.0062, 1.9), (18.0, 0.0155, 1.4)],
+        "obstacle_rate": 480.0,
+        "obstacles": ["rock", "boulder", "tyre", "ramp", "spike"],
         "friction": 0.80,
         "theme": {
             "sky": ["#05060f", "#101a3a", "#2a2f5a", "#4a4f80"],
@@ -182,14 +183,14 @@ VEHICLES = [
 OBSTACLES = {
     "rock":    {"label": "Rocks",         "shape": "hill",    "w": (30, 48),  "h": (12, 22), "style": "rock"},
     "log":     {"label": "Fallen Logs",   "shape": "log",     "w": (58, 88),  "h": (11, 17), "style": "log"},
-    "cactus":  {"label": "Cacti",         "shape": "plateau", "w": (22, 34),  "h": (34, 50), "style": "cactus"},
+    "cactus":  {"label": "Cacti",         "shape": "plateau", "w": (30, 44),  "h": (30, 44), "style": "cactus"},
     "ramp":    {"label": "Launch Ramps",  "shape": "wedge",   "w": (80, 124), "h": (32, 52), "style": "ramp"},
-    "boulder": {"label": "Boulders",      "shape": "hill",    "w": (52, 82),  "h": (36, 58), "style": "boulder"},
-    "ice":     {"label": "Ice Blocks",    "shape": "plateau", "w": (30, 46),  "h": (22, 36), "style": "ice"},
-    "barrel":  {"label": "Oil Barrels",   "shape": "plateau", "w": (24, 34),  "h": (26, 40), "style": "barrel"},
-    "cone":    {"label": "Traffic Cones", "shape": "peak",    "w": (16, 24),  "h": (16, 26), "style": "cone"},
-    "tyre":    {"label": "Tyre Stacks",   "shape": "hill",    "w": (22, 32),  "h": (24, 36), "style": "tyre"},
-    "crater":  {"label": "Craters",       "shape": "dip",     "w": (64, 104), "h": (14, 24), "style": "crater"},
+    "boulder": {"label": "Boulders",      "shape": "hill",    "w": (52, 82),  "h": (42, 64), "style": "boulder"},
+    "ice":     {"label": "Ice Blocks",    "shape": "plateau", "w": (32, 48),  "h": (24, 34), "style": "ice"},
+    "barrel":  {"label": "Oil Barrels",   "shape": "plateau", "w": (28, 40),  "h": (28, 40), "style": "barrel"},
+    "cone":    {"label": "Traffic Cones", "shape": "peak",    "w": (20, 30),  "h": (18, 26), "style": "cone"},
+    "tyre":    {"label": "Tyre Stacks",   "shape": "hill",    "w": (26, 36),  "h": (26, 36), "style": "tyre"},
+    "spike":   {"label": "Spike Strips",  "shape": "peak",    "w": (20, 30),  "h": (14, 22), "style": "spike"},
 }
 
 SAVE_KEY = "khelo_climb_save"
@@ -382,11 +383,23 @@ def _build_items():
     first = True
     while ox < end:
         oid = ids[0] if first else ids[rng.randrange(len(ids))]
+        if oid == "spike":
+            # spikes are the one lethal obstacle, so keep them rare and only on
+            # ground flat enough to brake on - never right after a ramp, which
+            # would launch you over your own brakes.
+            rough = max(abs(slope(ox - 60)), abs(slope(ox)), abs(slope(ox + 60)))
+            if (rng.random() > 0.62 or rough > 0.28
+                    or (rocks and rocks[-1]["shape"] == "wedge")):
+                oid = "rock"
         spec = OBSTACLES[oid]
         w = rng.uniform(*spec["w"])
         h = rng.uniform(*spec["h"])
-        if ox - w < last_right + 70.0:
-            ox = last_right + 70.0 + w
+        # never make a shape so steep the car simply cannot climb it - a 45deg
+        # cap keeps every obstacle drivable
+        h = min(h, 0.60 * w)
+        gap = 250.0 if oid == "spike" else 70.0     # leave room to brake
+        if ox - w < last_right + gap:
+            ox = last_right + gap + w
         rocks.append({"x": ox, "w": w, "h": h, "shape": spec["shape"],
                       "style": spec["style"], "id": oid})
         last_right = ox + w
@@ -423,7 +436,9 @@ def _bump_at(ob, x):
         # rises steadily across the ramp, then drops away -> a launch
         return h * (dx + w) / (2.0 * w)
     if shape == "plateau":
-        lead = max(14.0, h * 1.1)          # a climbable lead-in, then a flat top
+        # lead-in must stay inside the footprint, otherwise the "flat top"
+        # never starts and the block turns into a wedge
+        lead = min(w * 0.9, max(12.0, h * 1.0))
         if dx < -w + lead:
             return h * (dx + w) / lead
         return h
@@ -573,12 +588,14 @@ def reset_run():
 
 
 def _new_obstacles(i):
-    """Obstacle types that appear in level i but not in the one before it."""
+    """Obstacle types that appear for the FIRST time in level i."""
     ids = LEVELS[i]["obstacles"]
     if i == 0:
         return list(ids)
-    prev = set(LEVELS[i - 1]["obstacles"])
-    return [x for x in ids if x not in prev]
+    seen = set()
+    for j in range(i):
+        seen.update(LEVELS[j]["obstacles"])
+    return [x for x in ids if x not in seen]
 
 
 def _begin_play():
@@ -693,6 +710,20 @@ def _collect():
             f["got"] = True
             fuel = FUEL_MAX
             _sound("refuel")
+
+    # spike strips: safe to crawl over, fatal at speed. This is the obstacle
+    # that actually ends a run, so it is the one to brake for. Speed is the
+    # FORWARD speed - climbing the spike's own face must not count as speeding.
+    speed = abs(rear["vx"])
+    for ob in rocks:
+        if ob.get("id") != "spike":
+            continue
+        # the crash zone is exactly the strip's footprint, so once you are
+        # clear of it you are safe again
+        if abs(ob["x"] - cx) < ob["w"] and cy > terrain(ob["x"]) - 70.0:
+            if speed > SPIKE_SPEED:
+                _finish("spike")
+                return
 
 
 def update(dt):
@@ -934,20 +965,28 @@ def _draw_items():
         ctx.textAlign = "center"
         ctx.fillText("F", sx, f["y"] + 3)
 
-    _draw_obstacles()
-
 
 def _profile_path(ob):
-    """The obstacle's silhouette, following the exact profile the physics uses."""
+    """The obstacle silhouette: the top edge is the surface the car rides on,
+    the bottom edge follows the terrain itself, so on a slope the shape sits
+    ON the ground instead of sinking through it."""
     w = ob["w"]
-    ctx.beginPath()
-    ctx.moveTo(ob["x"] - w - _cam, terrain(ob["x"]) + 10)
     steps = 18
+    ctx.beginPath()
     for k in range(steps + 1):
         dx = -w + (2.0 * w) * k / steps
         px = ob["x"] + dx
-        ctx.lineTo(px - _cam, terrain(px) - _bump_at(ob, px))
-    ctx.lineTo(ob["x"] + w - _cam, terrain(ob["x"]) + 10)
+        y = terrain(px) - _bump_at(ob, px)
+        if k == 0:
+            ctx.moveTo(px - _cam, y)
+        else:
+            ctx.lineTo(px - _cam, y)
+    for k in range(steps, -1, -1):
+        dx = -w + (2.0 * w) * k / steps
+        px = ob["x"] + dx
+        # sit on the grass surface (the band is stroked 15px around the ground
+        # line, so its top edge is ~7px above it) instead of sinking into it
+        ctx.lineTo(px - _cam, terrain(px) - 7)
     ctx.closePath()
 
 
@@ -1034,10 +1073,11 @@ def _draw_obstacles():
             ctx.lineWidth = 2
             for k in range(9):
                 px = sx - w + (2.0 * w) * k / 8.0
-                top = terrain(px + _cam) - _bump_at(ob, px + _cam)
+                wx = px + _cam
+                top = terrain(wx) - _bump_at(ob, wx)
                 ctx.beginPath()
                 ctx.moveTo(px, top)
-                ctx.lineTo(px, base + 12)
+                ctx.lineTo(px, terrain(wx) - 4)
                 ctx.stroke()
             ctx.restore()
             ctx.beginPath()
@@ -1052,8 +1092,13 @@ def _draw_obstacles():
             ctx.lineWidth = 5
             ctx.strokeStyle = "#c99a5a"
             ctx.stroke()
+            # support post, reaching down to the ground under IT (not the centre)
+            postx = sx + w - 12
+            wx = postx + _cam
+            top_y = terrain(ob["x"]) - h * 0.85
+            bot_y = terrain(wx) - 4
             ctx.fillStyle = "#5c4326"
-            ctx.fillRect(sx + w - 12, base - h * 0.85, 9, h * 0.85)
+            ctx.fillRect(postx, top_y, 9, max(6.0, bot_y - top_y))
 
         elif style == "cactus":
             ctx.save()
@@ -1159,6 +1204,27 @@ def _draw_obstacles():
             _profile_path(ob)
             ctx.lineWidth = 2.5
             ctx.strokeStyle = "rgba(190, 200, 215, 0.45)"
+            ctx.stroke()
+
+        elif style == "spike":
+            ctx.save()
+            _profile_path(ob)
+            ctx.fillStyle = "#2b2f3a"
+            ctx.fill()
+            ctx.clip()
+            ctx.fillStyle = "#cfd6e2"
+            for k in range(5):
+                bx = sx - w + (2.0 * w) * (k + 0.5) / 5.0
+                ctx.beginPath()
+                ctx.moveTo(bx - 6, base + 4)
+                ctx.lineTo(bx, base - h * 0.92)
+                ctx.lineTo(bx + 6, base + 4)
+                ctx.closePath()
+                ctx.fill()
+            ctx.restore()
+            _profile_path(ob)
+            ctx.lineWidth = 2.5
+            ctx.strokeStyle = "rgba(220, 230, 245, 0.5)"
             ctx.stroke()
 
         else:
@@ -1629,11 +1695,18 @@ def _demo_icon(style, cx, base, w, h):
             ctx.beginPath()
             ctx.arc(cx, cy, h * 0.12, 0, math.pi * 2)
             ctx.fill()
-    elif style == "crater":
-        ctx.fillStyle = "#2b1d12"
-        ctx.beginPath()
-        ctx.ellipse(cx, base + h * 0.15, w * 0.8, h * 0.5, 0, 0, math.pi * 2)
-        ctx.fill()
+    elif style == "spike":
+        ctx.fillStyle = "#2b2f3a"
+        ctx.fillRect(cx - w * 0.9, base - 5, w * 1.8, 7)
+        ctx.fillStyle = "#cfd6e2"
+        for k in range(4):
+            bx = cx - w * 0.7 + k * (w * 0.47)
+            ctx.beginPath()
+            ctx.moveTo(bx - 5, base - 5)
+            ctx.lineTo(bx, base - h * 0.9)
+            ctx.lineTo(bx + 5, base - 5)
+            ctx.closePath()
+            ctx.fill()
 
 
 def _draw_intro():
@@ -1755,6 +1828,7 @@ def draw():
     ctx.translate(0, -_cam_y)
     _draw_parallax(theme)
     _draw_terrain(theme)
+    _draw_obstacles()
     _draw_items()
     _draw_car()
     ctx.restore()
