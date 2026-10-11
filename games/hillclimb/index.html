@@ -2,38 +2,57 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1224">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="description" content="Khelo Climb - a 2D hill-climb driving game written in Python: levels, vehicles, coins, fuel and obstacles.">
   <title>Khelo Climb - Python 2D Game</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <a class="back" href="../../">&#8592; All games</a>
-
+<body data-orient="landscape">
   <main class="stage">
-    <canvas id="game" width="900" height="560" aria-label="Khelo Climb game"></canvas>
-
-    <button id="mute" class="mute" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
-      <span id="mute-icon" aria-hidden="true">&#128266;</span>
-    </button>
-
-    <div class="pedals is-hidden" id="pedals">
-      <button class="pedal brake" id="pedal-brake" type="button" aria-label="Brake"><span>BRAKE</span></button>
-      <button class="pedal gas" id="pedal-gas" type="button" aria-label="Gas"><span>GAS</span></button>
+    <div class="bar">
+      <a class="ctrl home" href="../../" title="All games" aria-label="All games">&#8962;</a>
+      <span class="grow"></span>
+      <button id="mute" class="ctrl" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
+        <span id="mute-icon" aria-hidden="true">&#128266;</span>
+      </button>
+      <button id="fs" class="ctrl" type="button" aria-pressed="false" title="Full screen" aria-label="Full screen">&#9974;</button>
     </div>
 
-    <div id="loader" class="loader">
-      <div class="loader-card">
-        <h1>KHELO<span>CLIMB</span></h1>
-        <p id="loader-msg">Starting up…</p>
-        <div class="bar"><i id="loader-bar"></i></div>
-        <p class="loader-note">A Python game running in your browser via Pyodide.</p>
+    <div class="screen">
+      <canvas id="game" width="900" height="560" aria-label="Khelo Climb game"></canvas>
+
+      <div class="pedals is-hidden" id="pedals">
+        <button class="pedal brake" id="pedal-brake" type="button" aria-label="Brake"><span>BRAKE</span></button>
+        <button class="pedal gas" id="pedal-gas" type="button" aria-label="Gas"><span>GAS</span></button>
+      </div>
+
+      <div class="rotate" id="rotate">
+        <div class="rotate-card">
+          <div class="rotate-icon" aria-hidden="true">&#128241;&#8635;</div>
+          <h2>Turn your phone sideways</h2>
+          <p>Khelo Climb plays best in landscape. Rotate your device, or carry on in portrait.</p>
+          <button type="button" id="rotate-dismiss">Play anyway</button>
+        </div>
+      </div>
+
+      <div id="loader" class="loader">
+        <div class="loader-card">
+          <h1>KHELO<span>CLIMB</span></h1>
+          <p id="loader-msg">Starting up…</p>
+          <div class="bar-track"><i id="loader-bar"></i></div>
+          <p class="loader-note">A Python game running in your browser via Pyodide.</p>
+        </div>
       </div>
     </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
   <script>
+    var GW = 900, GH = 560;
+
     var actx = null;
     var muted = false;
 
@@ -68,7 +87,19 @@
     var gasFn = null, brakeFn = null, tapFn = null, enterFn = null, menuFn = null, playingFn = null;
     var ready = false;
     var canvas = document.getElementById("game");
+    var screenBox = document.querySelector(".screen");
     var pedals = document.getElementById("pedals");
+
+    /* Keep the 900x560 drawing ratio exact so taps map 1:1 and nothing is
+       squashed or cropped, whatever the screen. */
+    function fit() {
+      var aw = screenBox.clientWidth, ah = screenBox.clientHeight;
+      if (!aw || !ah) return;
+      var s = Math.min(aw / GW, ah / GH);
+      canvas.style.width = Math.floor(GW * s) + "px";
+      canvas.style.height = Math.floor(GH * s) + "px";
+      pedals.style.width = Math.floor(GW * s) + "px";   // keep the pedals on the canvas
+    }
 
     async function boot() {
       var msg = document.getElementById("loader-msg");
@@ -94,6 +125,7 @@
       bar.style.width = "100%";
       ready = true;
       document.getElementById("loader").classList.add("is-hidden");
+      fit();
 
       var last = performance.now();
       function frame(now) {
@@ -126,8 +158,8 @@
     // ---- canvas taps (menu buttons) ----
     function canvasPoint(e) {
       var r = canvas.getBoundingClientRect();
-      return [ (e.clientX - r.left) / r.width * 900,
-               (e.clientY - r.top) / r.height * 560 ];
+      return [ (e.clientX - r.left) / r.width * GW,
+               (e.clientY - r.top) / r.height * GH ];
     }
     canvas.addEventListener("pointerdown", function (e) {
       e.preventDefault();
@@ -154,6 +186,75 @@
       e.currentTarget.setAttribute("aria-pressed", String(muted));
       e.currentTarget.blur();
     });
+
+    /* ---- full screen ---- */
+    (function () {
+      var stage = document.querySelector(".stage");
+      var btn = document.getElementById("fs");
+      var wide = document.body.dataset.orient === "landscape";
+
+      function mark(on) {
+        btn.innerHTML = on ? "&#10064;" : "&#9974;";
+        btn.setAttribute("aria-pressed", String(on));
+        btn.title = on ? "Exit full screen" : "Full screen";
+        document.documentElement.classList.toggle("fs-on", on);
+        setTimeout(fit, 60);
+      }
+      function lockLandscape() {
+        try {
+          if (wide && screen.orientation && screen.orientation.lock) {
+            var p = screen.orientation.lock("landscape");
+            if (p && p.catch) p.catch(function () {});
+          }
+        } catch (e) {}
+      }
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        btn.blur();
+        if (document.fullscreenElement) { document.exitFullscreen(); return; }
+        if (stage.requestFullscreen) {
+          var p = stage.requestFullscreen({ navigationUI: "hide" });
+          if (p && p.then) p.then(lockLandscape, function () { mark(true); });
+          else lockLandscape();
+        } else {
+          mark(true);   // iOS Safari has no element fullscreen: fill the viewport instead
+        }
+      });
+      document.addEventListener("fullscreenchange", function () {
+        if (!document.fullscreenElement && screen.orientation && screen.orientation.unlock) {
+          try { screen.orientation.unlock(); } catch (e) {}
+        }
+        mark(!!document.fullscreenElement);
+      });
+      mark(false);
+    })();
+
+    /* ---- rotate hint ---- */
+    (function () {
+      var box = document.getElementById("rotate");
+      var btn = document.getElementById("rotate-dismiss");
+      function dismissed() {
+        try { return sessionStorage.getItem("khelo_rotate_ok") === "1"; } catch (e) { return false; }
+      }
+      function portrait() {
+        return window.matchMedia("(orientation: portrait) and (max-width: 900px)").matches;
+      }
+      function update() {
+        box.classList.toggle("is-on", portrait() && !dismissed() && !document.fullscreenElement);
+      }
+      btn.addEventListener("click", function () {
+        try { sessionStorage.setItem("khelo_rotate_ok", "1"); } catch (e) {}
+        update();
+      });
+      window.addEventListener("resize", update);
+      window.addEventListener("orientationchange", update);
+      document.addEventListener("fullscreenchange", update);
+      update();
+    })();
+
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    document.addEventListener("fullscreenchange", fit);
 
     boot().catch(function (err) {
       document.getElementById("loader-msg").textContent = "Could not start the game: " + err;
