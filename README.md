@@ -30,10 +30,15 @@ The dashboard at the root lists them all and links into each game.
   red cans to keep going.
 - 🕹️ **Air control** — while airborne, gas lifts the nose and brake drops it.
   Flatten out before you land, or over-rotate and flip.
-- 🪨 **Obstacles** — small rocks are just a nudge; boulders are tall enough to
-  launch (and flip) you if you hit them flat out.
+- 🪨 **Obstacles that change as you progress** — every location has its own set
+  of 2–5 obstacle types (rocks, fallen logs, cacti, launch ramps, boulders, ice
+  blocks, oil barrels, traffic cones, tyre stacks and craters). New types are
+  introduced as you unlock new locations, and each new one gets a short demo
+  before the level starts.
+- 🛞 **Different surfaces** — each location has its own grip, so Frozen Peaks is
+  slippery while Sunset Hills bites.
 - 📊 **In-game HUD** — location, distance to target with a progress bar, coins,
-  wallet, best distance and fuel.
+  wallet, best distance, fuel and a speedometer.
 - 🏁 **Level progression** — reach the target to unlock the next location.
 - 🖥️ **In-game menu** — pick a location and vehicle and buy new vehicles, all
   drawn in Python on the canvas.
