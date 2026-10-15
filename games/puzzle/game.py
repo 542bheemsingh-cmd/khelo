@@ -19,6 +19,7 @@ The page calls:
     draw()      -> render a frame
 """
 
+import copy
 import json
 import math
 import random
@@ -277,6 +278,7 @@ def keyboard_mode():
 MAX_WRONG = 10
 wrong_tries = 0
 _preview = False          # while drawing the solution preview, skip caption text
+_stash = None             # the board as it was when the solution was shown
 
 
 def _lights_solve(g0, n):
@@ -320,7 +322,9 @@ def _note_wrong():
 
 
 def _show_solution():
-    global screen, show_hint
+    global screen, show_hint, _stash
+    # remember exactly where the player was, so "Keep trying" can put it back
+    _stash = copy.deepcopy(P)
     screen = "solution"
     show_hint = False
     _apply_solution()
@@ -328,8 +332,12 @@ def _show_solution():
 
 
 def keep_trying():
-    """Dismiss the solution screen and go back to the board with a fresh count."""
-    global screen, wrong_tries
+    """Dismiss the solution and carry on from the board as it was."""
+    global screen, wrong_tries, P, _stash
+    if _stash is not None:
+        P.clear()
+        P.update(_stash)
+        _stash = None
     wrong_tries = 0
     screen = "play"
 
@@ -819,10 +827,11 @@ def _setup_crack():
 
 
 def _setup():
-    global P, _message, show_hint, wrong_tries
+    global P, _message, show_hint, wrong_tries, _stash
     show_hint = False
     _message = ""
     wrong_tries = 0
+    _stash = None
     lv = LEVELS[level_index]
     kind = lv["kind"]
     if kind == "lights":
