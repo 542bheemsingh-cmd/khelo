@@ -16,6 +16,7 @@ static files, so the whole thing hosts on GitHub Pages.
 | 🐦 **[Khelo Fly](https://542bheemsingh-cmd.github.io/khelo/games/fly/)** | Flappy-Bird-style flyer — tap to flap, dodge the pipes, best score saved | `Space` / `↑` / `W` / tap / click |
 | 🚙 **[Khelo Climb](https://542bheemsingh-cmd.github.io/khelo/games/hillclimb/)** | Hill-climb driving — 5 locations, 4 vehicles, coins, fuel and obstacles | `→` / `D` = gas, `←` / `A` = brake, or on-screen pedals |
 | 🧩 **[Khelo Puzzles](https://542bheemsingh-cmd.github.io/khelo/games/puzzle/)** | 10 logic puzzles of increasing difficulty, one new kind per level, each with a hint | click / tap, type for the word puzzles |
+| 🎲 **[Khelo Ludo](https://542bheemsingh-cmd.github.io/khelo/games/ludo/)** | The classic board game — 2, 3 or 4 players, or 2 against 2 | tap the dice, then tap a token |
 
 The dashboard at the root lists them all and links into each game.
 
@@ -34,6 +35,22 @@ Every game is built for touch as well as a keyboard:
   phone upright; Fly is portrait and needs no turning.
 - **Tap-friendly controls** — gas/brake pedals in Climb, tap-to-flap in Fly, and a
   canvas-tap Menu button so you are never stuck without an `Esc` key.
+
+## Khelo Ludo
+
+The classic race home, with the full board and the full rules.
+
+- **Two modes.** *Single-Single* — everyone for themselves, and you choose **2, 3
+  or 4 players** on the next screen. *Team-Team* — always 4 players, **Red +
+  Yellow against Green + Blue**.
+- **Real Ludo rules.** Roll a 6 to bring a token out of your yard. Land on an
+  opponent and it goes back to their yard. The four coloured start squares and
+  the four star squares are safe. A 6, a capture or getting a token home all earn
+  you another roll.
+- **Animated.** The dice tumbles before it settles, tokens hop square by square
+  along the ring, captured tokens spark, and a confetti burst celebrates the win.
+- **Playable solo on one screen** — every player takes their turn on the same
+  device, so it works as a pass-and-play game on a phone.
 
 ## Khelo Puzzles levels
 
