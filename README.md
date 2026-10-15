@@ -37,21 +37,48 @@ Every game is built for touch as well as a keyboard:
 
 ## Khelo Puzzles levels
 
-Ten levels, a **different kind of puzzle each time**, unlocked one at a time and
-saved in your browser. Every level carries a one-line hint.
+**20 levels**, a different kind of puzzle each time, unlocked one at a time and
+saved in your browser. Every level carries a **GOAL** line on screen saying
+exactly what you are being asked to do, and a **Hint** button that floats its
+advice in a card right above the button.
 
 | # | Puzzle | What you do |
 |---|---|---|
-| 1 | Lights Out (3×3) | Press tiles to switch every light off |
+| 1 | Lights Out (3×3) | Switch every light off |
 | 2 | Memory Match | Find the matching pairs |
 | 3 | Number Sequence | Work out the next term |
 | 4 | Riddle | Answer a classic riddle |
-| 5 | Sliding Puzzle | Order the 8 tiles |
-| 6 | Tower of Hanoi | Move the stack, big never on small |
-| 7 | Code Breaker | Crack a 3-digit code from Mastermind-style clues |
+| 5 | Sliding Puzzle (3×3) | Order the tiles |
+| 6 | Tower of Hanoi (3 discs) | Move the stack, big never on small |
+| 7 | Crack the Code | **Deduce** a 3-digit code from the clues |
 | 8 | Mini Sudoku (4×4) | Fill every row, column and box with 1-4 |
 | 9 | Nonogram (5×5) | Reveal the hidden picture from the clues |
 | 10 | N-Queens (6×6) | Place 6 queens with no two attacking |
+| 11 | Futoshiki (4×4) | Latin square with < and > between neighbours |
+| 12 | Lights Out + (4×4) | The bigger board |
+| 13 | Memory Match + | Five pairs, ten tiles |
+| 14 | Sliding Puzzle + (4×4) | The 15-puzzle |
+| 15 | Tower of Hanoi + (4 discs) | 15 moves minimum |
+| 16 | Logic Grid (3×3) | Deduce who owns which pet from the clues |
+| 17 | Nonogram + (6×6) | A bigger hidden picture |
+| 18 | N-Queens + (7×7) | Seven queens |
+| 19 | Futoshiki + (5×5) | Five symbols per line |
+| 20 | Logic Grid + (4×4) | Four of each |
+
+### Every puzzle is solvable by logic
+
+Nothing here needs guessing:
+
+- **Crack the Code** (level 7) replaced the old guess-the-code game. All the
+  clues are on screen from the start, and there is exactly one code that fits
+  every clue - you deduce it. The tests verify each generated puzzle is
+  uniquely deducible.
+- **Futoshiki** is generated so that its solution is provably the *only* one
+  satisfying the signs.
+- **Logic Grid** puzzles are hand-written and checked to have exactly one
+  arrangement consistent with their clues.
+- Lights Out, the sliding puzzle and the crack-the-code puzzles are all
+  generated *from* a valid solution, so they can never be unsolvable.
 
 ### Stuck? The solution shows itself
 
