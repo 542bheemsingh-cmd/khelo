@@ -39,7 +39,87 @@ DPR = min(max(DPR, 1.0), 2.0)
 canvas.width = int(W * DPR)
 canvas.height = int(H * DPR)
 
-ctx = canvas.getContext("2d")
+# ---------------------------------------------------------------------------
+# Screen-adaptive UI
+#
+# The canvas has a fixed logical size, so on a phone it is scaled down and
+# everything drawn on it shrinks with it - text becomes unreadable and buttons
+# become too small for a finger. The page tells us how big the canvas really
+# is on screen, and we grow the type and the touch targets back to a
+# comfortable size. Material Design asks for a finger target of at least
+# 48 CSS pixels, which is about 9mm.
+# ---------------------------------------------------------------------------
+UI = 1.0          # type scale, 1.0 on a big screen and larger on a phone
+MIN_TOUCH = 0.0   # logical pixels that land on 48 CSS pixels
+
+
+def set_ui(scale):
+    """Called by the page with canvasHeightOnScreen / logicalHeight."""
+    global UI, MIN_TOUCH
+    try:
+        s = float(scale)
+    except Exception:
+        return
+    if s <= 0:
+        return
+    UI = max(1.0, min(1.35, 1.0 / s))
+    MIN_TOUCH = min(66.0, 48.0 / s)
+
+
+def _fit_font(spec):
+    """Grow a '700 15px family' font string so text stays readable."""
+    if UI <= 1.0 or "px" not in spec:
+        return spec
+    i = spec.index("px")
+    j = i
+    while j > 0 and (spec[j - 1].isdigit() or spec[j - 1] == "."):
+        j -= 1
+    try:
+        size = float(spec[j:i])
+    except ValueError:
+        return spec
+    return spec[:j] + str(int(round(size * UI))) + spec[i:]
+
+
+def _fs(px, cap=1.35):
+    """A font size scaled for the screen, but never past `cap`."""
+    return int(round(px * min(UI, cap)))
+
+
+
+class _Ctx:
+    """A pass-through around the 2D context that rescales every font we set."""
+
+    def __init__(self, real):
+        object.__setattr__(self, "_real", real)
+
+    def __setattr__(self, name, value):
+        if name == "font" and isinstance(value, str):
+            value = _fit_font(value)
+        setattr(self._real, name, value)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def _touch(rect):
+    """Grow a rectangle so it is at least a finger wide."""
+    rx, ry, rw, rh = rect
+    if MIN_TOUCH > rw:
+        rx -= (MIN_TOUCH - rw) / 2.0
+        rw = MIN_TOUCH
+    if MIN_TOUCH > rh:
+        ry -= (MIN_TOUCH - rh) / 2.0
+        rh = MIN_TOUCH
+    return rx, ry, rw, rh
+
+
+def _in(rect, x, y):
+    rx, ry, rw, rh = _touch(rect)
+    return rx <= x <= rx + rw and ry <= y <= ry + rh
+
+
+ctx = _Ctx(canvas.getContext("2d"))
 ctx.scale(DPR, DPR)
 
 # ---------------------------------------------------------------------------
