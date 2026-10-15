@@ -35,6 +35,21 @@ Every game is built for touch as well as a keyboard:
   phone upright; Fly is portrait and needs no turning.
 - **Tap-friendly controls** — gas/brake pedals in Climb, tap-to-flap in Fly, and a
   canvas-tap Menu button so you are never stuck without an `Esc` key.
+- **Finger-sized targets.** The buttons in the page chrome are 48 CSS px square,
+  the [Material Design 3](https://m3.material.io/) minimum, with 8 px between
+  them. The controls drawn *inside* the canvas quietly grow their hit area to the
+  same size, so a button that looks small is still easy to hit.
+- **Type that stays readable.** The canvas has a fixed drawing resolution, so on
+  a small screen everything drawn on it shrinks with it. The page tells the
+  Python how big the canvas really is, and the game scales its type back up — a
+  label ends up about the same physical size on a phone as on a laptop.
+- **Safe areas.** The bars respect the notch and the home indicator.
+
+The values come from [Material Design 3](https://m3.material.io/foundations/design-tokens)
+for the touch targets and spacing, and from [Open Props](https://open-props.style/)
+(MIT) for the spacing and radius scale. Both are wired in as CSS custom
+properties at the top of each stylesheet, so the whole arcade can be restyled
+from one block.
 
 ## Khelo Ludo
 
