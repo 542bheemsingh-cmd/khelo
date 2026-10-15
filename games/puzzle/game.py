@@ -1064,10 +1064,10 @@ def _geo(kind):
     if kind == "futoshiki":
         return _grid_geo(n, 162, 436, 68, min_gap=22)
     if kind == "nonogram":
-        ox, oy, cell, gap = _grid_geo(n, 206, 470, 58, max_w=420)
+        ox, oy, cell, gap = _grid_geo(n, 176, 470, 58, max_w=420)
         return ox + 46, oy, cell, gap
     if kind == "logic":
-        ox, oy, cell, gap = _grid_geo(n, 212, 452, 60, max_w=420)
+        ox, oy, cell, gap = _grid_geo(n, 182, 452, 60, max_w=420)
         return ox + 62, oy, cell, gap
     return _grid_geo(n, 150, 450, 70)
 
@@ -1467,17 +1467,6 @@ def _draw_chrome():
 # ---------------------------------------------------------------------------
 # Drawing: puzzles
 # ---------------------------------------------------------------------------
-def _instr(text, y, maxw=600, size=15):
-    """The per-puzzle instruction line.
-
-    It hides while the hint card is open, because that card floats over the
-    same top-right corner.
-    """
-    if show_hint:
-        return
-    _wrap(text, W / 2, y, maxw, size)
-
-
 def _draw_lights():
     n, g = P["n"], P["g"]
     ox, oy, cell, gap = _geo("lights")
@@ -1494,7 +1483,6 @@ def _draw_lights():
                 ctx.lineWidth = 5
                 ctx.strokeStyle = "#7ef0c0"
                 ctx.stroke()
-    _instr("Switch every light off. Moves: %d" % P["moves"], 120)
 
 
 def _draw_memory():
@@ -1513,7 +1501,6 @@ def _draw_memory():
         ctx.fillStyle = "#ffffff"
         ctx.font = "800 42px %s" % FONT
         ctx.fillText(sym if shown else "?", px + cw / 2, py + ch / 2 + 15)
-    _instr("Find the %d pairs." % (len(P["deck"]) // 2), 120)
 
 
 def _draw_typed(prompt_lines, unit):
@@ -1557,7 +1544,6 @@ def _draw_slide():
             ctx.fillStyle = "#ffffff"
             ctx.font = "800 %dpx %s" % (int(cell * 0.42), FONT)
             ctx.fillText(str(v), px + cell / 2, py + cell / 2 + cell * 0.15)
-    _instr("Slide tiles into the blank. Moves: %d" % P["moves"], 120)
 
 
 def _draw_hanoi():
@@ -1577,12 +1563,10 @@ def _draw_hanoi():
             col = ["#e63946", "#f59e0b", "#2dd4bf", "#a78bfa", "#60a5fa"][disc % 5]
             _panel(px + peg_w / 2 - dw / 2, dy, dw, 20, col,
                    "rgba(255,255,255,0.35)", 7)
-    _instr("Move all %d discs to the third peg. Moves: %d" % (n, P["moves"]), 120, 620)
 
 
 def _draw_crack():
-    _instr("Use the clues to deduce the code - you never need to guess.", 118, 720)
-    y = 146
+    y = 132
     for cl in P["clues"][:6]:
         for i, d in enumerate(cl["g"]):
             bx = W / 2 - 200 + i * 44
@@ -1625,7 +1609,6 @@ def _draw_sudoku():
                 ctx.fillStyle = "#9fb3d9" if fixed else "#ffffff"
                 ctx.font = "800 %dpx %s" % (int(cell * 0.44), FONT)
                 ctx.fillText(str(v), px + cell / 2, py + cell / 2 + cell * 0.15)
-    _instr("Tap a cell, then a digit. 1-4 in every row, column and box.", 122, 700)
     for d in range(4):
         _button(W / 2 - 140 + d * 74, 460, 66, 54, str(d + 1), False, size=22)
 
@@ -1649,7 +1632,6 @@ def _draw_nonogram():
     for x in range(n):
         ctx.fillText(" ".join(str(v) for v in P["cols"][x]),
                      ox + x * (cell + gap) + cell / 2, oy - 10)
-    _instr("Fill the cells the clues describe.", 158, 620)
 
 
 def _draw_queens():
@@ -1667,7 +1649,6 @@ def _draw_queens():
         ctx.font = "800 %dpx %s" % (int(cell * 0.55), FONT)
         ctx.fillText("\u265b", ox + x * (cell + gap) + cell / 2,
                      oy + y * (cell + gap) + cell / 2 + cell * 0.19)
-    _instr("Place %d queens - none may attack another. Placed: %d" % (n, len(P["q"])), 120, 660)
 
 
 def _draw_futoshiki():
@@ -1704,7 +1685,6 @@ def _draw_futoshiki():
     bx = W / 2 - (n * bw + (n - 1) * bg) / 2
     for d in range(n):
         _button(bx + d * (bw + bg), 468, bw, 48, str(d + 1), False, size=20)
-    _instr("Fill 1-%d in every row and column, obeying the signs." % n, 132, 700)
 
 
 def _draw_logic():
