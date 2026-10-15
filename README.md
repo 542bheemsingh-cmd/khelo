@@ -47,8 +47,17 @@ The classic race home, with the full board and the full rules.
   opponent and it goes back to their yard. The four coloured start squares and
   the four star squares are safe. A 6, a capture or getting a token home all earn
   you another roll.
-- **Animated.** The dice tumbles before it settles, tokens hop square by square
-  along the ring, captured tokens spark, and a confetti burst celebrates the win.
+- **Animated.** The die drops in from above, tumbling and spinning before it
+  lands with a clack. Tokens hop square by square along the ring. A captured
+  token walks all the way back to its yard rather than teleporting. Confetti
+  celebrates the win.
+- **Sound for everything.** The die rattle and its landing clack, the wooden tock
+  of a token moving, the whoosh of a capture, a chime for a token reaching home,
+  and a fanfare for the win — all synthesised, so there are no audio files.
+- **Five token designs** — Ball, Gem, Ring, Star and Hex — picked on the set-up
+  screen before you start.
+- **Your own names.** Tap a player's name on the set-up screen and type it, and
+  it then shows in small text above every one of that player's tokens.
 - **Playable solo on one screen** — every player takes their turn on the same
   device, so it works as a pass-and-play game on a phone.
 
