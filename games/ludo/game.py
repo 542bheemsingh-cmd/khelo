@@ -180,7 +180,7 @@ _menu_hit = []
 _name_fields = []
 _confetti = []
 
-ROLL_DUR = 0.9
+ROLL_DUR = 2.0          # the die takes its time
 
 
 def _sound(name):
@@ -971,10 +971,31 @@ def _die_face(cx, cy, s, n):
         ctx.fill()
 
 
+def _blit_dice3d(x, y, w, h):
+    """Draw the three.js die onto the board. False if it is not available."""
+    try:
+        # roll_t runs 0..1 during the roll and rests at 1 when settled
+        js.dice3d.frame(float(roll_t), int(dice))
+        ctx.drawImage(js.dice3d.canvas, x, y, w, h)
+        return True
+    except Exception:
+        return False
+
+
 def _draw_die():
     x, y, w, h = DIE_RECT
     s = min(w, h)
     cx, cy = x + w / 2, y + h / 2
+
+    glow = 0.5 + 0.5 * math.sin(_t * 3)
+    if state == "play" and rolling <= 0:
+        _panel(x - 6, y - 6, s + 12, s + 12, "rgba(255,255,255,0.05)",
+               "rgba(255,255,255,%.2f)" % (0.10 + glow * 0.12), 18)
+
+    # the real 3D die, if the page managed to build one
+    if _blit_dice3d(x, y, w, h):
+        return
+
     e = roll_t if rolling > 0 else 1.0
     ease = 1 - (1 - e) ** 3                       # ease-out
     off = -(1 - ease) * 210                       # falls in from above
@@ -988,11 +1009,6 @@ def _draw_die():
                     0, 0, 6.2832)
         ctx.fillStyle = "rgba(0,0,0,%.2f)" % (0.10 + ease * 0.30)
         ctx.fill()
-
-    glow = 0.5 + 0.5 * math.sin(_t * 3)
-    if state == "play" and rolling <= 0:
-        _panel(x - 6, y - 6, s + 12, s + 12, "rgba(255,255,255,0.05)",
-               "rgba(255,255,255,%.2f)" % (0.10 + glow * 0.12), 18)
 
     ctx.save()
     ctx.translate(cx, cy + off)
