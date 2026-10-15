@@ -24,6 +24,11 @@
     <div class="screen">
       <canvas id="game" width="900" height="560" aria-label="Khelo Ludo"></canvas>
 
+      <!-- the text field the canvas borrows when a player types their name -->
+      <input id="namebox" class="namebox" type="text" maxlength="12"
+             autocomplete="off" autocapitalize="words" spellcheck="false"
+             aria-label="Player name" tabindex="-1">
+
       <div class="rotate" id="rotate">
         <div class="rotate-card">
           <div class="rotate-icon" aria-hidden="true">&#128241;&#8635;</div>
@@ -48,40 +53,133 @@
   <script>
     var GW = 900, GH = 560;   // the canvas's fixed drawing resolution
 
-    var actx = null;
-    var muted = false;
+    /* ------------------------------------------------------------------
+       Sound: everything is synthesised, so there are no audio files to load.
+       ------------------------------------------------------------------ */
+    var actx = null, muted = false, noiseBuf = null;
+
+    function audio() {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      return actx;
+    }
+
+    function noiseSource() {
+      if (noiseBuf) return noiseBuf;
+      var n = Math.floor(actx.sampleRate * 0.6);
+      noiseBuf = actx.createBuffer(1, n, actx.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      return noiseBuf;
+    }
+
+    // a burst of filtered noise - clacks, rattles, thuds
+    function noise(dur, vol, freq, q, when, type) {
+      var t = when || actx.currentTime;
+      var src = actx.createBufferSource();
+      src.buffer = noiseSource();
+      var f = actx.createBiquadFilter();
+      f.type = type || "bandpass";
+      f.frequency.value = freq;
+      f.Q.value = q || 1;
+      var g = actx.createGain();
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(actx.destination);
+      src.start(t);
+      src.stop(t + dur + 0.02);
+    }
+
+    // a short pitched blip with a quick attack
+    function tone(f0, f1, dur, type, vol, when) {
+      var t = when || actx.currentTime;
+      var o = actx.createOscillator();
+      var g = actx.createGain();
+      o.type = type || "sine";
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t);
+      o.stop(t + dur + 0.03);
+    }
 
     window.playSound = function (name) {
       if (muted) return;
       try {
-        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-        if (actx.state === "suspended") actx.resume();
-        var cfg = {
-          click:   { type: "square",   f0: 660,  f1: 660,  dur: 0.05, vol: 0.05 },
-          hop:     { type: "triangle", f0: 520,  f1: 760,  dur: 0.09, vol: 0.06 },
-          roll:    { type: "square",   f0: 300,  f1: 900,  dur: 0.22, vol: 0.07 },
-          capture: { type: "sawtooth", f0: 420,  f1: 120,  dur: 0.28, vol: 0.09 },
-          home:    { type: "triangle", f0: 700,  f1: 1500, dur: 0.30, vol: 0.09 },
-          win:     { type: "triangle", f0: 520,  f1: 1560, dur: 0.55, vol: 0.10 },
-          start:   { type: "square",   f0: 200,  f1: 620,  dur: 0.30, vol: 0.07 },
-          deny:    { type: "sawtooth", f0: 220,  f1: 140,  dur: 0.16, vol: 0.07 }
-        }[name] || { type: "sine", f0: 300, f1: 300, dur: 0.1, vol: 0.05 };
-        var t = actx.currentTime;
-        var osc = actx.createOscillator();
-        var gain = actx.createGain();
-        osc.connect(gain); gain.connect(actx.destination);
-        osc.type = cfg.type;
-        osc.frequency.setValueAtTime(cfg.f0, t);
-        osc.frequency.exponentialRampToValueAtTime(Math.max(1, cfg.f1), t + cfg.dur);
-        gain.gain.setValueAtTime(cfg.vol, t);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + cfg.dur);
-        osc.start(t); osc.stop(t + cfg.dur + 0.02);
-      } catch (err) { /* audio is optional */ }
+        audio();
+        var t = actx.currentTime, i, k;
+        switch (name) {
+          case "dice":
+            // the rattle of a die shaking in the hand...
+            for (i = 0; i < 10; i++) {
+              noise(0.035, 0.055, 1500 + Math.random() * 1600, 6, t + i * 0.058);
+            }
+            // ...and the heavier clack as it lands on the board
+            noise(0.10, 0.11, 650, 2.5, t + 0.66);
+            tone(240, 95, 0.15, "sine", 0.10, t + 0.66);
+            noise(0.06, 0.05, 2400, 5, t + 0.74);
+            break;
+          case "hop":
+            // a wooden tock, like a counter tapped on a board
+            tone(360, 200, 0.085, "triangle", 0.11);
+            noise(0.028, 0.05, 2800, 9);
+            break;
+          case "capture":
+            // a whoosh as it is knocked back, then a thud
+            tone(760, 150, 0.30, "sawtooth", 0.085);
+            noise(0.22, 0.075, 900, 2, t + 0.14);
+            tone(160, 60, 0.24, "sine", 0.11, t + 0.20);
+            break;
+          case "home":
+            tone(880, 880, 0.16, "triangle", 0.095);
+            tone(1320, 1320, 0.24, "triangle", 0.08, t + 0.09);
+            break;
+          case "win":
+            var notes = [523, 659, 784, 1047, 1319];
+            for (k = 0; k < notes.length; k++) {
+              tone(notes[k], notes[k], 0.28, "triangle", 0.09, t + k * 0.13);
+            }
+            noise(0.6, 0.045, 3200, 1, t + 0.62);
+            break;
+          case "click":
+            tone(760, 620, 0.045, "square", 0.05);
+            noise(0.02, 0.03, 3200, 8);
+            break;
+          case "start":
+            tone(260, 640, 0.30, "square", 0.075);
+            break;
+          case "deny":
+            tone(240, 150, 0.16, "sawtooth", 0.075);
+            break;
+        }
+      } catch (err) { /* audio is a nicety */ }
     };
 
-    var tapFn = null, ready = false;
+    var tapFn = null, setNameFn = null, ready = false;
     var canvas = document.getElementById("game");
     var screenBox = document.querySelector(".screen");
+    var namebox = document.getElementById("namebox");
+
+    /* the canvas borrows this field so a player can type their name */
+    window.focusName = function (i, current) {
+      namebox.dataset.idx = i;
+      namebox.value = current || "";
+      namebox.focus();
+      try { namebox.setSelectionRange(namebox.value.length, namebox.value.length); } catch (e) {}
+    };
+    namebox.addEventListener("input", function () {
+      if (setNameFn) setNameFn(parseInt(namebox.dataset.idx || "0", 10), namebox.value);
+    });
+    namebox.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { namebox.blur(); e.preventDefault(); }
+      e.stopPropagation();
+    });
+    namebox.addEventListener("blur", function () {
+      if (setNameFn) setNameFn(parseInt(namebox.dataset.idx || "0", 10), namebox.value);
+    });
 
     function fit() {
       var aw = screenBox.clientWidth, ah = screenBox.clientHeight;
@@ -105,6 +203,7 @@
       var update = pyodide.globals.get("update");
       var draw = pyodide.globals.get("draw");
       tapFn = pyodide.globals.get("tap");
+      setNameFn = pyodide.globals.get("set_name");
 
       bar.style.width = "100%";
       ready = true;
@@ -131,6 +230,7 @@
     canvas.addEventListener("pointerdown", function (e) {
       e.preventDefault();
       if (!ready || !tapFn) return;
+      audio();                       // the first tap wakes the audio up
       var p = canvasPoint(e);
       tapFn(p[0], p[1]);
     });
@@ -138,8 +238,9 @@
 
     window.addEventListener("keydown", function (e) {
       if (!ready || !tapFn) return;
+      if (e.target === namebox) return;
       if (e.code === "Space" || e.code === "Enter") {
-        tapFn(775, 273);          // the ROLL button
+        tapFn(713, 316);            // the ROLL button
         e.preventDefault();
       }
     });
