@@ -286,6 +286,42 @@ check("no obstacle silhouette dips below the ground line", not dippers)
 if dippers:
     print("   dips below ground:", dippers)
 
+# --- screen-adaptive UI -----------------------------------------------------
+print()
+print("--- screen-adaptive UI ---")
+game.set_ui(1.0)
+check("on a big screen the type is left alone",
+      game._fit_font("700 15px X") == "700 15px X")
+check("on a big screen targets are not grown",
+      game._in((100, 100, 20, 20), 100 + 10, 100 + 40) is False)
+
+game.set_ui(0.70)                     # a phone, canvas scaled to 70%
+check("on a phone the type is scaled up",
+      game._fit_font("700 15px X") != "700 15px X")
+scaled = game._fit_font("700 15px X")
+check("scaled type keeps its weight and family",
+      scaled.startswith("700 ") and scaled.endswith("px X"))
+check("a 48 CSS px target is larger than 48 logical px", game.MIN_TOUCH > 48)
+check("the type scale is capped so text cannot overflow", game.UI <= 1.35)
+
+# a small button is now reachable from outside its drawn bounds
+grown = game._in((100, 100, 20, 20), 100 + 10, 100 + game.MIN_TOUCH / 2 - 1)
+check("a small target is grown to a finger size", grown is True)
+_top = 100 - (game.MIN_TOUCH - 20) / 2
+_bot = 100 + (game.MIN_TOUCH + 20) / 2
+check("the grown target stays centred on the drawn one",
+      game._in((100, 100, 20, 20), 110, _top + 1) is True
+      and game._in((100, 100, 20, 20), 110, _bot - 1) is True
+      and game._in((100, 100, 20, 20), 110, _top - 2) is False)
+
+for spec in ("600 11px X", "800 26px X", "700 12.5px X", "900 40px X"):
+    check("font %-16r survives scaling" % spec,
+          "px" in game._fit_font(spec) and game._fit_font(spec).endswith("X"))
+
+game.set_ui(1.0)
+check("back on a big screen nothing is scaled",
+      game._fit_font("700 15px X") == "700 15px X")
+
 print()
 if fails:
     print("FAILURES:", fails); sys.exit(1)
