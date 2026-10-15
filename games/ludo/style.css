@@ -197,3 +197,13 @@ html.fs-on #game { border-radius: 10px; }
   font-size: 16px;   /* 16px stops mobile Safari zooming in */
   pointer-events: none;
 }
+
+/* the offscreen canvas the 3D die renders into (never shown directly) */
+#dice3d {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 256px;
+  height: 256px;
+  pointer-events: none;
+}
