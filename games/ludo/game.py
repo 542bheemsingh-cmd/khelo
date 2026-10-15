@@ -5,18 +5,19 @@ Runs in the browser through Pyodide, like the rest of the Khelo arcade.
 
 The board is the classic 15x15 grid. Four players sit in the corners, each with
 four tokens in their yard. Roll a 6 to bring a token out, race it around the
-52-square ring, then up your own coloured home column to the centre. Land on an
-opponent and it goes back to their yard. First player (or team) to get all four
-tokens home wins.
+ring, then up your own coloured home column to the centre. Land on an opponent
+and it walks all the way back to their yard. First player (or team) to get all
+four tokens home wins.
 
 Modes:
     single-single : 2, 3 or 4 players, everyone for themselves
     team-team     : 4 players, Red+Yellow against Green+Blue
 
 The page calls:
-    tap(x, y)   -> a click / tap on the canvas
-    update(dt)  -> advance the animation
-    draw()      -> render a frame
+    tap(x, y)          -> a click / tap on the canvas
+    update(dt)         -> advance the animation
+    draw()             -> render a frame
+    set_name(c, text)  -> the player typed a name
 """
 
 import json
@@ -54,7 +55,6 @@ BOARD = CELL * 15               # 495
 RED, GREEN, YELLOW, BLUE = 0, 1, 2, 3
 COLORS = ["red", "green", "yellow", "blue"]
 
-# the four colours, tuned to look good on the dark board
 PAL = {
     RED:    {"main": "#ff3b5c", "dark": "#c01f3d", "lite": "#ff8199", "soft": "#5c1526"},
     GREEN:  {"main": "#22c55e", "dark": "#15803d", "lite": "#7ee2a4", "soft": "#123d24"},
@@ -63,9 +63,9 @@ PAL = {
 }
 NAME = {RED: "Red", GREEN: "Green", YELLOW: "Yellow", BLUE: "Blue"}
 
-# The ring of track squares, in clockwise order. Every step is to an
-# orthogonally adjacent square, so a token always walks a real path - including
-# round the four inner corners of the cross.
+# The ring of track squares, clockwise. Every step is to an orthogonally
+# adjacent square, so a token always walks a real path - including round the
+# four inner corners of the cross.
 TRACK = [
     (6, 13), (6, 12), (6, 11), (6, 10), (6, 9),                       # 0-4
     (6, 8),                                                           # 5  inner corner
@@ -101,20 +101,27 @@ HOME_PATH = {
     BLUE:   [(7, 13), (7, 12), (7, 11), (7, 10), (7, 9)],
 }
 
-# safe squares: the four start squares plus the four star squares
-SAFE = {START[RED], START[GREEN], START[YELLOW], START[BLUE],
-        (START[RED] + 8) % TRACK_LEN, (START[GREEN] + 8) % TRACK_LEN,
-        (START[YELLOW] + 8) % TRACK_LEN, (START[BLUE] + 8) % TRACK_LEN}
+# Safe squares: the four coloured starts plus four stars, each nine squares on
+# from a start - the positions the classic board marks with a star.
+SAFE = set(START.values()) | {(START[c] + 9) % TRACK_LEN for c in range(4)}
 
 YARD = {RED: (0, 0), GREEN: (9, 0), YELLOW: (9, 9), BLUE: (0, 9)}
 YARD_SLOTS = [(1.5, 1.5), (4.5, 1.5), (1.5, 4.5), (4.5, 4.5)]
 
-# the centre triangles, one per colour (drawn as a 3x3 block)
 CENTRE = (6, 6)
+# where a finished token sits inside the centre - one row per colour, so four
+# home tokens are always all visible instead of piling up on one another
+HOME_SLOTS = {}
+for _k in range(4):
+    _off = 6.8 + _k * 0.47
+    HOME_SLOTS.setdefault(RED, []).append((6.55, _off))
+    HOME_SLOTS.setdefault(GREEN, []).append((_off, 6.55))
+    HOME_SLOTS.setdefault(YELLOW, []).append((8.45, _off))
+    HOME_SLOTS.setdefault(BLUE, []).append((_off, 8.45))
 
 
 def cell_px(cx, cy):
-    """Centre of grid cell (cx, cy) in pixels."""
+    """Centre of a point given in continuous cell units."""
     return BX + (cx + 0.5) * CELL, BY + (cy + 0.5) * CELL
 
 
@@ -136,37 +143,48 @@ def token_xy(c, idx, pos):
         sx, sy = YARD_SLOTS[idx]
         return cell_px(ox + sx - 0.5, oy + sy - 0.5)
     if pos >= HOME_POS:
-        # tucked into the centre, fanned out a little per token
-        cx, cy = cell_px(CENTRE[0] + 1, CENTRE[1] + 1)
-        ang = math.radians(90 * c + 25 * idx - 40)
-        return cx + math.cos(ang) * 11, cy + math.sin(ang) * 11
+        sx, sy = HOME_SLOTS[c][idx]
+        return cell_px(sx - 0.5, sy - 0.5)
     cx, cy = path_cell(c, pos)
     return cell_px(cx, cy)
 
 
 # ---------------------------------------------------------------------------
+# Token designs
+# ---------------------------------------------------------------------------
+DESIGNS = ["ball", "gem", "ring", "star", "hex"]
+DESIGN_LABEL = {"ball": "Ball", "gem": "Gem", "ring": "Ring",
+                "star": "Star", "hex": "Hex"}
+design = "ball"
+
+# ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
-state = "mode"            # mode | count | play | over
+state = "mode"            # mode | count | setup | play | over
 mode = "single"           # single | team
 player_count = 4
-players = []              # the colours in play, in turn order
-teams = {}                # colour -> team index (team mode only)
-turn = 0                  # index into `players`
+players = []
+teams = {}
+names = {RED: "Red", GREEN: "Green", YELLOW: "Yellow", BLUE: "Blue"}
+turn = 0
 dice = 6
 dice_show = 6
 rolling = 0.0
-moves = []                # [(token_index, target_pos)] for the current roll
+roll_t = 1.0
+moves = []
 can_roll = True
 message = ""
-tokens = []               # one dict per token: {c, i, pos, x, y}
-anim = None
-flash = []                # floating "+1" style effects
+tokens = []
+anims = []                # every running token animation
+flash = []
 winner = None
 _rng = random.Random()
-_t = 0.0                  # seconds, for the pulsing glow
+_t = 0.0
 _menu_hit = []
+_name_fields = []
 _confetti = []
+
+ROLL_DUR = 0.9
 
 
 def _sound(name):
@@ -179,18 +197,20 @@ def _sound(name):
 # ---------------------------------------------------------------------------
 # Setting up a game
 # ---------------------------------------------------------------------------
-def start_game(m, count=4):
+def start_game(m=None, count=None):
     global state, mode, player_count, players, teams, turn, tokens
-    global dice, dice_show, moves, can_roll, message, anim, winner, rolling
-    mode = m
-    if m == "team":
+    global dice, dice_show, moves, can_roll, message, winner, rolling, roll_t
+    if m is not None:
+        mode = m
+    if count is not None:
+        player_count = count
+    if mode == "team":
         player_count = 4
         players = [RED, GREEN, YELLOW, BLUE]
         teams = {RED: 0, YELLOW: 0, GREEN: 1, BLUE: 1}
     else:
-        player_count = count
         players = {2: [RED, YELLOW], 3: [RED, GREEN, YELLOW],
-                   4: [RED, GREEN, YELLOW, BLUE]}[count]
+                   4: [RED, GREEN, YELLOW, BLUE]}[player_count]
         teams = {}
 
     tokens = []
@@ -202,9 +222,10 @@ def start_game(m, count=4):
     turn = 0
     dice = dice_show = 6
     rolling = 0.0
+    roll_t = 1.0
     moves = []
+    anims[:] = []
     can_roll = True
-    anim = None
     winner = None
     message = "Tap the dice to roll."
     state = "play"
@@ -221,8 +242,35 @@ def to_count():
     state = "count"
 
 
+def to_setup():
+    global state
+    state = "setup"
+
+
 def restart():
-    start_game(mode, player_count)
+    start_game()
+
+
+def set_design(d):
+    global design
+    if d in DESIGNS:
+        design = d
+
+
+def set_name(c, text):
+    global names
+    c = int(c)
+    if c in NAME:
+        text = (text or "").strip()[:12]
+        names[c] = text if text else NAME[c]
+
+
+def focus_name(c):
+    """Ask the page to open its text field so the player can type a name."""
+    try:
+        js.focusName(int(c), names.get(int(c), ""))
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +285,6 @@ def my_tokens(c):
 
 
 def legal_moves(c, d):
-    """Every (token, target_pos) the current player may choose."""
     out = []
     for t in my_tokens(c):
         p = t["pos"]
@@ -252,50 +299,50 @@ def legal_moves(c, d):
 
 
 def roll():
-    """Roll the dice (animated) - only when it is the player's turn to roll."""
-    global rolling, dice, can_roll
-    if state != "play" or anim or rolling > 0 or not can_roll:
+    global rolling, roll_t, dice, can_roll
+    if state != "play" or anims or rolling > 0 or not can_roll:
         return
     dice = _rng.randint(1, 6)
-    rolling = 0.65
+    rolling = ROLL_DUR
+    roll_t = 0.0
     can_roll = False
-    _sound("roll")
+    _sound("dice")
 
 
 def _after_roll():
-    """Work out what the player may do with the number they rolled."""
     global moves, can_roll, message
     c = cur()
     moves = legal_moves(c, dice)
     if not moves:
-        message = "%s rolled %d - no move." % (NAME[c], dice)
+        message = "%s rolled %d - no move." % (names[c], dice)
         _sound("deny")
         _pass_turn()
         return
     can_roll = False
-    message = "%s rolled %d - tap a token." % (NAME[c], dice)
+    message = "%s rolled %d - tap a token." % (names[c], dice)
     _sound("click")
 
 
-def _pass_turn(delay=0.9):
-    global turn, can_roll, moves, message
+def _pass_turn():
+    global turn, can_roll, moves
     if dice == 6:
-        # a 6 always earns another go, even with nothing to move
-        can_roll = True
+        can_roll = True          # a 6 always earns another go
         moves = []
         return
     turn = (turn + 1) % len(players)
     moves = []
     can_roll = True
-    message = "%s to roll." % NAME[cur()]
+    message = "%s to roll." % names[cur()]
 
 
 def _captures_at(cell, moving_color):
-    """Opponent tokens standing on `cell` that this move would send home."""
     if cell is None:
         return []
-    idx = TRACK.index(cell) if cell in TRACK else None
-    if idx is None or idx in SAFE:
+    try:
+        idx = TRACK.index(cell)
+    except ValueError:
+        return []
+    if idx in SAFE:
         return []
     hits = []
     for t in tokens:
@@ -307,27 +354,26 @@ def _captures_at(cell, moving_color):
 
 
 def _choose(t, target):
-    """Commit to moving token `t` to `target` (starts the animation)."""
-    global moves, message
-    if anim:
+    global moves
+    if anims:
         return
     if not any(m[0] is t and m[1] == target for m in moves):
         return
     moves = []
-    _animate_move(t, target)
+    _anim_to(t, list(range(t["pos"] + 1, target + 1)), "move", dice=dice)
     _sound("hop")
 
 
-def _animate_move(t, target):
-    global anim
-    cells = []
-    for p in range(t["pos"] + 1, target + 1):
-        xy = token_xy(t["c"], t["i"], p)
-        cells.append((p, xy[0], xy[1]))
-    anim = {"t": t, "cells": cells, "i": 0, "p": 0.0,
-            "dice": dice, "captured": 0, "finished": False}
-    if cells:
-        t["pos"] = cells[0][0]
+def _anim_to(t, positions, kind, dice=0, speed=8.5):
+    """Walk `t` through a list of path positions, animating each square."""
+    cells = [(p, *token_xy(t["c"], t["i"], p)) for p in positions]
+    if not cells:
+        return None
+    a = {"t": t, "cells": cells, "i": 0, "p": 0.0, "kind": kind,
+         "dice": dice, "speed": speed}
+    t["pos"] = cells[0][0]
+    anims.append(a)
+    return a
 
 
 def _finish_move(a):
@@ -337,25 +383,23 @@ def _finish_move(a):
     c = t["c"]
     extra = (a["dice"] == 6)
 
-    # capture anyone standing on the landing square
     if t["pos"] <= LAST_TRACK:
-        cell = path_cell(c, t["pos"])
-        hits = _captures_at(cell, c)
+        hits = _captures_at(path_cell(c, t["pos"]), c)
         for h in hits:
-            h["pos"] = -1
-            hx, hy = token_xy(h["c"], h["i"], -1)
-            h["x"], h["y"] = hx, hy
-            _burst(hx, hy, PAL[h["c"]]["main"])
+            # the captured token walks all the way back, square by square
+            back = list(range(h["pos"] - 1, -1, -1)) + [-1]
+            _anim_to(h, back, "capture", speed=13.0)
+            _sound("capture")
             extra = True
         if hits:
-            _sound("capture")
-            message = "%s captured %d!" % (NAME[c], len(hits))
+            message = "%s captured %s!" % (
+                names[c], ", ".join(names[h["c"]] for h in hits))
 
     if t["pos"] >= HOME_POS:
         extra = True
         _sound("home")
         _burst(*token_xy(c, t["i"], HOME_POS), PAL[c]["lite"])
-        message = "%s got a token home!" % NAME[c]
+        message = "%s got a token home!" % names[c]
 
     if _won(c):
         winner = c
@@ -375,7 +419,7 @@ def _finish_move(a):
         turn = (turn + 1) % len(players)
         can_roll = True
         moves = []
-        message = "%s to roll." % NAME[cur()]
+        message = "%s to roll." % names[cur()]
 
 
 def _won(c):
@@ -388,9 +432,9 @@ def _won(c):
 
 
 def _burst(x, y, col):
-    for _ in range(10):
+    for _ in range(12):
         a = _rng.uniform(0, 6.283)
-        s = _rng.uniform(40, 130)
+        s = _rng.uniform(40, 140)
         flash.append({"x": x, "y": y, "vx": math.cos(a) * s, "vy": math.sin(a) * s,
                       "life": 0.6, "col": col, "r": _rng.uniform(2, 4)})
 
@@ -403,6 +447,13 @@ def _in(rect, x, y):
     return rx <= x <= rx + rw and ry <= y <= ry + rh
 
 
+# HUD rects - the drawing and the tap handling both read these, so a button can
+# never be drawn somewhere the finger cannot reach.
+HUD_X = 552
+DIE_RECT = (HUD_X + 85, BY + 74, 152, 152)
+ROLL_RECT = (HUD_X + 76, BY + 262, 170, 44)
+
+
 def tap(x, y):
     global state
     if state == "mode":
@@ -412,7 +463,10 @@ def tap(x, y):
                 if tag == "single":
                     state = "count"
                 elif tag == "team":
-                    start_game("team")
+                    globals()["mode"] = "team"
+                    state = "setup"
+                elif tag == "design":
+                    state = "setup"
                 return
         return
 
@@ -423,7 +477,26 @@ def tap(x, y):
                 if tag == "back":
                     state = "mode"
                 else:
-                    start_game("single", int(tag))
+                    globals()["mode"] = "single"
+                    globals()["player_count"] = int(tag)
+                    state = "setup"
+                return
+        return
+
+    if state == "setup":
+        for tag, r in _menu_hit:
+            if _in(r, x, y):
+                _sound("click")
+                if tag == "back":
+                    state = "count" if mode == "single" else "mode"
+                elif tag == "start":
+                    start_game()
+                elif tag.startswith("d:"):
+                    set_design(tag[2:])
+                return
+        for c, r in _name_fields:
+            if _in(r, x, y):
+                focus_name(c)
                 return
         return
 
@@ -439,7 +512,7 @@ def tap(x, y):
         return
 
     # --- playing ---
-    if _in((700, 250, 150, 46), x, y) or _in((640, 100, 170, 130), x, y):
+    if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
         roll()
         return
     if _in((16, 16, 110, 38), x, y):
@@ -447,13 +520,14 @@ def tap(x, y):
         _sound("click")
         return
 
-    # tap a token to move it
-    if anim or not moves:
+    if anims or not moves:
         return
     best, bestd = None, 26
+    offs = _stack_offsets()
     for t, target in moves:
         tx, ty = token_xy(t["c"], t["i"], t["pos"])
-        d = math.hypot(x - tx, y - ty)
+        ox, oy = offs.get(id(t), (0, 0))
+        d = math.hypot(x - (tx + ox), y - (ty + oy))
         if d < bestd:
             best, bestd = (t, target), d
     if best:
@@ -463,8 +537,30 @@ def tap(x, y):
 # ---------------------------------------------------------------------------
 # Update
 # ---------------------------------------------------------------------------
+def _stack_offsets():
+    """Small offsets so tokens sharing a square are all visible."""
+    groups = {}
+    for t in tokens:
+        if t["pos"] < 0 or t["pos"] >= HOME_POS:
+            continue
+        cell = path_cell(t["c"], t["pos"])
+        if cell is not None:
+            groups.setdefault(cell, []).append(t)
+    offs = {}
+    for grp in groups.values():
+        n = len(grp)
+        if n == 1:
+            offs[id(grp[0])] = (0.0, 0.0)
+            continue
+        r = CELL * 0.20
+        for k, t in enumerate(grp):
+            a = -math.pi / 2 + k * 2 * math.pi / n
+            offs[id(t)] = (math.cos(a) * r, math.sin(a) * r)
+    return offs
+
+
 def update(dt):
-    global rolling, anim, _t, message, can_roll
+    global rolling, roll_t, _t, dice_show, message, can_roll
     dt = min(max(float(dt), 0.0), 0.05)
     _t += dt
 
@@ -483,31 +579,41 @@ def update(dt):
             p["x"] = _rng.uniform(0, W)
 
     if rolling > 0:
-        global dice_show
         rolling -= dt
-        dice_show = _rng.randint(1, 6)
+        roll_t = min(1.0, roll_t + dt / ROLL_DUR)
+        if roll_t < 0.78:
+            dice_show = _rng.randint(1, 6)
+        else:
+            dice_show = dice
         if rolling <= 0:
+            rolling = 0.0
+            roll_t = 1.0
             dice_show = dice
             _after_roll()
 
-    if anim:
-        anim["p"] += dt * 8.5
-        while anim["p"] >= 1.0:
-            anim["p"] -= 1.0
-            anim["i"] += 1
-            if anim["i"] >= len(anim["cells"]):
-                anim["t"]["pos"] = anim["cells"][-1][0] if anim["cells"] else anim["t"]["pos"]
-                done, anim = anim, None
-                _finish_move(done)
+    for a in anims[:]:
+        a["p"] += dt * a["speed"]
+        while a["p"] >= 1.0:
+            a["p"] -= 1.0
+            a["i"] += 1
+            if a["i"] >= len(a["cells"]):
+                a["t"]["pos"] = a["cells"][-1][0]
+                anims.remove(a)
+                if a["kind"] == "move":
+                    _finish_move(a)
                 break
-            p, cx, cy = anim["cells"][anim["i"]]
-            anim["t"]["pos"] = p
+            a["t"]["pos"] = a["cells"][a["i"]][0]
 
-    # tokens ease toward wherever they belong
+    offs = _stack_offsets()
     for t in tokens:
         tx, ty = token_xy(t["c"], t["i"], t["pos"])
-        if anim and anim["t"] is t:
-            tx, ty = token_xy(t["c"], t["i"], t["pos"])
+        ox, oy = offs.get(id(t), (0.0, 0.0))
+        tx += ox
+        ty += oy
+        for a in anims:
+            if a["t"] is t:
+                ty -= math.sin(math.pi * min(1.0, a["p"])) * CELL * 0.85
+                break
         k = min(1.0, dt * 16)
         t["x"] += (tx - t["x"]) * k
         t["y"] += (ty - t["y"]) * k
@@ -581,15 +687,22 @@ def _bg():
     ctx.fillRect(0, 0, W, H)
 
 
+def _poly(x, y, r, n, rot=0.0):
+    ctx.beginPath()
+    for i in range(n):
+        a = rot + i * 2 * math.pi / n
+        px, py = x + math.cos(a) * r, y + math.sin(a) * r
+        ctx.moveTo(px, py) if i == 0 else ctx.lineTo(px, py)
+    ctx.closePath()
+
+
 # ---------------------------------------------------------------------------
 # Drawing the board
 # ---------------------------------------------------------------------------
 def _draw_board():
-    # the plate the whole board sits on
     _panel(BX - 12, BY - 12, BOARD + 24, BOARD + 24,
            "rgba(9, 15, 32, 0.95)", "rgba(150, 180, 240, 0.18)", 16)
 
-    # four yards
     for c in (RED, GREEN, YELLOW, BLUE):
         ox, oy = YARD[c]
         px, py = BX + ox * CELL, BY + oy * CELL
@@ -597,7 +710,6 @@ def _draw_board():
         _panel(px + 3, py + 3, CELL * 6 - 6, CELL * 6 - 6, p["soft"], p["main"], 12)
         _panel(px + CELL + 6, py + CELL + 6, CELL * 4 - 12, CELL * 4 - 12,
                "rgba(8, 14, 30, 0.55)", "rgba(255,255,255,0.10)", 10)
-        # four token slots
         for sx, sy in YARD_SLOTS:
             cx, cy = cell_px(ox + sx - 0.5, oy + sy - 0.5)
             ctx.beginPath()
@@ -608,7 +720,6 @@ def _draw_board():
             ctx.strokeStyle = "rgba(255,255,255,0.16)"
             ctx.stroke()
 
-    # every square of the ring
     for idx, (cx, cy) in enumerate(TRACK):
         px, py = BX + cx * CELL, BY + cy * CELL
         owner = None
@@ -618,7 +729,7 @@ def _draw_board():
         if owner is not None:
             fill = PAL[owner]["main"]
         elif idx in SAFE:
-            fill = "rgba(226, 236, 255, 0.92)"
+            fill = "rgba(226, 236, 255, 0.95)"
         else:
             fill = "rgba(238, 244, 255, 0.90)"
         ctx.fillStyle = fill
@@ -627,9 +738,8 @@ def _draw_board():
         ctx.strokeStyle = "rgba(20, 30, 60, 0.45)"
         ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1)
         if idx in SAFE and owner is None:
-            _star(px + CELL / 2, py + CELL / 2, CELL * 0.28, "#7c8aa8")
+            _star(px + CELL / 2, py + CELL / 2, CELL * 0.30, "#8b98b5")
 
-    # the four home columns
     for c in (RED, GREEN, YELLOW, BLUE):
         p = PAL[c]
         for k, (cx, cy) in enumerate(HOME_PATH[c]):
@@ -647,7 +757,7 @@ def _draw_board():
     size = CELL * 3
     mid = (cx0 + size / 2, cy0 + size / 2)
     corners = [(cx0, cy0), (cx0 + size, cy0), (cx0 + size, cy0 + size), (cx0, cy0 + size)]
-    order = [GREEN, YELLOW, BLUE, RED]      # top-left, top-right, bottom-right, bottom-left
+    order = [GREEN, YELLOW, BLUE, RED]      # top, right, bottom, left
     for i, col in enumerate(order):
         a, b = corners[i], corners[(i + 1) % 4]
         ctx.beginPath()
@@ -660,13 +770,12 @@ def _draw_board():
         ctx.lineWidth = 1.5
         ctx.strokeStyle = "rgba(10, 18, 40, 0.5)"
         ctx.stroke()
-    # a small ring in the middle
     ctx.beginPath()
-    ctx.arc(mid[0], mid[1], CELL * 0.62, 0, 6.2832)
-    ctx.fillStyle = "rgba(8, 14, 30, 0.75)"
+    ctx.arc(mid[0], mid[1], CELL * 0.66, 0, 6.2832)
+    ctx.fillStyle = "rgba(8, 14, 30, 0.72)"
     ctx.fill()
     ctx.lineWidth = 2
-    ctx.strokeStyle = "rgba(255,255,255,0.25)"
+    ctx.strokeStyle = "rgba(255,255,255,0.22)"
     ctx.stroke()
 
 
@@ -682,7 +791,109 @@ def _star(x, y, r, col):
     ctx.fill()
 
 
-def _draw_token(t, highlight=False, movable=False):
+# ---------------------------------------------------------------------------
+# Tokens
+# ---------------------------------------------------------------------------
+def _shape_ball(x, y, r, p):
+    g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.15, x, y, r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(0.55, p["main"])
+    g.addColorStop(1, p["dark"])
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, 6.2832)
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.26, 0, 6.2832)
+    ctx.fillStyle = "rgba(255,255,255,0.78)"
+    ctx.fill()
+
+
+def _shape_gem(x, y, r, p):
+    _poly(x, y, r, 6, -math.pi / 2)
+    g = ctx.createLinearGradient(x - r, y - r, x + r, y + r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(0.5, p["main"])
+    g.addColorStop(1, p["dark"])
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.7
+    ctx.strokeStyle = "rgba(255,255,255,0.65)"
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x, y - r * 0.92)
+    ctx.lineTo(x - r * 0.46, y + r * 0.34)
+    ctx.lineTo(x + r * 0.46, y + r * 0.34)
+    ctx.closePath()
+    ctx.fillStyle = "rgba(255,255,255,0.30)"
+    ctx.fill()
+
+
+def _shape_ring(x, y, r, p):
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, 6.2832)
+    ctx.fillStyle = p["dark"]
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(x, y, r * 0.46, 0, 6.2832)
+    ctx.fillStyle = "#0b1224"
+    ctx.fill()
+    ctx.lineWidth = 1.6
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, 6.2832)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(x, y, r * 0.46, 0, 6.2832)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(x - r * 0.30, y - r * 0.62, r * 0.20, 0, 6.2832)
+    ctx.fillStyle = "rgba(255,255,255,0.55)"
+    ctx.fill()
+
+
+def _shape_star(x, y, r, p):
+    ctx.beginPath()
+    for i in range(10):
+        a = -math.pi / 2 + i * math.pi / 5
+        rr = r if i % 2 == 0 else r * 0.48
+        px, py = x + math.cos(a) * rr, y + math.sin(a) * rr
+        ctx.moveTo(px, py) if i == 0 else ctx.lineTo(px, py)
+    ctx.closePath()
+    g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(1, p["main"])
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"
+    ctx.stroke()
+
+
+def _shape_hex(x, y, r, p):
+    _poly(x, y, r, 6, math.pi / 6)
+    g = ctx.createLinearGradient(x - r, y - r, x + r, y + r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(0.6, p["main"])
+    g.addColorStop(1, p["dark"])
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.8
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"
+    ctx.stroke()
+    _poly(x, y, r * 0.55, 6, math.pi / 6)
+    ctx.fillStyle = "rgba(255,255,255,0.22)"
+    ctx.fill()
+
+
+SHAPES = {"ball": _shape_ball, "gem": _shape_gem, "ring": _shape_ring,
+          "star": _shape_star, "hex": _shape_hex}
+
+
+def _draw_token(t, highlight=False, movable=False, label=True):
     x, y, c = t["x"], t["y"], t["c"]
     p = PAL[c]
     r = CELL * 0.40
@@ -696,30 +907,12 @@ def _draw_token(t, highlight=False, movable=False):
         ctx.fill()
         ctx.globalAlpha = 1.0
 
-    # soft shadow
     ctx.beginPath()
-    ctx.ellipse(x, y + r * 0.75, r * 0.85, r * 0.38, 0, 0, 6.2832)
+    ctx.ellipse(x, y + r * 0.72, r * 0.85, r * 0.36, 0, 0, 6.2832)
     ctx.fillStyle = "rgba(0,0,0,0.35)"
     ctx.fill()
 
-    # body
-    g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.15, x, y, r)
-    g.addColorStop(0, p["lite"])
-    g.addColorStop(0.55, p["main"])
-    g.addColorStop(1, p["dark"])
-    ctx.beginPath()
-    ctx.arc(x, y, r, 0, 6.2832)
-    ctx.fillStyle = g
-    ctx.fill()
-    ctx.lineWidth = 2
-    ctx.strokeStyle = "rgba(255,255,255,0.55)"
-    ctx.stroke()
-
-    # specular highlight
-    ctx.beginPath()
-    ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.26, 0, 6.2832)
-    ctx.fillStyle = "rgba(255,255,255,0.75)"
-    ctx.fill()
+    SHAPES[design](x, y, r, p)
 
     if movable:
         ctx.beginPath()
@@ -731,15 +924,26 @@ def _draw_token(t, highlight=False, movable=False):
         ctx.stroke()
         ctx.setLineDash([])
 
+    if label:
+        nm = names[c]
+        if nm:
+            ctx.textAlign = "center"
+            ctx.font = "800 8px %s" % FONT
+            ctx.lineWidth = 2.4
+            ctx.strokeStyle = "rgba(4, 8, 18, 0.85)"
+            ctx.strokeText(nm, x, y - r - 3)
+            ctx.fillStyle = "#ffffff"
+            ctx.fillText(nm, x, y - r - 3)
+
 
 def _draw_tokens():
     c = cur() if state == "play" else None
-    movable = {id(m[0]) for m in moves}          # dicts are not hashable
-    # the moving token on top, then everyone else
-    order = sorted(tokens, key=lambda t: 1 if (anim and anim["t"] is t) else 0)
+    movable = {id(m[0]) for m in moves}
+    order = sorted(tokens, key=lambda t: 1 if any(a["t"] is t for a in anims) else 0)
     for t in order:
         _draw_token(t, highlight=(c is not None and t["c"] == c),
-                    movable=(id(t) in movable))
+                    movable=(id(t) in movable),
+                    label=(t["pos"] >= 0 and t["pos"] < HOME_POS))
 
 
 # ---------------------------------------------------------------------------
@@ -755,23 +959,58 @@ PIPS = {
 }
 
 
-def _draw_die(x, y, s, n, col="#ffffff", dark="#c9d6ef"):
-    _panel(x, y, s, s, col, "rgba(20, 30, 60, 0.35)", 14)
-    r = s * 0.115
-    step = s * 0.26
-    cx, cy = x + s / 2, y + s / 2
+def _die_face(cx, cy, s, n):
+    x, y = cx - s / 2, cy - s / 2
+    _panel(x, y, s, s, "#f8fbff", "rgba(20, 30, 60, 0.40)", 14)
+    r = s * 0.105
+    step = s * 0.25
     for dx, dy in PIPS[n]:
         ctx.beginPath()
         ctx.arc(cx + dx * step, cy + dy * step, r, 0, 6.2832)
-        ctx.fillStyle = dark
+        ctx.fillStyle = "#243252"
         ctx.fill()
+        ctx.beginPath()
+        ctx.arc(cx + dx * step - r * 0.3, cy + dy * step - r * 0.3, r * 0.32, 0, 6.2832)
+        ctx.fillStyle = "rgba(255,255,255,0.55)"
+        ctx.fill()
+
+
+def _draw_die():
+    x, y, w, h = DIE_RECT
+    s = min(w, h)
+    cx, cy = x + w / 2, y + h / 2
+    e = roll_t if rolling > 0 else 1.0
+    ease = 1 - (1 - e) ** 3                       # ease-out
+    off = -(1 - ease) * 210                       # falls in from above
+    scl = 1 + (1 - ease) * 0.55
+    rot = (1 - ease) * math.pi * 2.4
+
+    if rolling > 0:
+        # the shadow on the table grows as the die comes down
+        ctx.beginPath()
+        ctx.ellipse(cx, y + s + 8, s * (0.30 + ease * 0.18), s * (0.10 + ease * 0.04),
+                    0, 0, 6.2832)
+        ctx.fillStyle = "rgba(0,0,0,%.2f)" % (0.10 + ease * 0.30)
+        ctx.fill()
+
+    glow = 0.5 + 0.5 * math.sin(_t * 3)
+    if state == "play" and rolling <= 0:
+        _panel(x - 6, y - 6, s + 12, s + 12, "rgba(255,255,255,0.05)",
+               "rgba(255,255,255,%.2f)" % (0.10 + glow * 0.12), 18)
+
+    ctx.save()
+    ctx.translate(cx, cy + off)
+    ctx.rotate(rot)
+    ctx.scale(scl, scl)
+    _die_face(0, 0, s, dice_show)
+    ctx.restore()
 
 
 # ---------------------------------------------------------------------------
 # HUD panel
 # ---------------------------------------------------------------------------
 def _draw_hud():
-    x = 552
+    x = HUD_X
     _panel(x, BY - 12, 322, BOARD + 24, "rgba(11, 18, 38, 0.92)",
            "rgba(150, 180, 240, 0.20)", 16)
 
@@ -782,29 +1021,22 @@ def _draw_hud():
     ctx.fillText("TURN", x + 161, BY + 12)
     if c is not None:
         ctx.fillStyle = PAL[c]["main"]
-        ctx.font = "800 26px %s" % FONT
-        ctx.fillText(NAME[c], x + 161, BY + 42)
-        if mode == "team":
+        ctx.font = "800 24px %s" % FONT
+        ctx.fillText(names[c], x + 161, BY + 40)
+        if mode == "team" and teams:
             ctx.fillStyle = "#8fa3c9"
             ctx.font = "700 12px %s" % FONT
-            ctx.fillText("Team A" if teams[c] == 0 else "Team B", x + 161, BY + 62)
+            ctx.fillText("Team A" if teams.get(c, 0) == 0 else "Team B", x + 161, BY + 58)
 
-    # the die
-    dx, dy, ds = x + 85, BY + 74, 152
-    if state == "play":
-        glow = 0.5 + 0.5 * math.sin(_t * 3)
-        _panel(dx - 6, dy - 6, ds + 12, ds + 12,
-               "rgba(255,255,255,0.05)", "rgba(255,255,255,%.2f)" % (0.10 + glow * 0.12), 18)
-    _draw_die(dx, dy, ds, dice_show)
+    _draw_die()
 
     if state == "play":
-        ready = can_roll and rolling <= 0 and not anim
-        _button(x + 76, BY + 262, 170, 44, "ROLL" if ready else "…",
-                ready, PAL[c]["main"], size=17)
-        if not ready and rolling <= 0 and not anim and moves:
+        ready = can_roll and rolling <= 0 and not anims
+        _button(*ROLL_RECT[:2], ROLL_RECT[2], ROLL_RECT[3],
+                "ROLL" if ready else "\u2026", ready, PAL[c]["main"], size=17)
+        if not ready and rolling <= 0 and not anims and moves:
             _wrap("tap a token", x + 161, BY + 322, 260, 12, "#8fa3c9")
 
-    # every player's progress
     y = BY + 344
     for i, col in enumerate(players):
         active = (state == "play" and i == turn % len(players))
@@ -818,16 +1050,16 @@ def _draw_hud():
         ctx.textAlign = "left"
         ctx.fillStyle = "#eaf2ff"
         ctx.font = "700 12px %s" % FONT
-        label = NAME[col]
-        if mode == "team":
-            label += "  (A)" if teams[col] == 0 else "  (B)"
+        label = names[col]
+        if mode == "team" and teams:
+            label += "  (A)" if teams.get(col, 0) == 0 else "  (B)"
         ctx.fillText(label, x + 56, y + 20)
         home = sum(1 for t in my_tokens(col) if t["pos"] >= HOME_POS)
         out = sum(1 for t in my_tokens(col) if 0 <= t["pos"] < HOME_POS)
         ctx.textAlign = "right"
         ctx.fillStyle = "#9fb3d9"
         ctx.font = "700 11px %s" % FONT
-        ctx.fillText("%d home · %d out" % (home, out), x + 292, y + 20)
+        ctx.fillText("%d home \u00b7 %d out" % (home, out), x + 292, y + 20)
         y += 33
 
     if message:
@@ -844,9 +1076,9 @@ def _draw_mode():
     _title("KHELO LUDO", 76, 40)
     _wrap("The classic race home - pick how you want to play.", W / 2, 112, 640, 16)
 
-    cw, ch, gap = 330, 210, 40
+    cw, ch, gap = 330, 200, 40
     ox = W / 2 - cw - gap / 2
-    oy = 168
+    oy = 158
     cards = [
         ("single", "Single-Single", "Everyone for themselves", "#4aa8ff",
          "Choose 2, 3 or 4 players"),
@@ -859,19 +1091,21 @@ def _draw_mode():
         ctx.textAlign = "center"
         ctx.fillStyle = accent
         ctx.font = "800 26px %s" % FONT
-        ctx.fillText(name, x + cw / 2, oy + 58)
+        ctx.fillText(name, x + cw / 2, oy + 56)
         ctx.fillStyle = "#eaf2ff"
         ctx.font = "700 15px %s" % FONT
-        ctx.fillText(sub, x + cw / 2, oy + 92)
+        ctx.fillText(sub, x + cw / 2, oy + 88)
         ctx.fillStyle = "#93a4c8"
         ctx.font = "600 13px %s" % FONT
-        ctx.fillText(note, x + cw / 2, oy + 118)
-        _button(x + 55, oy + 148, cw - 110, 44, "Play", True, accent)
+        ctx.fillText(note, x + cw / 2, oy + 112)
+        _button(x + 55, oy + 140, cw - 110, 44, "Play", True, accent)
         _menu_hit.append((tag, (x, oy, cw, ch)))
 
     _wrap("Roll a 6 to bring a token out. Land on an opponent to send it home.",
-          W / 2, 430, 720, 14)
-    _wrap("First to get all four tokens to the centre wins.", W / 2, 456, 720, 14)
+          W / 2, 408, 720, 14)
+    _wrap("First to get all four tokens to the centre wins.", W / 2, 432, 720, 14)
+    _button(W / 2 - 110, 462, 220, 44, "Token design & names", False)
+    _menu_hit.append(("design", (W / 2 - 110, 462, 220, 44)))
     _button(16, 16, 110, 38, "\u2190 Games")
 
 
@@ -903,11 +1137,67 @@ def _draw_count():
         ctx.fillStyle = "#93a4c8"
         ctx.font = "600 12px %s" % FONT
         ctx.fillText(sub, x + cw / 2, oy + 130)
-        _button(x + 30, oy + 146, cw - 60, 36, "Start", True, accent, size=14)
+        _button(x + 30, oy + 146, cw - 60, 36, "Next", True, accent, size=14)
         _menu_hit.append((tag, (x, oy, cw, ch)))
 
     _button(W / 2 - 90, 430, 180, 44, "\u2190 Back")
     _menu_hit.append(("back", (W / 2 - 90, 430, 180, 44)))
+
+
+def _draw_setup():
+    global _menu_hit, _name_fields
+    _menu_hit = []
+    _name_fields = []
+    _bg()
+    _title("SET UP", 60, 32)
+    _wrap("Pick a token design, then tap a name to type your own.",
+          W / 2, 90, 720, 14)
+
+    # token designs
+    n = len(DESIGNS)
+    sw, sh, gap = 116, 96, 18
+    ox = W / 2 - (n * sw + (n - 1) * gap) / 2
+    oy = 112
+    for i, d in enumerate(DESIGNS):
+        x = ox + i * (sw + gap)
+        sel = (d == design)
+        _panel(x, oy, sw, sh, "rgba(20, 30, 56, 0.94)",
+               "#ffb703" if sel else "rgba(150,180,240,0.20)", 14)
+        _draw_token({"x": x + sw / 2, "y": oy + 40, "c": RED}, label=False)
+        ctx.textAlign = "center"
+        ctx.fillStyle = "#ffd23f" if sel else "#9fb3d9"
+        ctx.font = "700 12px %s" % FONT
+        ctx.fillText(DESIGN_LABEL[d], x + sw / 2, oy + sh - 12)
+        _menu_hit.append(("d:" + d, (x, oy, sw, sh)))
+
+    # names
+    _wrap("Player names", W / 2, 246, 400, 14, "#8fa3c9")
+    cols = 2
+    fw, fh, fgap = 300, 46, 20
+    fx0 = W / 2 - (cols * fw + (cols - 1) * fgap) / 2
+    fy0 = 262
+    for k, col in enumerate(players):
+        cx = fx0 + (k % cols) * (fw + fgap)
+        cy = fy0 + (k // cols) * (fh + 14)
+        _panel(cx, cy, fw, fh, "rgba(20, 30, 56, 0.9)", PAL[col]["main"], 11)
+        ctx.beginPath()
+        ctx.arc(cx + 26, cy + fh / 2, 10, 0, 6.2832)
+        ctx.fillStyle = PAL[col]["main"]
+        ctx.fill()
+        ctx.textAlign = "left"
+        ctx.fillStyle = "#eaf2ff"
+        ctx.font = "700 16px %s" % FONT
+        ctx.fillText(names[col], cx + 46, cy + fh / 2 + 6)
+        ctx.textAlign = "right"
+        ctx.fillStyle = "#7f8fb3"
+        ctx.font = "600 11px %s" % FONT
+        ctx.fillText("tap to edit", cx + fw - 12, cy + fh / 2 + 4)
+        _name_fields.append((col, (cx, cy, fw, fh)))
+
+    _button(W / 2 - 260, H - 76, 220, 46, "\u2190 Back")
+    _button(W / 2 + 40, H - 76, 220, 46, "Start game", True)
+    _menu_hit = [("back", (W / 2 - 260, H - 76, 220, 46)),
+                 ("start", (W / 2 + 40, H - 76, 220, 46))] + _menu_hit
 
 
 def _draw_over():
@@ -925,13 +1215,13 @@ def _draw_over():
     _panel(W / 2 - 300, 130, 600, 300, "rgba(12, 20, 42, 0.96)",
            PAL[winner]["main"], 22)
     _title("WINNER!", 196, 34, PAL[winner]["main"])
-    if mode == "team":
-        tname = "Team A" if teams[winner] == 0 else "Team B"
-        _title("%s  (%s + %s)" % (tname, NAME[winner],
-               NAME[[k for k, v in teams.items() if v == teams[winner] and k != winner][0]]),
-               244, 24)
+    if mode == "team" and teams:
+        tname = "Team A" if teams.get(winner, 0) == 0 else "Team B"
+        mate = [k for k, v in teams.items() if v == teams.get(winner) and k != winner]
+        sub_ = "  (%s + %s)" % (names[winner], names[mate[0]]) if mate else ""
+        _title(tname + sub_, 244, 24)
     else:
-        _title(NAME[winner], 244, 26)
+        _title(names[winner], 244, 26)
     _wrap("All four tokens are home.", W / 2, 288, 520, 16, "#cfe0ff")
     _button(W / 2 - 250, H - 150, 230, 52, "Play again", True)
     _button(W / 2 + 20, H - 150, 230, 52, "Main menu", False)
@@ -949,13 +1239,15 @@ def draw():
     if state == "count":
         _draw_count()
         return
+    if state == "setup":
+        _draw_setup()
+        return
 
     _bg()
     _draw_board()
     _draw_tokens()
     _draw_hud()
 
-    # sparkles
     for f in flash:
         ctx.beginPath()
         ctx.arc(f["x"], f["y"], f["r"], 0, 6.2832)
