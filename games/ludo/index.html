@@ -175,6 +175,7 @@
     var tapFn = null, setNameFn = null, ready = false;
     var canvas = document.getElementById("game");
     var screenBox = document.querySelector(".screen");
+    var setUiFn = null;
     var namebox = document.getElementById("namebox");
 
     /* the canvas borrows this field so a player can type their name */
@@ -201,6 +202,7 @@
       var s = Math.min(aw / GW, ah / GH);
       canvas.style.width = Math.floor(GW * s) + "px";
       canvas.style.height = Math.floor(GH * s) + "px";
+      if (setUiFn) setUiFn(s);      // tell Python how small the canvas is
     }
 
     async function boot() {
@@ -218,6 +220,7 @@
       var draw = pyodide.globals.get("draw");
       tapFn = pyodide.globals.get("tap");
       setNameFn = pyodide.globals.get("set_name");
+      setUiFn = pyodide.globals.get("set_ui");
 
       bar.style.width = "100%";
       ready = true;
