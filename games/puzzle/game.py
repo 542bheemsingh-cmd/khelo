@@ -179,6 +179,264 @@ def keyboard_mode():
 
 
 # ---------------------------------------------------------------------------
+# Stuck detection: after this many wrong tries the solution is shown
+# ---------------------------------------------------------------------------
+MAX_WRONG = 10
+wrong_tries = 0
+_preview = False          # while drawing the solution preview, skip caption text
+
+
+def _lights_solve(g0, n):
+    """Brute-force the set of tiles that clears a 3x3 Lights Out board."""
+    for mask in range(1 << (n * n)):
+        g = [row[:] for row in g0]
+        for i in range(n * n):
+            if mask >> i & 1:
+                _press_lights(g, i % n, i // n, n)
+        if not any(any(row) for row in g):
+            return [i for i in range(n * n) if mask >> i & 1]
+    return []
+
+
+def _queens_solve(n):
+    """Backtrack one valid n-queens layout, as a list of (x, y)."""
+    def place(cols):
+        if len(cols) == n:
+            return cols
+        x = len(cols)
+        for y in range(n):
+            if all(y != qy and abs(x - qx) != abs(y - qy)
+                   for qx, qy in enumerate(cols)):
+                got = place(cols + [y])
+                if got:
+                    return got
+        return None
+
+    sol = place([]) or []
+    return list(enumerate(sol))
+
+
+def _note_wrong():
+    """Record a wrong try; reveal the solution once the player is clearly stuck."""
+    global wrong_tries
+    if screen != "play":
+        return
+    wrong_tries += 1
+    if wrong_tries >= MAX_WRONG:
+        _show_solution()
+
+
+def _show_solution():
+    global screen, show_hint
+    screen = "solution"
+    show_hint = False
+    _apply_solution()
+    _sound("deny")
+
+
+def keep_trying():
+    """Dismiss the solution screen and go back to the board with a fresh count."""
+    global screen, wrong_tries
+    wrong_tries = 0
+    screen = "play"
+
+
+def _apply_solution():
+    """Put the puzzle into its solved state so it can be shown as the answer."""
+    kind = LEVELS[level_index]["kind"]
+    if kind == "lights":
+        P["g"] = [[False] * P["n"] for _ in range(P["n"])]
+    elif kind == "memory":
+        P["matched"] = set(range(len(P["deck"])))
+        P["open"] = []
+    elif kind == "seq":
+        P["input"] = str(P["answer"])
+    elif kind == "riddle":
+        P["input"] = P["r"]["a"][0]
+    elif kind == "slide":
+        P["g"] = [1, 2, 3, 4, 5, 6, 7, 8, 0]
+    elif kind == "hanoi":
+        P["pegs"] = [[], [], list(range(P["n"], 0, -1))]
+        P["sel"] = None
+    elif kind == "code":
+        P["cur"] = list(P["secret"])
+    elif kind == "sudoku":
+        P["grid"] = [row[:] for row in SUDOKU_SOL]
+        P["sel"] = None
+    elif kind == "nonogram":
+        P["grid"] = [row[:] for row in P["target"]]
+    elif kind == "queens":
+        P["q"] = set(P["sol"])
+
+
+def _solution_lines():
+    """The plain-language explanation shown under the answer."""
+    kind = LEVELS[level_index]["kind"]
+
+    if kind == "lights":
+        presses = P.get("sol", [])
+        n = P["n"]
+        cells = ", ".join("row %d col %d" % (i // n + 1, i % n + 1) for i in presses)
+        return [
+            "Every press flips the tile you touch AND its four neighbours, so a "
+            "tile you flip now may be flipped again later. Order never matters, and "
+            "pressing the same tile twice simply undoes it - so the only question is "
+            "WHICH tiles to press.",
+            "One set of presses that clears this board (marked with a ring): " + cells + ".",
+            "A reliable method is 'light chasing': go row by row and, for every tile "
+            "still lit in a row, press the tile directly BELOW it. That clears each "
+            "row down to the last one, which then needs a short fix-up.",
+        ]
+
+    if kind == "memory":
+        pairs = len(P["deck"]) // 2
+        seen, order = {}, []
+        for i, s in enumerate(P["deck"]):
+            if s not in seen:
+                seen[s] = []
+                order.append(s)
+            seen[s].append(i + 1)
+        rows = "; ".join("%s in tiles %s" % (s, " and ".join(str(v) for v in seen[s]))
+                         for s in order)
+        return [
+            "Flip two tiles at a time. If the symbols match, the pair stays open; if "
+            "they do not, both flip back after a moment - so a miss is only "
+            "expensive because it wastes a peek.",
+            "There are " + str(pairs) + " pairs, and the whole deck is now face up. "
+            "The pairs are: " + rows + ".",
+            "The trick is to work the board in a fixed order and say each symbol out "
+            "loud as you reveal it, so the second of a pair is never a surprise.",
+        ]
+
+    if kind == "seq":
+        t = P["terms"]
+        k = P.get("rule", "arith")
+        if k == "arith":
+            d = t[1] - t[0]
+            how = ("The gap between neighbouring terms is always " + str(d) +
+                   ", so this is an arithmetic sequence: add " + str(d) + " each step.")
+        elif k == "geo":
+            r = t[1] // t[0]
+            how = ("Each term is the one before it multiplied by " + str(r) +
+                   ", so this is a geometric sequence.")
+        elif k == "square":
+            how = ("These are perfect squares: " +
+                   ", ".join(str(v) for v in t) + " is " +
+                   ", ".join(str(int(v ** 0.5)) for v in t) + " squared.")
+        else:
+            how = ("Each term is the sum of the two before it (" + str(t[0]) + " + " +
+                   str(t[1]) + " = " + str(t[2]) + "), the Fibonacci rule.")
+        return [
+            how,
+            "Working it out: " + " , ".join(str(v) for v in t) + " , " +
+            str(P["answer"]) + ".",
+            "The answer was " + str(P["answer"]) + ". The general habit that cracks "
+            "most sequences: look at the gaps first, then at the ratios, then at "
+            "whether the numbers are squares or cubes.",
+        ]
+
+    if kind == "riddle":
+        ans = P["r"]["a"][0]
+        return [
+            "The riddle: \u201c" + P["r"]["q"] + "\u201d",
+            "The answer was \u201c" + ans + "\u201d.",
+            "Riddles like this one describe an everyday object through one "
+            "deliberately misleading feature. Take the words literally, one at a "
+            "time, and test cheap objects around you: 'head', 'tail', 'hands', "
+            "'keys', 'face' are the usual giveaways.",
+        ]
+
+    if kind == "slide":
+        return [
+            "Only a tile next to the blank can move, and it moves into the blank. "
+            "The goal is 1-8 in order with the blank at the bottom right.",
+            "Solve it in layers. First place tile 1 and then tile 2 along the top "
+            "row; then place 3 in the top-right corner. Do the same for the middle "
+            "row, and the last row falls into place by itself.",
+            "If you get stuck, never disturb finished tiles - shuffle only the "
+            "unfinished corner, and slide tiles in a loop around the blank rather "
+            "than dragging one tile back and forth.",
+        ]
+
+    if kind == "hanoi":
+        n = P["n"]
+        moves = []
+
+        def plan(k, a, c, b):
+            if k == 0:
+                return
+            plan(k - 1, a, b, c)
+            moves.append((a, c))
+            plan(k - 1, b, c, a)
+
+        plan(n, 0, 2, 1)
+        seq = " then ".join("peg %d \u2192 peg %d" % (a + 1, c + 1) for a, c in moves)
+        return [
+            "The one rule: a disc may sit on an empty peg or on a LARGER disc, never "
+            "on a smaller one. Only the topmost disc of a peg can move.",
+            "With " + str(n) + " discs the minimum is " + str(2 ** n - 1) + " moves, and "
+            "the sequence is: " + seq + ".",
+            "The idea to hold in your head: to move a stack, first move everything "
+            "above the bottom disc out of the way to the spare peg, move the bottom "
+            "disc to the target, then bring the stack back on top of it.",
+        ]
+
+    if kind == "code":
+        sec = "-".join(str(d) for d in P["secret"])
+        return [
+            "You are guessing a 3-digit code, digits 1-6. After each guess: a green "
+            "\u25cf counts digits that are correct AND in the right place; a yellow \u25cb "
+            "counts digits that are in the code but in the wrong place.",
+            "The code was " + sec + ".",
+            "How to crack it: start with 1-1-1, then 2-2-2 and so on. The replies tell "
+            "you which digits exist at all. Once you know the digits, reorder them - "
+            "a guess scoring \u25cb means the digits are right but the order is wrong, so "
+            "swap them until the \u25cb turns into a \u25cf.",
+        ]
+
+    if kind == "sudoku":
+        return [
+            "Every row, every column and every 2x2 box must hold 1, 2, 3 and 4 "
+            "exactly once - no repeats anywhere.",
+            "The completed grid is shown on the left.",
+            "How to solve it: find a row, column or box that already has three "
+            "numbers - the missing one is forced. Fill those singles first; each one "
+            "you place makes the next one easier, and the whole grid unravels without "
+            "any guessing.",
+        ]
+
+    if kind == "nonogram":
+        rows = "; ".join("row %d: %s" % (i + 1, " ".join(str(v) for v in P["rows"][i]))
+                         for i in range(5))
+        return [
+            "Each clue is the length of a run of filled cells in that line, listed in "
+            "order. '4 2' means four filled, at least one gap, then two filled.",
+            "The row clues were " + rows + ".",
+            "How to solve it: start with the biggest clue in a line. In a line of 5, "
+            "a clue of 5 fills everything, and a clue of 4 must cover the middle cells "
+            "wherever it sits - those forced cells are your foothold. Then cross out "
+            "cells the clues rule out and keep going.",
+        ]
+
+    if kind == "queens":
+        n = P["n"]
+        sol = P.get("sol", [])
+        where = ", ".join("column %d \u2192 row %d" % (x + 1, y + 1) for x, y in sol)
+        return [
+            "Place " + str(n) + " queens so that no two share a row, a column or a "
+            "diagonal. Because there is one queen per column, think of it as choosing "
+            "a row for each column.",
+            "One valid layout: " + where + ".",
+            "How to solve it: place a queen in the first column, then for each next "
+            "column try the rows in order and reject any row that is attacked. If a "
+            "column has no safe row, back up and move the previous queen - that "
+            "backtracking always finds a layout.",
+        ]
+
+    return ["The puzzle is shown solved on the left."]
+
+
+# ---------------------------------------------------------------------------
 # Puzzle set-up
 # ---------------------------------------------------------------------------
 def _press_lights(g, x, y, n):
@@ -194,7 +452,8 @@ def _setup_lights(n, presses):
         _press_lights(g, _rng.randrange(n), _rng.randrange(n), n)
     if not any(any(row) for row in g):          # never hand out a solved board
         _press_lights(g, 0, 0, n)
-    return {"n": n, "g": g, "moves": 0}
+    # remember one press-set that clears THIS board, for the solution screen
+    return {"n": n, "g": g, "moves": 0, "sol": _lights_solve(g, n)}
 
 
 def _setup_memory(pairs):
@@ -226,7 +485,7 @@ def _setup_seq():
         while len(terms) < 4:
             terms.append(terms[-1] + terms[-2])
         nxt = terms[-1] + terms[-2]
-    return {"terms": terms, "answer": nxt, "input": ""}
+    return {"terms": terms, "answer": nxt, "input": "", "rule": kind}
 
 
 def _setup_riddle():
@@ -257,7 +516,7 @@ def _setup_hanoi(n):
 
 def _setup_code():
     return {"secret": [_rng.randint(1, 6) for _ in range(3)],
-            "guesses": [], "cur": [1, 1, 1], "slot": 0, "max": 7}
+            "guesses": [], "cur": [1, 1, 1], "slot": 0, "max": 99}
 
 
 def _setup_sudoku():
@@ -298,13 +557,14 @@ def _runs(line):
 
 
 def _setup_queens():
-    return {"n": 6, "q": set()}
+    return {"n": 6, "q": set(), "sol": _queens_solve(6)}
 
 
 def _setup():
-    global P, _message, show_hint
+    global P, _message, show_hint, wrong_tries
     show_hint = False
     _message = ""
+    wrong_tries = 0
     kind = LEVELS[level_index]["kind"]
     if kind == "lights":
         P = _setup_lights(3, _rng.randint(3, 5))
@@ -418,6 +678,15 @@ def tap(x, y):
             next_level()
         return
 
+    if screen == "solution":
+        if _in((W / 2 - 250, H - 96, 230, 52), x, y):
+            keep_trying()
+            _sound("click")
+        elif _in((W / 2 + 20, H - 96, 230, 52), x, y):
+            back_to_menu()
+            _sound("click")
+        return
+
     # --- in a level: the shared chrome ---
     if _in((W - 190, 16, 174, 40), x, y):
         show_hint = not show_hint
@@ -440,11 +709,15 @@ def tap(x, y):
             for gx in range(n):
                 r = (ox + gx * (cell + gap), oy + gy * (cell + gap), cell, cell)
                 if _in(r, x, y):
+                    before = sum(row.count(True) for row in P["g"])
                     _press_lights(P["g"], gx, gy, n)
+                    after = sum(row.count(True) for row in P["g"])
                     P["moves"] += 1
                     _sound("click")
                     if _is_solved():
                         _win()
+                    elif after > before:        # that press made the board worse
+                        _note_wrong()
                     return
 
     elif kind == "memory":
@@ -470,6 +743,7 @@ def tap(x, y):
                     else:
                         P["wrong"] = 0.55
                         _sound("deny")
+                        _note_wrong()
                 return
 
     elif kind == "slide":
@@ -480,11 +754,15 @@ def tap(x, y):
             if _in(r, x, y):
                 blank = P["g"].index(0)
                 if abs(gx - blank % 3) + abs(gy - blank // 3) == 1:
+                    before = _slide_dist(P["g"])
                     P["g"][blank], P["g"][i] = P["g"][i], P["g"][blank]
+                    after = _slide_dist(P["g"])
                     P["moves"] += 1
                     _sound("click")
                     if _is_solved():
                         _win()
+                    elif after > before:        # moved a tile further from home
+                        _note_wrong()
                 return
 
     elif kind == "hanoi":
@@ -535,6 +813,8 @@ def tap(x, y):
                     _sound("click")
                     if _is_solved():
                         _win()
+                    elif d + 1 != SUDOKU_SOL[gy][gx]:
+                        _note_wrong()
                 return
 
     elif kind == "nonogram":
@@ -548,6 +828,8 @@ def tap(x, y):
                     _sound("click")
                     if _is_solved():
                         _win()
+                    elif P["grid"][gy][gx] != P["target"][gy][gx]:
+                        _note_wrong()
                     return
 
     elif kind == "queens":
@@ -566,6 +848,7 @@ def tap(x, y):
                             _win()
                     else:
                         _sound("deny")
+                        _note_wrong()
                     return
 
 
@@ -585,6 +868,7 @@ def _hanoi_click(peg):
     if pegs[peg] and pegs[sel] and pegs[peg][-1] < pegs[sel][-1]:
         _message = "A bigger disc cannot sit on a smaller one."
         _sound("deny")
+        _note_wrong()
         return
     pegs[peg].append(pegs[sel].pop())
     P["sel"] = None
@@ -609,12 +893,9 @@ def _code_guess():
     if exact == 3:
         _sound("win")
         _win()
-    elif len(P["guesses"]) >= P["max"]:
-        _message = "Out of guesses - the code was " + "".join(str(d) for d in sec) + ". Retrying."
-        _sound("crash")
-        _setup()
     else:
-        _sound("click")
+        _sound("deny")
+        _note_wrong()
 
 
 def _queens_ok(q, x, y):
@@ -622,6 +903,16 @@ def _queens_ok(q, x, y):
         if qx == x or qy == y or abs(qx - x) == abs(qy - y):
             return False
     return True
+
+
+def _slide_dist(g):
+    """Total Manhattan distance of the tiles from their home squares."""
+    d = 0
+    for i, v in enumerate(g):
+        if v:
+            home = v - 1
+            d += abs(i % 3 - home % 3) + abs(i // 3 - home // 3)
+    return d
 
 
 def key(k):
@@ -652,6 +943,7 @@ def key(k):
                 _message = "Not it - look at the gaps again."
                 P["input"] = ""
                 _sound("deny")
+                _note_wrong()
         else:
             if text in P["r"]["a"]:
                 P["done"] = True
@@ -660,6 +952,7 @@ def key(k):
                 _message = "Not quite - try again."
                 P["input"] = ""
                 _sound("deny")
+                _note_wrong()
         return
     if len(k) == 1 and (k.isalnum() or k in " -'"):
         P["input"] = (P["input"] + k)[:24]
@@ -714,6 +1007,8 @@ def _title(t, y, size=30, color="#ffffff"):
 
 
 def _wrap(text, x, y, maxw, size=15, color="#9fb3d9", center=True):
+    if _preview:            # the solution preview draws the board, not its captions
+        return y
     ctx.font = "600 %dpx %s" % (size, FONT)
     ctx.fillStyle = color
     ctx.textAlign = "center" if center else "left"
@@ -783,6 +1078,13 @@ def _draw_chrome():
     ctx.font = "800 22px %s" % FONT
     ctx.fillText(LEVELS[level_index]["name"], 150, 54)
 
+    # how many wrong tries before the solution is shown
+    if wrong_tries:
+        left = MAX_WRONG - wrong_tries
+        ctx.fillStyle = "#ff9aa2" if left <= 3 else "#7f8fb3"
+        ctx.font = "700 12px %s" % FONT
+        ctx.fillText("wrong tries %d / %d" % (wrong_tries, MAX_WRONG), 150, 74)
+
     _button(16, 16, 120, 40, "← Levels")
     _button(W - 190, 16, 174, 40, "Hint" if not show_hint else "Hide hint",
             show_hint, "#ffd23f")
@@ -811,6 +1113,12 @@ def _draw_lights():
             _panel(px, py, cell, cell,
                    "#ffd23f" if lit else "rgba(24, 34, 62, 0.95)",
                    "#fff2bd" if lit else "rgba(150, 180, 240, 0.25)", 12)
+            if _preview and (y * n + x) in P.get("sol", []):
+                ctx.beginPath()          # ring the tiles the solution presses
+                ctx.arc(px + cell / 2, py + cell / 2, cell * 0.28, 0, 6.2832)
+                ctx.lineWidth = 5
+                ctx.strokeStyle = "#7ef0c0"
+                ctx.stroke()
     _wrap("Switch every light off. Moves: %d" % P["moves"], W / 2, 118, 600, 15)
 
 
@@ -905,7 +1213,7 @@ def _draw_code():
     _wrap("Guess the 3-digit code (digits 1-6).", W / 2, 112, 620, 15)
 
     y = 232
-    for g in P["guesses"]:
+    for g in P["guesses"][-5:]:
         ctx.fillStyle = "#9fb3d9"
         ctx.font = "700 18px %s" % FONT
         ctx.textAlign = "center"
@@ -915,9 +1223,6 @@ def _draw_code():
         ctx.fillStyle = "#ffd23f"
         ctx.fillText("○ %d" % g["partial"], W / 2 + 110, y + 6)
         y += 30
-    if len(P["guesses"]) >= P["max"]:
-        _wrap("No guesses left - restarting.", W / 2, y + 20, 600, 15, "#ff9aa2")
-
     for d in range(6):
         _button(W / 2 - 330 + d * 66, 400, 58, 54, str(d + 1), False, size=20)
     _button(W / 2 - 90, 476, 180, 48, "Guess", True)
@@ -1005,9 +1310,88 @@ def _draw_solved():
             "Levels" if last else "Next level →", True)
 
 
+# which drawing routine renders each puzzle kind
+_PUZZLE_DRAW = {
+    "lights": _draw_lights, "memory": _draw_memory, "seq": _draw_seq,
+    "riddle": _draw_riddle, "slide": _draw_slide, "hanoi": _draw_hanoi,
+    "code": _draw_code, "sudoku": _draw_sudoku, "nonogram": _draw_nonogram,
+    "queens": _draw_queens,
+}
+
+# the slice of the canvas each board occupies, so the preview can zoom to it
+_SOL_REGION = {
+    "lights": (300, 120, 600, 420),
+    "memory": (220, 130, 680, 420),
+    "slide": (300, 120, 600, 420),
+    "hanoi": (90, 130, 810, 440),
+    "sudoku": (290, 120, 620, 530),
+    "nonogram": (330, 170, 680, 510),
+    "queens": (250, 120, 650, 530),
+}
+
+
+def _draw_solution():
+    """The stuck screen: the answer on the left, how to get there on the right."""
+    global _preview
+    ctx.fillStyle = "rgba(4, 10, 24, 0.95)"
+    ctx.fillRect(0, 0, W, H)
+    _panel(36, 20, W - 72, H - 40, stroke="#7ef0c0", r=20)
+
+    _title("SOLUTION", 60, 30, "#7ef0c0")
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#ffd23f"
+    ctx.font = "800 17px %s" % FONT
+    ctx.fillText("%s  ·  level %d of %d" %
+                 (LEVELS[level_index]["name"], level_index + 1, len(LEVELS)), W / 2, 86)
+
+    kind = LEVELS[level_index]["kind"]
+    px, py, pw, ph = 60, 104, 400, 360
+    _panel(px, py, pw, ph, "rgba(10, 18, 38, 0.92)", "rgba(150, 180, 240, 0.22)", 12)
+
+    if kind in ("seq", "riddle", "code"):
+        # a word/number answer reads better big than as a board
+        ctx.textAlign = "center"
+        ctx.fillStyle = "#9fb3d9"
+        ctx.font = "700 14px %s" % FONT
+        ctx.fillText("THE ANSWER", px + pw / 2, py + 52)
+        ans = "-".join(str(d) for d in P["secret"]) if kind == "code" else str(P.get("input", "?"))
+        ctx.fillStyle = "#7ef0c0"
+        ctx.font = "800 %dpx %s" % (38 if len(ans) < 12 else 22, FONT)
+        ctx.fillText(ans, px + pw / 2, py + ph / 2 + 6)
+    else:
+        x0, y0, x1, y1 = _SOL_REGION.get(kind, (240, 110, 660, 520))
+        s = min(pw / (x1 - x0), ph / (y1 - y0)) * 0.94
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(px, py, pw, ph)
+        ctx.clip()
+        ctx.translate(px + (pw - (x1 - x0) * s) / 2 - x0 * s,
+                      py + (ph - (y1 - y0) * s) / 2 - y0 * s)
+        ctx.scale(s, s)
+        _preview = True
+        _PUZZLE_DRAW[kind]()
+        _preview = False
+        ctx.restore()
+        ctx.textAlign = "center"
+        ctx.fillStyle = "#7f8fb3"
+        ctx.font = "700 12px %s" % FONT
+        ctx.fillText("the answer", px + pw / 2, py + ph - 12)
+
+    tx, ty = 486, 116
+    for line in _solution_lines():
+        ty = _wrap(line, tx, ty, 372, 15, "#dbe6ff", False) + 22
+
+    _button(W / 2 - 250, H - 96, 230, 52, "Keep trying", False)
+    _button(W / 2 + 20, H - 96, 230, 52, "Back to levels", True)
+
+
 def draw():
     if screen == "menu":
         _draw_menu()
+        return
+
+    if screen == "solution":
+        _draw_solution()
         return
 
     grad = ctx.createLinearGradient(0, 0, 0, H)
@@ -1017,11 +1401,7 @@ def draw():
     ctx.fillRect(0, 0, W, H)
 
     _draw_chrome()
-    kind = LEVELS[level_index]["kind"]
-    {"lights": _draw_lights, "memory": _draw_memory, "seq": _draw_seq,
-     "riddle": _draw_riddle, "slide": _draw_slide, "hanoi": _draw_hanoi,
-     "code": _draw_code, "sudoku": _draw_sudoku, "nonogram": _draw_nonogram,
-     "queens": _draw_queens}[kind]()
+    _PUZZLE_DRAW[LEVELS[level_index]["kind"]]()
 
     if screen == "solved":
         _draw_solved()
