@@ -53,6 +53,32 @@ saved in your browser. Every level carries a one-line hint.
 | 9 | Nonogram (5×5) | Reveal the hidden picture from the clues |
 | 10 | N-Queens (6×6) | Place 6 queens with no two attacking |
 
+### Stuck? The solution shows itself
+
+Every level watches for wrong tries. Make **10** of them and the solution opens by
+itself: the solved board on the left (with the answer marked where it matters,
+like the tiles to press in Lights Out), and a plain-language explanation on the
+right of **what the answer was and how to get there**.
+
+A wrong try means a move that genuinely sets you back, not just a slow one:
+
+| Level | What counts as a wrong try |
+|---|---|
+| Lights Out | a press that leaves more lights on than before |
+| Memory Match | flipping two tiles that do not match |
+| Number Sequence / Riddle | a wrong answer you submit |
+| Sliding Puzzle | sliding a tile further from its home square |
+| Tower of Hanoi | trying to drop a bigger disc on a smaller one |
+| Code Breaker | a guess that is not the code |
+| Mini Sudoku | placing a digit that is not the answer for that cell |
+| Nonogram | filling a cell that should stay empty (or the reverse) |
+| N-Queens | trying to place a queen on an attacked square |
+
+The HUD shows a `wrong tries n / 10` counter once you have any. **Keep trying**
+dismisses the solution and gives you a fresh count; **Back to levels** returns to
+the menu. Solving a level the normal way still unlocks the next one — seeing the
+solution does not.
+
 ## Khelo Climb features
 
 - 🗺️ **5 locations** — Sunset Hills, Desert Dunes, Frozen Peaks, Volcano Run and
