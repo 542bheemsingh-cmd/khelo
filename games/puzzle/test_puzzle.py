@@ -338,6 +338,47 @@ game.solved = []
 game._load()
 check("progress round-trips through storage", game.solved == [0, 1, 2])
 
+# --- keep-trying must put the board back -----------------------------------
+print()
+print("--- keep-trying restores the board ---")
+import copy as _copy
+
+game.solved = list(range(20))
+for i, lv in enumerate(game.LEVELS):
+    game.start_level(i)
+    kind, n = lv["kind"], lv.get("n", 3)
+    # make one real move so the board is not in its starting state
+    if kind in ("lights", "slide", "queens", "nonogram", "futoshiki", "logic"):
+        game.tap(*cell(kind, 0, 0))
+    elif kind == "sudoku":
+        game.tap(*cell("sudoku", 1, 1))
+    elif kind == "memory":
+        game.tap(game.W / 2 - 200, 160)
+    elif kind == "hanoi":
+        game.tap(game.W / 2 - 300, 200)
+    elif kind == "seq":
+        game.P["input"] = "7"
+    elif kind == "riddle":
+        game.P["input"] = "abc"
+    elif kind == "crack":
+        game.P["input"] = "12"
+
+    before = _copy.deepcopy(game.P)
+    game._show_solution()
+    # the solution screen does show the answer...
+    filled = game._is_solved() if kind not in ("seq", "riddle", "crack") \
+        else bool(game.P.get("input"))
+    check("L%-2d %-14s solution screen shows the answer" % (i + 1, kind), filled)
+    # ...but Keep trying must bring the player back to where they were
+    game.keep_trying()
+    check("L%-2d %-14s keep-trying restores the board" % (i + 1, kind),
+          game.P == before)
+    check("L%-2d %-14s board is unsolved again" % (i + 1, kind),
+          not game.P.get("done", False) and
+          (kind in ("seq", "riddle", "crack") or not game._is_solved()))
+    game.back_to_menu()
+
+
 print()
 if fails:
     print("FAILURES:", fails); sys.exit(1)
