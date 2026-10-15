@@ -63,34 +63,30 @@ PAL = {
 }
 NAME = {RED: "Red", GREEN: "Green", YELLOW: "Yellow", BLUE: "Blue"}
 
-# The ring of track squares, clockwise. Every step is to an orthogonally
-# adjacent square, so a token always walks a real path - including round the
-# four inner corners of the cross.
+# The ring of track squares, clockwise - the classic 52. At the four inner
+# corners of the cross the path turns a corner, exactly as it does on a real
+# board, so the centre square stays clear of the track.
 TRACK = [
     (6, 13), (6, 12), (6, 11), (6, 10), (6, 9),                       # 0-4
-    (6, 8),                                                           # 5  inner corner
-    (5, 8), (4, 8), (3, 8), (2, 8), (1, 8), (0, 8),                   # 6-11
-    (0, 7),                                                           # 12 arm tip
-    (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6),                   # 13-18
-    (6, 6),                                                           # 19 inner corner
-    (6, 5), (6, 4), (6, 3), (6, 2), (6, 1), (6, 0),                   # 20-25
-    (7, 0),                                                           # 26 arm tip
-    (8, 0), (8, 1), (8, 2), (8, 3), (8, 4), (8, 5),                   # 27-32
-    (8, 6),                                                           # 33 inner corner
-    (9, 6), (10, 6), (11, 6), (12, 6), (13, 6), (14, 6),              # 34-39
-    (14, 7),                                                          # 40 arm tip
-    (14, 8), (13, 8), (12, 8), (11, 8), (10, 8), (9, 8),              # 41-46
-    (8, 8),                                                           # 47 inner corner
-    (8, 9), (8, 10), (8, 11), (8, 12), (8, 13), (8, 14),              # 48-53
-    (7, 14),                                                          # 54 arm tip
-    (6, 14),                                                          # 55
+    (5, 8), (4, 8), (3, 8), (2, 8), (1, 8), (0, 8),                   # 5-10
+    (0, 7),                                                           # 11 arm tip
+    (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6),                   # 12-17
+    (6, 5), (6, 4), (6, 3), (6, 2), (6, 1), (6, 0),                   # 18-23
+    (7, 0),                                                           # 24 arm tip
+    (8, 0), (8, 1), (8, 2), (8, 3), (8, 4), (8, 5),                   # 25-30
+    (9, 6), (10, 6), (11, 6), (12, 6), (13, 6), (14, 6),              # 31-36
+    (14, 7),                                                          # 37 arm tip
+    (14, 8), (13, 8), (12, 8), (11, 8), (10, 8), (9, 8),              # 38-43
+    (8, 9), (8, 10), (8, 11), (8, 12), (8, 13), (8, 14),              # 44-49
+    (7, 14),                                                          # 50 arm tip
+    (6, 14),                                                          # 51
 ]
 TRACK_LEN = len(TRACK)
-LAST_TRACK = TRACK_LEN - 2        # the arm tip a token turns off the ring at
+LAST_TRACK = 50                   # the arm tip a token turns off the ring at
 
-START = {RED: 14, GREEN: 28, YELLOW: 42, BLUE: 0}
+START = {RED: 13, GREEN: 26, YELLOW: 39, BLUE: 0}
 
-# a token walks 0..54 on the ring, then 55..59 up its home column, then 60 = home
+# a token walks 0..50 on the ring, then 51..55 up its home column, then 56 = home
 HOME_LEN = 5
 HOME_POS = LAST_TRACK + HOME_LEN + 1
 
@@ -103,7 +99,7 @@ HOME_PATH = {
 
 # Safe squares: the four coloured starts plus four stars, each nine squares on
 # from a start - the positions the classic board marks with a star.
-SAFE = set(START.values()) | {(START[c] + 9) % TRACK_LEN for c in range(4)}
+SAFE = set(START.values()) | {(START[c] + 8) % TRACK_LEN for c in range(4)}
 
 YARD = {RED: (0, 0), GREEN: (9, 0), YELLOW: (9, 9), BLUE: (0, 9)}
 YARD_SLOTS = [(1.5, 1.5), (4.5, 1.5), (1.5, 4.5), (4.5, 4.5)]
