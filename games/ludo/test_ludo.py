@@ -70,10 +70,13 @@ def force_roll(value):
 
 # --- board geometry --------------------------------------------------------
 print("--- board geometry ---")
-check("the ring has 56 squares", len(game.TRACK) == 56)
-check("every ring square is unique", len(set(game.TRACK)) == 56)
-bad = [i for i in range(56) if not adj(game.TRACK[i], game.TRACK[(i + 1) % 56])]
-check("the ring is a closed loop of neighbours", not bad)
+check("the ring has the classic 52 squares", len(game.TRACK) == 52)
+check("every ring square is unique", len(set(game.TRACK)) == 52)
+bad = [i for i in range(len(game.TRACK))
+       if not adj(game.TRACK[i], game.TRACK[(i + 1) % len(game.TRACK)])]
+check("the ring is a closed loop, turning a corner at each inner corner", len(bad) == 4)
+check("no track square sits inside the centre",
+      not [c for c in game.TRACK if c[0] in (6, 7, 8) and c[1] in (6, 7, 8)])
 
 check("each colour has a start square on the ring",
       all(game.TRACK[game.START[c]] == game.START and True for c in game.START) or True)
@@ -81,7 +84,7 @@ check("starts are the four corners' exits",
       {game.TRACK[game.START[c]] for c in range(4)} == {(1, 6), (8, 1), (13, 8), (6, 13)})
 check("eight safe squares", len(game.SAFE) == 8)
 check("the stars match the classic board",
-      {game.TRACK[(game.START[c] + 9) % game.TRACK_LEN] for c in range(4)}
+      {game.TRACK[(game.START[c] + 8) % game.TRACK_LEN] for c in range(4)}
       == {(6, 2), (12, 6), (8, 12), (2, 8)})
 check("the four start squares are safe",
       all(game.START[c] in game.SAFE for c in range(4)))
@@ -102,11 +105,11 @@ check("the four home columns never overlap", len(home_cells) == 20)
 
 # a full walk for every colour: 0..56, every step to a neighbouring cell
 for c in range(4):
-    ok = True
-    for p in range(0, game.HOME_POS - 1):
-        if not adj(game.path_cell(c, p), game.path_cell(c, p + 1)):
-            ok = False
-    check("colour %d can walk the whole way home" % c, ok)
+    steps = [game.path_cell(c, p) for p in range(game.HOME_POS)]
+    diag = sum(1 for p in range(game.HOME_POS - 1) if not adj(steps[p], steps[p + 1]))
+    check("colour %d walks home, turning the four corners" % c, diag == 4)
+    check("colour %d never revisits a square" % c,
+          len(set(steps[:game.LAST_TRACK + 1])) == game.LAST_TRACK + 1)
     check("colour %d path length is sane" % c, game.HOME_POS == game.LAST_TRACK + game.HOME_LEN + 1)
 
 check("yards sit in the four corners",
@@ -191,7 +194,7 @@ if hit_pos is not None:
 game.start_game("single", 4)
 s0 = game.my_tokens(game.RED)[0]
 g0 = game.my_tokens(game.GREEN)[0]
-safe_idx = (game.START[game.GREEN] + 9) % game.TRACK_LEN
+safe_idx = (game.START[game.GREEN] + 8) % game.TRACK_LEN
 safe_cell = game.TRACK[safe_idx]
 gp = next((p for p in range(51) if game.path_cell(game.GREEN, p) == safe_cell), None)
 rp = next((p for p in range(51) if game.path_cell(game.RED, p) == safe_cell), None)
