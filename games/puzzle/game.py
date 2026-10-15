@@ -40,7 +40,87 @@ except Exception:
 DPR = min(max(DPR, 1.0), 2.0)
 canvas.width = int(W * DPR)
 canvas.height = int(H * DPR)
-ctx = canvas.getContext("2d")
+# ---------------------------------------------------------------------------
+# Screen-adaptive UI
+#
+# The canvas has a fixed logical size, so on a phone it is scaled down and
+# everything drawn on it shrinks with it - text becomes unreadable and buttons
+# become too small for a finger. The page tells us how big the canvas really
+# is on screen, and we grow the type and the touch targets back to a
+# comfortable size. Material Design asks for a finger target of at least
+# 48 CSS pixels, which is about 9mm.
+# ---------------------------------------------------------------------------
+UI = 1.0          # type scale, 1.0 on a big screen and larger on a phone
+MIN_TOUCH = 0.0   # logical pixels that land on 48 CSS pixels
+
+
+def set_ui(scale):
+    """Called by the page with canvasHeightOnScreen / logicalHeight."""
+    global UI, MIN_TOUCH
+    try:
+        s = float(scale)
+    except Exception:
+        return
+    if s <= 0:
+        return
+    UI = max(1.0, min(1.35, 1.0 / s))
+    MIN_TOUCH = min(66.0, 48.0 / s)
+
+
+def _fit_font(spec):
+    """Grow a '700 15px family' font string so text stays readable."""
+    if UI <= 1.0 or "px" not in spec:
+        return spec
+    i = spec.index("px")
+    j = i
+    while j > 0 and (spec[j - 1].isdigit() or spec[j - 1] == "."):
+        j -= 1
+    try:
+        size = float(spec[j:i])
+    except ValueError:
+        return spec
+    return spec[:j] + str(int(round(size * UI))) + spec[i:]
+
+
+def _fs(px, cap=1.35):
+    """A font size scaled for the screen, but never past `cap`."""
+    return int(round(px * min(UI, cap)))
+
+
+
+class _Ctx:
+    """A pass-through around the 2D context that rescales every font we set."""
+
+    def __init__(self, real):
+        object.__setattr__(self, "_real", real)
+
+    def __setattr__(self, name, value):
+        if name == "font" and isinstance(value, str):
+            value = _fit_font(value)
+        setattr(self._real, name, value)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def _touch(rect):
+    """Grow a rectangle so it is at least a finger wide."""
+    rx, ry, rw, rh = rect
+    if MIN_TOUCH > rw:
+        rx -= (MIN_TOUCH - rw) / 2.0
+        rw = MIN_TOUCH
+    if MIN_TOUCH > rh:
+        ry -= (MIN_TOUCH - rh) / 2.0
+        rh = MIN_TOUCH
+    return rx, ry, rw, rh
+
+
+def _in(rect, x, y):
+    rx, ry, rw, rh = _touch(rect)
+    return rx <= x <= rx + rw and ry <= y <= ry + rh
+
+
+ctx = _Ctx(canvas.getContext("2d"))
 ctx.scale(DPR, DPR)
 
 SAVE_KEY = "khelo_puzzle_save"
@@ -933,11 +1013,6 @@ def retry():
     screen = "play"
 
 
-def _in(rect, x, y):
-    rx, ry, rw, rh = rect
-    return rx <= x <= rx + rw and ry <= y <= ry + rh
-
-
 _GRID_KINDS = ("lights", "slide", "sudoku", "nonogram", "queens", "futoshiki", "logic")
 
 
@@ -1354,23 +1429,28 @@ def _title(t, y, size=30, color="#ffffff"):
     ctx.fillText(t, W / 2, y)
 
 
-def _wrap(text, x, y, maxw, size=15, color="#9fb3d9", center=True):
+def _wrap(text, x, y, maxw, size=15, color="#9fb3d9", center=True, cap=None):
+    """Wrap text. With `cap`, the size stops growing sooner - for tight boxes."""
     if _preview:            # the solution preview draws the board, not its captions
         return y
-    ctx.font = "600 %dpx %s" % (size, FONT)
-    ctx.fillStyle = color
-    ctx.textAlign = "center" if center else "left"
+    if cap is None:
+        c, px = ctx, size
+    else:
+        c, px = ctx._real, int(round(size * min(UI, cap)))
+    c.font = "600 %dpx %s" % (int(round(px)), FONT)
+    c.fillStyle = color
+    c.textAlign = "center" if center else "left"
     words, line = text.split(" "), ""
     for wd in words:
         trial = (line + " " + wd).strip()
-        if ctx.measureText(trial).width > maxw and line:
-            ctx.fillText(line, x, y)
-            y += size + 6
+        if c.measureText(trial).width > maxw and line:
+            c.fillText(line, x, y)
+            y += px + 6
             line = wd
         else:
             line = trial
     if line:
-        ctx.fillText(line, x, y)
+        c.fillText(line, x, y)
     return y
 
 
@@ -1405,10 +1485,12 @@ def _draw_menu():
                "#7ef0c0" if done else "rgba(150, 180, 240, 0.22)", 12)
         ctx.textAlign = "center"
         ctx.fillStyle = "#7ef0c0" if done else ("#8794b3" if locked else "#9fb3d9")
-        ctx.font = "800 11px %s" % FONT
-        ctx.fillText("LEVEL %d" % (i + 1), x + cw / 2, y + 20)
+        ctx._real.font = "800 %dpx %s" % (_fs(11, 1.15), FONT)
+        ctx._real.textAlign = "center"
+        ctx._real.fillStyle = "#7ef0c0" if done else ("#8794b3" if locked else "#9fb3d9")
+        ctx._real.fillText("LEVEL %d" % (i + 1), x + cw / 2, y + 20)
         _wrap(lv["name"], x + cw / 2, y + 42, cw - 14, 14,
-              "#ffffff" if not locked else "#5d6a85")
+              "#ffffff" if not locked else "#5d6a85", cap=1.12)
         ctx.font = "800 17px %s" % FONT
         ctx.fillStyle = "#7ef0c0" if done else "#5d6a85"
         ctx.fillText("\u2713" if done else ("\U0001f512" if locked else "\u2022"),
