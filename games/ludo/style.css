@@ -183,3 +183,17 @@ html.fs-on #game { border-radius: 10px; }
   .ctrl { width: 36px; height: 36px; font-size: 16px; }
   .ctrl.home { font-size: 19px; }
 }
+
+/* the text field the canvas borrows for player names */
+.namebox {
+  position: fixed;
+  left: -1000px;
+  top: 0;
+  width: 220px;
+  height: 44px;
+  opacity: 0.01;
+  border: 0;
+  padding: 0;
+  font-size: 16px;   /* 16px stops mobile Safari zooming in */
+  pointer-events: none;
+}
