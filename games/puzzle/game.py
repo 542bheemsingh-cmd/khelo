@@ -49,26 +49,69 @@ FONT = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
 # Levels
 # ---------------------------------------------------------------------------
 LEVELS = [
-    {"name": "Lights Out", "kind": "lights",
-     "hint": "Pressing a tile flips it and its four neighbours. Work top to bottom."},
-    {"name": "Memory Match", "kind": "memory",
-     "hint": "Flip two tiles. A matching pair stays open - remember the rest."},
+    # --- the first ten ---
+    {"name": "Lights Out", "kind": "lights", "n": 3,
+     "goal": "Switch every light off.",
+     "hint": "Pressing a tile flips it AND its four neighbours. Work from the top row down: for each lit tile, press the one directly below it."},
+    {"name": "Memory Match", "kind": "memory", "pairs": 3,
+     "goal": "Find all 3 matching pairs.",
+     "hint": "Flip two tiles at a time - a matching pair stays open. Say each symbol out loud as you reveal it so you remember where it was."},
     {"name": "Number Sequence", "kind": "seq",
-     "hint": "Look at the gap between each term."},
+     "goal": "Work out the next number in the list.",
+     "hint": "Look at the GAP between each pair of terms first. If the gaps are not equal, check whether each term is the one before it multiplied by something."},
     {"name": "Riddle", "kind": "riddle",
-     "hint": "It is brown, has a head and a tail, and no legs."},
-    {"name": "Sliding Puzzle", "kind": "slide",
-     "hint": "Put 1-8 in order with the blank at the bottom right."},
-    {"name": "Tower of Hanoi", "kind": "hanoi",
-     "hint": "Move the whole stack to peg 3. Never a big disc on a small one."},
-    {"name": "Code Breaker", "kind": "code",
-     "hint": "Exact = right digit in the right place. Partial = right digit, wrong place."},
+     "goal": "Answer the riddle.",
+     "hint": "It is brown, it has a head and a tail, and it has no legs. Type a single word."},
+    {"name": "Sliding Puzzle", "kind": "slide", "n": 3,
+     "goal": "Put the tiles in order, with the blank in the bottom-right corner.",
+     "hint": "Only a tile next to the blank can move. Place tile 1 first, then 2, then 3 in the top-right corner - never disturb a finished tile."},
+    {"name": "Tower of Hanoi", "kind": "hanoi", "n": 3,
+     "goal": "Move the whole stack to the third peg.",
+     "hint": "Move the smallest disc out of the way first, and never put a bigger disc on a smaller one. 3 discs need at least 7 moves."},
+    {"name": "Crack the Code", "kind": "crack",
+     "goal": "Deduce the 3-digit code from the clues - no guessing needed.",
+     "hint": "Each clue shows a guess and its score: a filled dot = a digit that is right AND in the right place, a hollow dot = a digit that is in the code but in the wrong place. Cross out every code that breaks a clue."},
     {"name": "Mini Sudoku", "kind": "sudoku",
-     "hint": "Every row, column and 2x2 box needs 1-4 exactly once."},
-    {"name": "Nonogram", "kind": "nonogram",
-     "hint": "Each clue is a run of filled cells, in order."},
-    {"name": "N-Queens", "kind": "queens",
-     "hint": "No two queens may share a row, column or diagonal."},
+     "goal": "Fill 1-4 into every row, column and 2x2 box - each exactly once.",
+     "hint": "Find a row, column or box that already shows three numbers - the missing one is forced. Fill those singles first."},
+    {"name": "Nonogram", "kind": "nonogram", "n": 5,
+     "goal": "Fill the cells the clues describe to reveal the picture.",
+     "hint": "A clue of 5 fills the whole line. A clue of 4 always covers the middle cells wherever it sits - those are certain, so start there."},
+    {"name": "N-Queens", "kind": "queens", "n": 6,
+     "goal": "Place 6 queens so that no two attack each other.",
+     "hint": "One queen per column. Work left to right, and when a column has no safe square, back up and move the queen before it."},
+
+    # --- the next ten: harder, and two brand-new kinds of puzzle ---
+    {"name": "Futoshiki", "kind": "futoshiki", "n": 4,
+     "goal": "Fill 1-4 into every row and column, obeying the < and > signs.",
+     "hint": "Every row and column needs 1-4 once each. A '<' means the left/top cell is SMALLER than its neighbour - start with a cell only one number can fit."},
+    {"name": "Lights Out +", "kind": "lights", "n": 4,
+     "goal": "Switch every light off on the bigger board.",
+     "hint": "Same rule, bigger board. Clear one row at a time: press the tile directly below every lit tile, then move down a row."},
+    {"name": "Memory Match +", "kind": "memory", "pairs": 5,
+     "goal": "Find all 5 matching pairs.",
+     "hint": "Ten tiles now. Go left to right and never flip a tile you have not already seen - a miss is only worth it when it shows you a NEW tile."},
+    {"name": "Sliding Puzzle +", "kind": "slide", "n": 4,
+     "goal": "Order the tiles 1-15, with the blank in the bottom-right corner.",
+     "hint": "Solve the top row first, then the second row, then the third. Slide tiles in a loop around the blank instead of dragging one tile back and forth."},
+    {"name": "Tower of Hanoi +", "kind": "hanoi", "n": 4,
+     "goal": "Move all 4 discs to the third peg.",
+     "hint": "4 discs need at least 15 moves - almost exactly double the 3-disc puzzle. Move the top three discs onto the spare peg first."},
+    {"name": "Logic Grid", "kind": "logic", "n": 3,
+     "goal": "Work out which person owns which pet.",
+     "hint": "Tick the cell you are sure about, and cross out the ones a clue rules out. A crossed-out cell is just as useful as a tick."},
+    {"name": "Nonogram +", "kind": "nonogram", "n": 6,
+     "goal": "Fill the cells the clues describe to reveal the bigger picture.",
+     "hint": "Count how far a run can slide. In a line of 6, a run of 4 always covers the two middle cells no matter where it sits - fill those first."},
+    {"name": "N-Queens +", "kind": "queens", "n": 7,
+     "goal": "Place 7 queens so that no two attack each other.",
+     "hint": "Seven columns, seven queens. Place them one column at a time; if you get stuck, the mistake is almost always in the last two queens."},
+    {"name": "Futoshiki +", "kind": "futoshiki", "n": 5,
+     "goal": "Fill 1-5 into every row and column, obeying the < and > signs.",
+     "hint": "Scan for a cell where the signs and its row both rule out all but one number. Those forced cells break the puzzle open."},
+    {"name": "Logic Grid +", "kind": "logic", "n": 4,
+     "goal": "Work out which of the four friends owns which pet.",
+     "hint": "Four of each now. Apply every clue to the whole grid, then look for a row or column with only one cell left undecided."},
 ]
 
 RIDDLES = [
@@ -114,6 +157,56 @@ SUDOKU_SOL = [
     [2, 1, 4, 3],
     [4, 3, 2, 1],
 ]
+
+# 6x6 nonogram pictures (used by the harder Nonogram level)
+NONOGRAM6 = [
+    ["..X...",
+     ".XXX..",
+     "XXXXX.",
+     "..X...",
+     "..X...",
+     "..X..."],
+    ["XX..XX",
+     "XX..XX",
+     "XXXXXX",
+     "XXXXXX",
+     "XX..XX",
+     "XX..XX"],
+    ["..XX..",
+     ".XXXX.",
+     "XXXXXX",
+     "XXXXXX",
+     ".XXXX.",
+     "..XX.."],
+]
+
+# Logic-grid puzzles: a set of people, a set of pets, the answer, and the clues.
+# The tests check that each one has exactly ONE arrangement.
+LOGIC_PUZZLES = {
+    3: {
+        "people": ["Aarav", "Bhavna", "Chetan"],
+        "pets": ["cat", "dog", "fish"],
+        "sol": [1, 0, 2],
+        "clues": [
+            "Aarav does not keep the cat.",
+            "Bhavna does not keep the dog.",
+            "Chetan keeps the fish.",
+        ],
+    },
+    4: {
+        "people": ["Diya", "Eshan", "Farah", "Gaurav"],
+        "pets": ["parrot", "rabbit", "turtle", "fish"],
+        "sol": [2, 0, 3, 1],
+        "clues": [
+            "Eshan keeps the parrot.",
+            "Farah keeps neither the turtle nor the rabbit.",
+            "Diya does not keep the rabbit.",
+            "Gaurav does not keep the parrot.",
+        ],
+    },
+}
+
+TICK, CROSS = 1, 2          # the two marks a player can put in a logic-grid cell
 
 # ---------------------------------------------------------------------------
 # State
@@ -171,7 +264,7 @@ def keyboard_mode():
     if screen != "play":
         return "none"
     kind = LEVELS[level_index]["kind"]
-    if kind == "seq":
+    if kind in ("seq", "crack"):
         return "digits"
     if kind == "riddle":
         return "letters"
@@ -254,7 +347,8 @@ def _apply_solution():
     elif kind == "riddle":
         P["input"] = P["r"]["a"][0]
     elif kind == "slide":
-        P["g"] = [1, 2, 3, 4, 5, 6, 7, 8, 0]
+        n = P["n"]
+        P["g"] = list(range(1, n * n)) + [0]
     elif kind == "hanoi":
         P["pegs"] = [[], [], list(range(P["n"], 0, -1))]
         P["sel"] = None
@@ -267,6 +361,13 @@ def _apply_solution():
         P["grid"] = [row[:] for row in P["target"]]
     elif kind == "queens":
         P["q"] = set(P["sol"])
+    elif kind == "crack":
+        P["input"] = "".join(str(d) for d in P["secret"])
+    elif kind == "futoshiki":
+        P["grid"] = [row[:] for row in P["sol"]]
+    elif kind == "logic":
+        P["marks"] = [[TICK if P["sol"][r] == c else 0 for c in range(P["n"])]
+                      for r in range(P["n"])]
 
 
 def _solution_lines():
@@ -418,6 +519,54 @@ def _solution_lines():
             "cells the clues rule out and keep going.",
         ]
 
+    if kind == "crack":
+        codes = [(a, b, c) for a in range(10) for b in range(10) for c in range(10)
+                 if len({a, b, c}) == 3]
+        lines = ["Begin with every 3-digit code that has no repeated digit - 720 of "
+                 "them. A clue is simply a filter: it wipes out every code that would "
+                 "not score exactly what the clue shows."]
+        left = codes
+        for i, cl in enumerate(P["clues"]):
+            left = [c for c in left
+                    if _crack_score(c, cl["g"]) == (cl["exact"], cl["partial"])]
+            lines.append("After clue %d (%s \u2192 \u25cf%d \u25cb%d): %d code%s left."
+                         % (i + 1, "-".join(str(d) for d in cl["g"]), cl["exact"],
+                            cl["partial"], len(left),
+                            "" if len(left) == 1 else "s"))
+        lines.append("The only code that survives every clue is " +
+                     "-".join(str(d) for d in P["secret"]) + ".")
+        lines.append("Shortcut: a clue of \u25cf0 \u25cb0 rules all three of its digits "
+                     "out entirely, and \u25cf3 means you are already done.")
+        return lines
+
+    if kind == "futoshiki":
+        n = P["n"]
+        rows = "; ".join("row %d: %s" % (i + 1, " ".join(str(v) for v in P["sol"][i]))
+                         for i in range(n))
+        return [
+            "Every row and every column must hold 1-%d exactly once, like a Latin "
+            "square. On top of that each sign fixes the order of two neighbours: "
+            "'<' means the left/top cell is smaller, '>' means it is bigger." % n,
+            "The finished grid - " + rows + ".",
+            "How to get there: hunt for a cell where the signs plus the digits already "
+            "in its row and column leave only ONE number that fits. Fill those forced "
+            "cells first - each one you place creates another.",
+        ]
+
+    if kind == "logic":
+        pairs = ", ".join("%s \u2192 %s" % (P["people"][i], P["pets"][P["sol"][i]])
+                          for i in range(P["n"]))
+        return [
+            "Each person keeps exactly one pet, and each pet has exactly one owner. "
+            "A clue saying someone does NOT keep something lets you cross that cell "
+            "out - and crossing out is how these puzzles are solved.",
+            "The answer: " + pairs + ".",
+            "How to solve it: apply every clue to the whole grid, ticking what it "
+            "confirms and crossing out what it rules out. Then look for a row or "
+            "column with only one cell still undecided - that cell must be the "
+            "answer, and it unlocks the next one.",
+        ]
+
     if kind == "queens":
         n = P["n"]
         sol = P.get("sol", [])
@@ -492,22 +641,23 @@ def _setup_riddle():
     return {"r": _rng.choice(RIDDLES), "input": ""}
 
 
-def _setup_slide():
-    g = [1, 2, 3, 4, 5, 6, 7, 8, 0]           # 0 is the blank
-    blank = 8
-    for _ in range(120):                       # scramble with legal moves only
-        opts = []
-        bx, by = blank % 3, blank // 3
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            nx, ny = bx + dx, by + dy
-            if 0 <= nx < 3 and 0 <= ny < 3:
-                opts.append(ny * 3 + nx)
-        pick = _rng.choice(opts)
-        g[blank], g[pick] = g[pick], g[blank]
-        blank = pick
-    if g == [1, 2, 3, 4, 5, 6, 7, 8, 0]:
-        g[7], g[8] = g[8], g[7]
-    return {"g": g, "moves": 0}
+def _setup_slide(n):
+    target = list(range(1, n * n)) + [0]       # 0 is the blank
+    while True:
+        g = list(target)
+        blank = n * n - 1
+        for _ in range(70 * n):                # scramble with legal moves only
+            opts = []
+            bx, by = blank % n, blank // n
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = bx + dx, by + dy
+                if 0 <= nx < n and 0 <= ny < n:
+                    opts.append(ny * n + nx)
+            pick = _rng.choice(opts)
+            g[blank], g[pick] = g[pick], g[blank]
+            blank = pick
+        if g != target:                        # never hand out a solved board
+            return {"n": n, "g": g, "moves": 0}
 
 
 def _setup_hanoi(n):
@@ -530,16 +680,12 @@ def _setup_sudoku():
     return {"grid": grid, "fixed": fixed, "sel": None}
 
 
-def _setup_nonogram():
-    pat = _rng.choice(NONOGRAM_PATTERNS)
+def _setup_nonogram(n):
+    pat = _rng.choice(NONOGRAM_PATTERNS if n == 5 else NONOGRAM6)
     target = [[c == "X" for c in row] for row in pat]
-    rows = []
-    for y in range(5):
-        rows.append(_runs([1 if target[y][x] else 0 for x in range(5)]))
-    cols = []
-    for x in range(5):
-        cols.append(_runs([1 if target[y][x] else 0 for y in range(5)]))
-    return {"target": target, "grid": [[False] * 5 for _ in range(5)],
+    rows = [_runs([1 if target[y][x] else 0 for x in range(n)]) for y in range(n)]
+    cols = [_runs([1 if target[y][x] else 0 for y in range(n)]) for x in range(n)]
+    return {"n": n, "target": target, "grid": [[False] * n for _ in range(n)],
             "rows": rows, "cols": cols}
 
 
@@ -556,8 +702,120 @@ def _runs(line):
     return out or [0]
 
 
-def _setup_queens():
-    return {"n": 6, "q": set(), "sol": _queens_solve(6)}
+def _setup_queens(n):
+    return {"n": n, "q": set(), "sol": _queens_solve(n)}
+
+
+# --- Futoshiki: a Latin square with < and > between some neighbours ----------
+def _latin_square(n):
+    base = list(range(1, n + 1))
+    sh = _rng.randrange(n)
+    rows = [base[(y + sh) % n:] + base[:(y + sh) % n] for y in range(n)]
+    _rng.shuffle(rows)
+    perm = list(range(n))
+    _rng.shuffle(perm)
+    rows = [[r[c] for c in perm] for r in rows]
+    lab = list(range(1, n + 1))
+    _rng.shuffle(lab)
+    return [[lab[v - 1] for v in r] for r in rows]
+
+
+def _futoshiki_count(n, ineq, given, limit=2):
+    """How many complete grids satisfy the signs (stops early at `limit`)."""
+    grid = [[0] * n for _ in range(n)]
+    for (x, y), v in given.items():
+        grid[y][x] = v
+    found = [0]
+
+    def fits(x, y, v):
+        for i in range(n):
+            if i != x and grid[y][i] == v:
+                return False
+            if i != y and grid[i][x] == v:
+                return False
+        for (a, b), sign in ineq.items():
+            va, vb = grid[a[1]][a[0]], grid[b[1]][b[0]]
+            if va and vb and ((sign == "<" and va >= vb) or (sign == ">" and va <= vb)):
+                return False
+        return True
+
+    def solve(pos):
+        if found[0] >= limit:
+            return
+        if pos == n * n:
+            found[0] += 1
+            return
+        x, y = pos % n, pos // n
+        if grid[y][x]:
+            solve(pos + 1)
+            return
+        for v in range(1, n + 1):
+            grid[y][x] = v
+            if fits(x, y, v):
+                solve(pos + 1)
+            grid[y][x] = 0
+            if found[0] >= limit:
+                return
+
+    solve(0)
+    return found[0]
+
+
+def _setup_futoshiki(n):
+    full = {}
+    sol = _latin_square(n)
+    for _ in range(60):
+        sol = _latin_square(n)
+        full = {}
+        for y in range(n):
+            for x in range(n - 1):
+                full[((x, y), (x + 1, y))] = "<" if sol[y][x] < sol[y][x + 1] else ">"
+        for x in range(n):
+            for y in range(n - 1):
+                full[((x, y), (x, y + 1))] = "<" if sol[y][x] < sol[y + 1][x] else ">"
+        keys = list(full.keys())
+        _rng.shuffle(keys)
+        keep = keys[:max(1, int(len(keys) * 0.62))]
+        ineq = {k: full[k] for k in keep}
+        if _futoshiki_count(n, ineq, {}, 2) == 1:
+            return {"n": n, "grid": [[0] * n for _ in range(n)],
+                    "ineq": ineq, "sel": None, "sol": sol}
+    # extremely unlikely: keep every sign, which is almost always unique
+    return {"n": n, "grid": [[0] * n for _ in range(n)],
+            "ineq": full, "sel": None, "sol": sol}
+
+
+# --- Logic grid: deduce who owns which pet --------------------------------
+def _setup_logic(n):
+    pz = LOGIC_PUZZLES[n]
+    return {"n": n, "people": pz["people"], "pets": pz["pets"],
+            "sol": pz["sol"], "clues": pz["clues"],
+            "marks": [[0] * n for _ in range(n)]}
+
+
+# --- Crack the Code: a code that is deducible, with no guessing -----------
+def _crack_score(guess, code):
+    exact = sum(1 for i in range(3) if guess[i] == code[i])
+    partial = len(set(guess) & set(code)) - exact
+    return exact, partial
+
+
+def _setup_crack():
+    codes = [(a, b, c) for a in range(10) for b in range(10) for c in range(10)
+             if len({a, b, c}) == 3]
+    for _ in range(200):
+        secret = _rng.choice(codes)
+        clues, left = [], codes
+        while len(clues) < 6 and len(left) > 1:
+            g = _rng.choice(codes)
+            if any(cl["g"] == list(g) for cl in clues):
+                continue
+            e, p = _crack_score(g, secret)
+            clues.append({"g": list(g), "exact": e, "partial": p})
+            left = [c for c in left if _crack_score(c, g) == (e, p)]
+        if len(left) == 1 and len(clues) >= 3:
+            return {"secret": list(secret), "clues": clues, "input": ""}
+    return None
 
 
 def _setup():
@@ -565,27 +823,32 @@ def _setup():
     show_hint = False
     _message = ""
     wrong_tries = 0
-    kind = LEVELS[level_index]["kind"]
+    lv = LEVELS[level_index]
+    kind = lv["kind"]
     if kind == "lights":
-        P = _setup_lights(3, _rng.randint(3, 5))
+        P = _setup_lights(lv["n"], lv["n"] + 2)
     elif kind == "memory":
-        P = _setup_memory(3)
+        P = _setup_memory(lv["pairs"])
     elif kind == "seq":
         P = _setup_seq()
     elif kind == "riddle":
         P = _setup_riddle()
     elif kind == "slide":
-        P = _setup_slide()
+        P = _setup_slide(lv["n"])
     elif kind == "hanoi":
-        P = _setup_hanoi(3)
-    elif kind == "code":
-        P = _setup_code()
+        P = _setup_hanoi(lv["n"])
+    elif kind == "crack":
+        P = _setup_crack() or _setup_crack()
     elif kind == "sudoku":
         P = _setup_sudoku()
     elif kind == "nonogram":
-        P = _setup_nonogram()
+        P = _setup_nonogram(lv["n"])
     elif kind == "queens":
-        P = _setup_queens()
+        P = _setup_queens(lv["n"])
+    elif kind == "futoshiki":
+        P = _setup_futoshiki(lv["n"])
+    elif kind == "logic":
+        P = _setup_logic(lv["n"])
 
 
 # ---------------------------------------------------------------------------
@@ -597,20 +860,24 @@ def _is_solved():
         return not any(any(row) for row in P["g"])
     if kind == "memory":
         return len(P["matched"]) == len(P["deck"])
-    if kind in ("seq", "riddle"):
+    if kind in ("seq", "riddle", "crack"):
         return P.get("done", False)
     if kind == "slide":
-        return P["g"] == [1, 2, 3, 4, 5, 6, 7, 8, 0]
+        n = P["n"]
+        return P["g"] == list(range(1, n * n)) + [0]
     if kind == "hanoi":
         return P["pegs"][2] == list(range(P["n"], 0, -1))
-    if kind == "code":
-        return bool(P["guesses"]) and P["guesses"][-1]["exact"] == 3
     if kind == "sudoku":
         return all(P["grid"][y][x] == SUDOKU_SOL[y][x] for y in range(4) for x in range(4))
     if kind == "nonogram":
         return P["grid"] == P["target"]
     if kind == "queens":
         return len(P["q"]) == P["n"]
+    if kind == "futoshiki":
+        return P["grid"] == P["sol"]
+    if kind == "logic":
+        return all((P["marks"][r][c] == TICK) == (P["sol"][r] == c)
+                   for r in range(P["n"]) for c in range(P["n"]))
     return False
 
 
@@ -662,6 +929,22 @@ def _in(rect, x, y):
     return rx <= x <= rx + rw and ry <= y <= ry + rh
 
 
+_GRID_KINDS = ("lights", "slide", "sudoku", "nonogram", "queens", "futoshiki", "logic")
+
+
+def _grid_geo(n, top, bottom, max_cell, max_w=560, min_gap=0):
+    """Centre an n x n grid in the given band; returns (ox, oy, cell, gap).
+
+    The drawing and the tap handling both call this, so they can never disagree
+    about where a cell is - even as the boards get bigger.
+    """
+    avail_h = bottom - top
+    gap = max(4, min_gap, int(max_cell * 0.11))
+    cell = int(min(max_cell, (max_w - (n - 1) * gap) / n, (avail_h - (n - 1) * gap) / n))
+    size = n * cell + (n - 1) * gap
+    return W / 2 - size / 2, top + (avail_h - size) / 2, cell, gap
+
+
 def tap(x, y):
     global show_hint, _message
     if screen == "menu":
@@ -702,26 +985,33 @@ def tap(x, y):
         return
 
     kind = LEVELS[level_index]["kind"]
-    if kind == "lights":
-        n = P["n"]
-        ox, oy, cell, gap = W / 2 - 120, 130, 72, 8
+
+    if kind in _GRID_KINDS:
+        ox, oy, cell, gap = _geo(kind)
+        n = _grid_n(kind)
         for gy in range(n):
             for gx in range(n):
                 r = (ox + gx * (cell + gap), oy + gy * (cell + gap), cell, cell)
                 if _in(r, x, y):
-                    before = sum(row.count(True) for row in P["g"])
-                    _press_lights(P["g"], gx, gy, n)
-                    after = sum(row.count(True) for row in P["g"])
-                    P["moves"] += 1
-                    _sound("click")
-                    if _is_solved():
-                        _win()
-                    elif after > before:        # that press made the board worse
-                        _note_wrong()
+                    _tap_cell(kind, gx, gy)
                     return
+        if kind == "sudoku":
+            for d in range(4):
+                if _in((W / 2 - 140 + d * 74, 460, 66, 54), x, y):
+                    _sudoku_put(d + 1)
+                    return
+        elif kind == "futoshiki":
+            bw, bg = 56, 10
+            bx = W / 2 - (n * bw + (n - 1) * bg) / 2
+            for d in range(n):
+                if _in((bx + d * (bw + bg), 468, bw, 48), x, y):
+                    _futo_put(d + 1)
+                    return
+        return
 
-    elif kind == "memory":
-        cols, cw, ch, gap = 3, 130, 120, 18
+    if kind == "memory":
+        cols = 3 if len(P["deck"]) <= 6 else 4
+        cw, ch, gap = 130, 118, 16
         ox = W / 2 - (cols * cw + (cols - 1) * gap) / 2
         oy = 150
         for i in range(len(P["deck"])):
@@ -746,111 +1036,146 @@ def tap(x, y):
                         _note_wrong()
                 return
 
-    elif kind == "slide":
-        ox, oy, cell, gap = W / 2 - 120, 130, 72, 8
-        for i in range(9):
-            gx, gy = i % 3, i // 3
-            r = (ox + gx * (cell + gap), oy + gy * (cell + gap), cell, cell)
-            if _in(r, x, y):
-                blank = P["g"].index(0)
-                if abs(gx - blank % 3) + abs(gy - blank // 3) == 1:
-                    before = _slide_dist(P["g"])
-                    P["g"][blank], P["g"][i] = P["g"][i], P["g"][blank]
-                    after = _slide_dist(P["g"])
-                    P["moves"] += 1
-                    _sound("click")
-                    if _is_solved():
-                        _win()
-                    elif after > before:        # moved a tile further from home
-                        _note_wrong()
-                return
-
     elif kind == "hanoi":
         peg_w, peg_gap = 190, 60
         ox = W / 2 - (3 * peg_w + 2 * peg_gap) / 2
         for i in range(3):
-            r = (ox + i * (peg_w + peg_gap), 150, peg_w, 300)
-            if _in(r, x, y):
+            if _in((ox + i * (peg_w + peg_gap), 150, peg_w, 300), x, y):
                 _hanoi_click(i)
                 return
 
-    elif kind == "code":
-        # digit pads
-        for d in range(6):
-            r = (W / 2 - 330 + d * 66, 400, 58, 54)
-            if _in(r, x, y):
-                P["cur"][P["slot"]] = d + 1
-                P["slot"] = min(2, P["slot"] + 1)
-                _sound("click")
-                return
-        # slots
-        for s in range(3):
-            r = (W / 2 - 110 + s * 76, 130, 64, 64)
-            if _in(r, x, y):
-                P["slot"] = s
-                _sound("click")
-                return
-        if _in((W / 2 - 90, 476, 180, 48), x, y):
-            _code_guess()
-            return
 
+def _grid_n(kind):
+    """How many rows/columns the current grid puzzle has."""
+    if kind == "sudoku":
+        return 4
+    return P.get("n", 3)
+
+
+def _geo(kind):
+    """Grid geometry, shared by the drawing and the tap handling."""
+    n = _grid_n(kind)
+    if kind in ("lights", "slide"):
+        return _grid_geo(n, 152, 448, 78)
+    if kind == "sudoku":
+        return _grid_geo(4, 160, 420, 66)
+    if kind == "queens":
+        return _grid_geo(n, 150, 450, 60)
+    if kind == "futoshiki":
+        return _grid_geo(n, 162, 436, 68, min_gap=22)
+    if kind == "nonogram":
+        ox, oy, cell, gap = _grid_geo(n, 206, 470, 58, max_w=420)
+        return ox + 46, oy, cell, gap
+    if kind == "logic":
+        ox, oy, cell, gap = _grid_geo(n, 212, 452, 60, max_w=420)
+        return ox + 62, oy, cell, gap
+    return _grid_geo(n, 150, 450, 70)
+
+
+def _tap_cell(kind, gx, gy):
+    if kind == "lights":
+        n = P["n"]
+        before = sum(row.count(True) for row in P["g"])
+        _press_lights(P["g"], gx, gy, n)
+        after = sum(row.count(True) for row in P["g"])
+        P["moves"] += 1
+        _sound("click")
+        if _is_solved():
+            _win()
+        elif after > before:                 # that press made the board worse
+            _note_wrong()
+    elif kind == "slide":
+        n = P["n"]
+        i = gy * n + gx
+        blank = P["g"].index(0)
+        if abs(gx - blank % n) + abs(gy - blank // n) == 1:
+            before = _slide_dist(P["g"], n)
+            P["g"][blank], P["g"][i] = P["g"][i], P["g"][blank]
+            after = _slide_dist(P["g"], n)
+            P["moves"] += 1
+            _sound("click")
+            if _is_solved():
+                _win()
+            elif after > before:             # moved a tile further from home
+                _note_wrong()
     elif kind == "sudoku":
-        ox, oy, cell, gap = W / 2 - 130, 140, 62, 6
-        for gy in range(4):
-            for gx in range(4):
-                r = (ox + gx * (cell + gap), oy + gy * (cell + gap), cell, cell)
-                if _in(r, x, y):
-                    if not P["fixed"][gy][gx]:
-                        P["sel"] = (gx, gy)
-                        _sound("click")
-                    return
-        for d in range(4):
-            r = (W / 2 - 140 + d * 74, 460, 66, 54)
-            if _in(r, x, y):
-                if P["sel"]:
-                    gx, gy = P["sel"]
-                    P["grid"][gy][gx] = d + 1
-                    _sound("click")
-                    if _is_solved():
-                        _win()
-                    elif d + 1 != SUDOKU_SOL[gy][gx]:
-                        _note_wrong()
-                return
-
+        if not P["fixed"][gy][gx]:
+            P["sel"] = (gx, gy)
+            _sound("click")
     elif kind == "nonogram":
-        cell = 58
-        ox, oy = W / 2 - 145 + 110, 130 + 70
-        for gy in range(5):
-            for gx in range(5):
-                r = (ox + gx * cell, oy + gy * cell, cell, cell)
-                if _in(r, x, y):
-                    P["grid"][gy][gx] = not P["grid"][gy][gx]
-                    _sound("click")
-                    if _is_solved():
-                        _win()
-                    elif P["grid"][gy][gx] != P["target"][gy][gx]:
-                        _note_wrong()
-                    return
-
+        P["grid"][gy][gx] = not P["grid"][gy][gx]
+        _sound("click")
+        if _is_solved():
+            _win()
+        elif P["grid"][gy][gx] != P["target"][gy][gx]:
+            _note_wrong()
     elif kind == "queens":
-        n, cell = P["n"], 62
-        ox, oy = W / 2 - n * cell / 2, 140
-        for gy in range(n):
-            for gx in range(n):
-                r = (ox + gx * cell, oy + gy * cell, cell, cell)
-                if _in(r, x, y):
-                    if (gx, gy) in P["q"]:
-                        P["q"].discard((gx, gy))
-                    elif _queens_ok(P["q"], gx, gy):
-                        P["q"].add((gx, gy))
-                        _sound("click")
-                        if _is_solved():
-                            _win()
-                    else:
-                        _sound("deny")
-                        _note_wrong()
-                    return
+        if (gx, gy) in P["q"]:
+            P["q"].discard((gx, gy))
+        elif _queens_ok(P["q"], gx, gy):
+            P["q"].add((gx, gy))
+            _sound("click")
+            if _is_solved():
+                _win()
+        else:
+            _sound("deny")
+            _note_wrong()
+    elif kind == "futoshiki":
+        P["sel"] = (gx, gy)
+        _sound("click")
+    elif kind == "logic":
+        m = P["marks"][gy][gx]
+        m = 0 if m == CROSS else m + 1
+        P["marks"][gy][gx] = m
+        _sound("click")
+        if _is_solved():
+            _win()
+        else:
+            truth = P["sol"][gy] == gx
+            if (m == TICK and not truth) or (m == CROSS and truth):
+                _note_wrong()
 
+
+def _sudoku_put(d):
+    if not P["sel"]:
+        return
+    gx, gy = P["sel"]
+    P["grid"][gy][gx] = d
+    _sound("click")
+    if _is_solved():
+        _win()
+    elif d != SUDOKU_SOL[gy][gx]:
+        _note_wrong()
+
+
+def _futo_bad():
+    """True if the grid currently breaks a Futoshiki rule."""
+    n, g = P["n"], P["grid"]
+    for y in range(n):
+        vals = [v for v in g[y] if v]
+        if len(vals) != len(set(vals)):
+            return True
+    for x in range(n):
+        vals = [g[y][x] for y in range(n) if g[y][x]]
+        if len(vals) != len(set(vals)):
+            return True
+    for (a, b), sign in P["ineq"].items():
+        va, vb = g[a[1]][a[0]], g[b[1]][b[0]]
+        if va and vb and ((sign == "<" and va >= vb) or (sign == ">" and va <= vb)):
+            return True
+    return False
+
+
+def _futo_put(d):
+    if not P["sel"]:
+        return
+    gx, gy = P["sel"]
+    P["grid"][gy][gx] = d
+    _sound("click")
+    if _is_solved():
+        _win()
+    elif _futo_bad():
+        _note_wrong()
 
 def _hanoi_click(peg):
     global _message
@@ -905,13 +1230,13 @@ def _queens_ok(q, x, y):
     return True
 
 
-def _slide_dist(g):
+def _slide_dist(g, n):
     """Total Manhattan distance of the tiles from their home squares."""
     d = 0
     for i, v in enumerate(g):
         if v:
             home = v - 1
-            d += abs(i % 3 - home % 3) + abs(i // 3 - home // 3)
+            d += abs(i % n - home % n) + abs(i // n - home // n)
     return d
 
 
@@ -921,7 +1246,7 @@ def key(k):
     if screen != "play":
         return
     kind = LEVELS[level_index]["kind"]
-    if kind not in ("riddle", "seq"):
+    if kind not in ("riddle", "seq", "crack"):
         return
     if k == "Backspace":
         P["input"] = P["input"][:-1]
@@ -929,6 +1254,20 @@ def key(k):
     if k == "Enter":
         text = P["input"].strip().lower()
         if not text:
+            return
+        if kind == "crack":
+            got = [int(c) for c in text if c.isdigit()]
+            if len(got) != 3:
+                _message = "Type exactly three digits, then press Enter."
+                return
+            if got == P["secret"]:
+                P["done"] = True
+                _win()
+            else:
+                _message = "That code breaks one of the clues - re-check each row."
+                P["input"] = ""
+                _sound("deny")
+                _note_wrong()
             return
         if kind == "seq":
             try:
@@ -1038,13 +1377,14 @@ def _draw_menu():
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, W, H)
 
-    _title("KHELO PUZZLES", 62, 38)
-    _wrap("10 levels, a different puzzle each time", W / 2, 92, 520, 15)
-    _wrap("Solved: %d / %d" % (len(solved), len(LEVELS)), W / 2, 118, 520, 14, "#7ef0c0")
+    _title("KHELO PUZZLES", 46, 32)
+    _wrap("20 levels - a different puzzle each time, getting harder as you go",
+          W / 2, 72, 620, 14)
+    _wrap("Solved: %d / %d" % (len(solved), len(LEVELS)), W / 2, 94, 520, 13, "#7ef0c0")
 
-    cols, cw, ch, gap = 5, 150, 118, 16
+    cols, cw, ch, gap = 5, 162, 86, 13
     ox = W / 2 - (cols * cw + (cols - 1) * gap) / 2
-    oy = 158
+    oy = 112
     for i, lv in enumerate(LEVELS):
         gx, gy = i % cols, i // cols
         x = ox + gx * (cw + gap)
@@ -1053,59 +1393,94 @@ def _draw_menu():
         done = i in solved
         _panel(x, y, cw, ch,
                "rgba(20, 30, 56, 0.92)" if not locked else "rgba(14, 20, 36, 0.75)",
-               "#7ef0c0" if done else "rgba(150, 180, 240, 0.22)", 14)
+               "#7ef0c0" if done else "rgba(150, 180, 240, 0.22)", 12)
         ctx.textAlign = "center"
         ctx.fillStyle = "#7ef0c0" if done else ("#8794b3" if locked else "#9fb3d9")
-        ctx.font = "800 13px %s" % FONT
-        ctx.fillText("LEVEL %d" % (i + 1), x + cw / 2, y + 28)
-        ctx.fillStyle = "#ffffff" if not locked else "#5d6a85"
-        ctx.font = "700 15px %s" % FONT
-        _wrap(lv["name"], x + cw / 2, y + 58, cw - 16, 15,
+        ctx.font = "800 11px %s" % FONT
+        ctx.fillText("LEVEL %d" % (i + 1), x + cw / 2, y + 20)
+        _wrap(lv["name"], x + cw / 2, y + 42, cw - 14, 14,
               "#ffffff" if not locked else "#5d6a85")
-        ctx.font = "800 20px %s" % FONT
+        ctx.font = "800 17px %s" % FONT
         ctx.fillStyle = "#7ef0c0" if done else "#5d6a85"
-        ctx.fillText("✓" if done else ("🔒" if locked else "•"), x + cw / 2, y + ch - 18)
+        ctx.fillText("\u2713" if done else ("\U0001f512" if locked else "\u2022"),
+                     x + cw / 2, y + ch - 12)
         if not locked:
             _menu_hit.append((i, (x, y, cw, ch)))
 
 
+def _hint_popup(text):
+    """A floating card that sits directly above the Hint button."""
+    bw, bh = 420, 84
+    bx, by = W - 190 + 174 - bw, 62
+    _panel(bx, by, bw, bh, "rgba(255, 210, 63, 0.16)",
+           "rgba(255, 210, 63, 0.62)", 12)
+    cx = W - 190 + 87                                   # centre of the Hint button
+    ctx.beginPath()                                     # little pointer up to it
+    ctx.moveTo(cx - 11, by)
+    ctx.lineTo(cx + 11, by)
+    ctx.lineTo(cx, by - 8)
+    ctx.closePath()
+    ctx.fillStyle = "rgba(255, 210, 63, 0.62)"
+    ctx.fill()
+    _wrap(text, bx + bw / 2, by + 26, bw - 30, 13, "#ffe9a3")
+
+
 def _draw_chrome():
+    lv = LEVELS[level_index]
     ctx.textAlign = "left"
     ctx.fillStyle = "#9fb3d9"
     ctx.font = "700 12px %s" % FONT
     ctx.fillText("LEVEL %d / %d" % (level_index + 1, len(LEVELS)), 150, 30)
     ctx.fillStyle = "#ffffff"
     ctx.font = "800 22px %s" % FONT
-    ctx.fillText(LEVELS[level_index]["name"], 150, 54)
+    ctx.fillText(lv["name"], 150, 54)
+
+    _button(16, 16, 120, 40, "\u2190 Levels")
+    _button(W - 190, 16, 174, 40, "Hint" if not show_hint else "Hide hint",
+            show_hint, "#ffd23f")
+    _button(W - 190, H - 52, 174, 36, "Restart")
+
+    # the goal, always on screen, so the player knows what is being asked
+    _panel(16, 64, 440, 44, "rgba(126, 240, 192, 0.10)",
+           "rgba(126, 240, 192, 0.38)", 10)
+    ctx.textAlign = "left"
+    ctx.fillStyle = "#7ef0c0"
+    ctx.font = "800 11px %s" % FONT
+    ctx.fillText("GOAL", 30, 84)
+    _wrap(lv["goal"], 74, 82, 366, 13, "#dff7ee", False)
 
     # how many wrong tries before the solution is shown
     if wrong_tries:
         left = MAX_WRONG - wrong_tries
+        ctx.textAlign = "left"
         ctx.fillStyle = "#ff9aa2" if left <= 3 else "#7f8fb3"
         ctx.font = "700 12px %s" % FONT
-        ctx.fillText("wrong tries %d / %d" % (wrong_tries, MAX_WRONG), 150, 74)
-
-    _button(16, 16, 120, 40, "← Levels")
-    _button(W - 190, 16, 174, 40, "Hint" if not show_hint else "Hide hint",
-            show_hint, "#ffd23f")
-    _button(W - 190, H - 56, 174, 40, "Restart")
+        ctx.fillText("wrong tries %d / %d" % (wrong_tries, MAX_WRONG), 24, H - 22)
 
     if show_hint:
-        _panel(W / 2 - 340, H - 104, 680, 42, "rgba(255, 210, 63, 0.14)",
-               "rgba(255, 210, 63, 0.5)", 12)
-        _wrap(LEVELS[level_index]["hint"], W / 2, H - 80, 640, 15, "#ffe9a3")
+        _hint_popup(lv["hint"])
 
     if _message:
-        _wrap(_message, W / 2, H - 62, 680, 15, "#ff9aa2")
+        _wrap(_message, W / 2, H - 66, 700, 15, "#ff9aa2")
 
 
 # ---------------------------------------------------------------------------
 # Drawing: puzzles
 # ---------------------------------------------------------------------------
+def _instr(text, y, maxw=600, size=15):
+    """The per-puzzle instruction line.
+
+    It hides while the hint card is open, because that card floats over the
+    same top-right corner.
+    """
+    if show_hint:
+        return
+    _wrap(text, W / 2, y, maxw, size)
+
+
 def _draw_lights():
     n, g = P["n"], P["g"]
-    cell, gap = 72, 8
-    ox, oy = W / 2 - (n * cell + (n - 1) * gap) / 2, 150
+    ox, oy, cell, gap = _geo("lights")
     for y in range(n):
         for x in range(n):
             px, py = ox + x * (cell + gap), oy + y * (cell + gap)
@@ -1119,11 +1494,12 @@ def _draw_lights():
                 ctx.lineWidth = 5
                 ctx.strokeStyle = "#7ef0c0"
                 ctx.stroke()
-    _wrap("Switch every light off. Moves: %d" % P["moves"], W / 2, 118, 600, 15)
+    _instr("Switch every light off. Moves: %d" % P["moves"], 120)
 
 
 def _draw_memory():
-    cols, cw, ch, gap = 3, 130, 120, 18
+    cols = 3 if len(P["deck"]) <= 6 else 4
+    cw, ch, gap = 130, 118, 16
     ox = W / 2 - (cols * cw + (cols - 1) * gap) / 2
     oy = 150
     for i, sym in enumerate(P["deck"]):
@@ -1137,11 +1513,11 @@ def _draw_memory():
         ctx.fillStyle = "#ffffff"
         ctx.font = "800 42px %s" % FONT
         ctx.fillText(sym if shown else "?", px + cw / 2, py + ch / 2 + 15)
-    _wrap("Find the %d pairs." % (len(P["deck"]) // 2), W / 2, 118, 600, 15)
+    _instr("Find the %d pairs." % (len(P["deck"]) // 2), 120)
 
 
 def _draw_typed(prompt_lines, unit):
-    y = 130
+    y = 172 if show_hint else 130
     for line in prompt_lines:
         _wrap(line, W / 2, y, 700, 18, "#eaf2ff")
         y += 30
@@ -1156,29 +1532,32 @@ def _draw_typed(prompt_lines, unit):
 
 
 def _draw_seq():
-    _draw_typed([", ".join(str(t) for t in P["terms"]) + ",  ?"], "Type the next number and press Enter")
+    _draw_typed([", ".join(str(t) for t in P["terms"]) + ",  ?"],
+                "Type the next number and press Enter")
 
 
 def _draw_riddle():
-    _wrap(P["r"]["q"], W / 2, 150, 660, 19, "#eaf2ff")
+    _wrap(P["r"]["q"], W / 2, 190 if show_hint else 150, 660, 19, "#eaf2ff")
     _draw_typed([], "Type your answer and press Enter")
 
 
 def _draw_slide():
-    cell, gap = 72, 8
-    ox, oy = W / 2 - (3 * cell + 2 * gap) / 2, 150
+    n = P["n"]
+    ox, oy, cell, gap = _geo("slide")
     for i, v in enumerate(P["g"]):
-        gx, gy = i % 3, i // 3
+        gx, gy = i % n, i // n
         px, py = ox + gx * (cell + gap), oy + gy * (cell + gap)
         if v == 0:
-            _panel(px, py, cell, cell, "rgba(10, 16, 32, 0.6)", "rgba(150, 180, 240, 0.15)", 12)
+            _panel(px, py, cell, cell, "rgba(10, 16, 32, 0.6)",
+                   "rgba(150, 180, 240, 0.15)", 10)
         else:
-            _panel(px, py, cell, cell, "rgba(36, 52, 92, 0.95)", "rgba(150, 180, 240, 0.35)", 12)
+            _panel(px, py, cell, cell, "rgba(36, 52, 92, 0.95)",
+                   "rgba(150, 180, 240, 0.35)", 10)
             ctx.textAlign = "center"
             ctx.fillStyle = "#ffffff"
-            ctx.font = "800 30px %s" % FONT
-            ctx.fillText(str(v), px + cell / 2, py + cell / 2 + 11)
-    _wrap("Slide tiles into the blank. Moves: %d" % P["moves"], W / 2, 118, 600, 15)
+            ctx.font = "800 %dpx %s" % (int(cell * 0.42), FONT)
+            ctx.fillText(str(v), px + cell / 2, py + cell / 2 + cell * 0.15)
+    _instr("Slide tiles into the blank. Moves: %d" % P["moves"], 120)
 
 
 def _draw_hanoi():
@@ -1193,43 +1572,45 @@ def _draw_hanoi():
         ctx.fillStyle = "rgba(150, 180, 240, 0.35)"
         ctx.fillRect(px + peg_w / 2 - 4, 190, 8, base_y - 210)
         for k, disc in enumerate(pegs[i]):
-            dw = 26 + disc * 30
-            dy = base_y - 24 - k * 26
-            col = ["#e63946", "#f59e0b", "#2dd4bf"][disc % 3]
-            _panel(px + peg_w / 2 - dw / 2, dy, dw, 22, col, "rgba(255,255,255,0.35)", 8)
-    _wrap("Move all %d discs to the third peg. Moves: %d" % (n, P["moves"]), W / 2, 118, 620, 15)
+            dw = 20 + disc * (240 / max(1, n))
+            dy = base_y - 20 - k * (230 / (n + 1))
+            col = ["#e63946", "#f59e0b", "#2dd4bf", "#a78bfa", "#60a5fa"][disc % 5]
+            _panel(px + peg_w / 2 - dw / 2, dy, dw, 20, col,
+                   "rgba(255,255,255,0.35)", 7)
+    _instr("Move all %d discs to the third peg. Moves: %d" % (n, P["moves"]), 120, 620)
 
 
-def _draw_code():
-    ctx.textAlign = "center"
-    for s in range(3):
-        px, py = W / 2 - 110 + s * 76, 130
-        _panel(px, py, 64, 64,
-               "#ffd23f" if P["slot"] == s else "rgba(24, 34, 62, 0.95)",
-               "rgba(150, 180, 240, 0.35)", 10)
-        ctx.fillStyle = "#06101f" if P["slot"] == s else "#ffffff"
-        ctx.font = "800 30px %s" % FONT
-        ctx.fillText(str(P["cur"][s]), px + 32, py + 43)
-    _wrap("Guess the 3-digit code (digits 1-6).", W / 2, 112, 620, 15)
-
-    y = 232
-    for g in P["guesses"][-5:]:
-        ctx.fillStyle = "#9fb3d9"
-        ctx.font = "700 18px %s" % FONT
-        ctx.textAlign = "center"
-        ctx.fillText("".join(str(d) for d in g["g"]), W / 2 - 90, y + 6)
+def _draw_crack():
+    _instr("Use the clues to deduce the code - you never need to guess.", 118, 720)
+    y = 146
+    for cl in P["clues"][:6]:
+        for i, d in enumerate(cl["g"]):
+            bx = W / 2 - 200 + i * 44
+            _panel(bx, y, 36, 36, "rgba(36, 52, 92, 0.95)",
+                   "rgba(150, 180, 240, 0.35)", 8)
+            ctx.textAlign = "center"
+            ctx.fillStyle = "#ffffff"
+            ctx.font = "800 19px %s" % FONT
+            ctx.fillText(str(d), bx + 18, y + 25)
+        ctx.textAlign = "left"
+        ctx.font = "800 17px %s" % FONT
         ctx.fillStyle = "#7ef0c0"
-        ctx.fillText("● %d" % g["exact"], W / 2 + 10, y + 6)
+        ctx.fillText("\u25cf %d" % cl["exact"], W / 2 + 6, y + 25)
         ctx.fillStyle = "#ffd23f"
-        ctx.fillText("○ %d" % g["partial"], W / 2 + 110, y + 6)
-        y += 30
-    for d in range(6):
-        _button(W / 2 - 330 + d * 66, 400, 58, 54, str(d + 1), False, size=20)
-    _button(W / 2 - 90, 476, 180, 48, "Guess", True)
+        ctx.fillText("\u25cb %d" % cl["partial"], W / 2 + 96, y + 25)
+        y += 40
+    box = (W / 2 - 160, y + 14, 320, 54)
+    _panel(box[0], box[1], box[2], box[3], "rgba(24, 34, 62, 0.95)", "#7ef0c0", 12)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#ffffff"
+    ctx.font = "800 26px %s" % FONT
+    ctx.fillText((P["input"] + "|") if P["input"] else "|",
+                 box[0] + box[2] / 2, box[1] + 37)
+    _wrap("Type the three digits, then press Enter", W / 2, box[1] + box[3] + 24, 620, 14)
 
 
 def _draw_sudoku():
-    ox, oy, cell, gap = W / 2 - 130, 140, 62, 6
+    ox, oy, cell, gap = _geo("sudoku")
     for gy in range(4):
         for gx in range(4):
             px, py = ox + gx * (cell + gap), oy + gy * (cell + gap)
@@ -1242,54 +1623,119 @@ def _draw_sudoku():
             if v:
                 ctx.textAlign = "center"
                 ctx.fillStyle = "#9fb3d9" if fixed else "#ffffff"
-                ctx.font = "800 28px %s" % FONT
-                ctx.fillText(str(v), px + cell / 2, py + cell / 2 + 10)
-    _wrap("Tap a cell, then a digit. 1-4 in every row, column and box.",
-          W / 2, 118, 660, 15)
+                ctx.font = "800 %dpx %s" % (int(cell * 0.44), FONT)
+                ctx.fillText(str(v), px + cell / 2, py + cell / 2 + cell * 0.15)
+    _instr("Tap a cell, then a digit. 1-4 in every row, column and box.", 122, 700)
     for d in range(4):
         _button(W / 2 - 140 + d * 74, 460, 66, 54, str(d + 1), False, size=22)
 
 
 def _draw_nonogram():
-    cell = 58
-    gw = 5 * cell
-    ox = W / 2 - (gw + 110) / 2 + 110
-    oy = 200
-    for y in range(5):
-        for x in range(5):
-            px, py = ox + x * cell, oy + y * cell
+    n = P["n"]
+    ox, oy, cell, gap = _geo("nonogram")
+    for y in range(n):
+        for x in range(n):
+            px, py = ox + x * (cell + gap), oy + y * (cell + gap)
             _panel(px, py, cell, cell,
                    "#7ef0c0" if P["grid"][y][x] else "rgba(22, 30, 54, 0.95)",
-                   "rgba(150, 180, 240, 0.25)", 6)
+                   "rgba(150, 180, 240, 0.25)", 5)
     ctx.textAlign = "right"
     ctx.fillStyle = "#9fb3d9"
-    ctx.font = "700 17px %s" % FONT
-    for y in range(5):
-        txt = " ".join(str(v) for v in P["rows"][y])
-        ctx.fillText(txt, ox - 12, oy + y * cell + cell / 2 + 6)
+    ctx.font = "700 15px %s" % FONT
+    for y in range(n):
+        ctx.fillText(" ".join(str(v) for v in P["rows"][y]),
+                     ox - 10, oy + y * (cell + gap) + cell / 2 + 5)
     ctx.textAlign = "center"
-    for x in range(5):
-        txt = " ".join(str(v) for v in P["cols"][x])
-        ctx.fillText(txt, ox + x * cell + cell / 2, oy - 12)
-    _wrap("Fill the cells the clues describe.", W / 2, 150, 620, 15)
+    for x in range(n):
+        ctx.fillText(" ".join(str(v) for v in P["cols"][x]),
+                     ox + x * (cell + gap) + cell / 2, oy - 10)
+    _instr("Fill the cells the clues describe.", 158, 620)
 
 
 def _draw_queens():
-    n, cell = P["n"], 62
-    ox, oy = W / 2 - n * cell / 2, 140
+    n, cell = P["n"], _geo("queens")[2]
+    ox, oy, cell, gap = _geo("queens")
     for y in range(n):
         for x in range(n):
             dark = (x + y) % 2 == 0
-            _panel(ox + x * cell, oy + y * cell, cell, cell,
+            _panel(ox + x * (cell + gap), oy + y * (cell + gap), cell, cell,
                    "rgba(30, 40, 70, 0.95)" if dark else "rgba(22, 30, 56, 0.95)",
                    "rgba(150, 180, 240, 0.18)", 4)
     for (x, y) in P["q"]:
         ctx.textAlign = "center"
         ctx.fillStyle = "#ffd23f"
-        ctx.font = "800 34px %s" % FONT
-        ctx.fillText("♛", ox + x * cell + cell / 2, oy + y * cell + cell / 2 + 12)
-    _wrap("Place %d queens - none may attack another. Placed: %d" % (n, len(P["q"])),
-          W / 2, 118, 660, 15)
+        ctx.font = "800 %dpx %s" % (int(cell * 0.55), FONT)
+        ctx.fillText("\u265b", ox + x * (cell + gap) + cell / 2,
+                     oy + y * (cell + gap) + cell / 2 + cell * 0.19)
+    _instr("Place %d queens - none may attack another. Placed: %d" % (n, len(P["q"])), 120, 660)
+
+
+def _draw_futoshiki():
+    n = P["n"]
+    ox, oy, cell, gap = _geo("futoshiki")
+    for gy in range(n):
+        for gx in range(n):
+            px, py = ox + gx * (cell + gap), oy + gy * (cell + gap)
+            sel = P["sel"] == (gx, gy)
+            _panel(px, py, cell, cell,
+                   "#2a3a66" if sel else "rgba(24, 34, 62, 0.95)",
+                   "#7ef0c0" if sel else "rgba(150, 180, 240, 0.3)", 8)
+            v = P["grid"][gy][gx]
+            if v:
+                ctx.textAlign = "center"
+                ctx.fillStyle = "#ffffff"
+                ctx.font = "800 %dpx %s" % (int(cell * 0.46), FONT)
+                ctx.fillText(str(v), px + cell / 2, py + cell / 2 + cell * 0.16)
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillStyle = "#ffd23f"
+    ctx.font = "800 %dpx %s" % (max(13, int(gap * 0.9)), FONT)
+    for (a, b), sign in P["ineq"].items():
+        (ax, ay), (bx, by) = a, b
+        if ax == bx:                                    # stacked vertically
+            mx = ox + ax * (cell + gap) + cell / 2
+            my = oy + ay * (cell + gap) + cell + gap / 2
+        else:                                           # side by side
+            mx = ox + ax * (cell + gap) + cell + gap / 2
+            my = oy + ay * (cell + gap) + cell / 2
+        ctx.fillText(sign, mx, my)
+    ctx.textBaseline = "alphabetic"
+    bw, bg = 56, 10
+    bx = W / 2 - (n * bw + (n - 1) * bg) / 2
+    for d in range(n):
+        _button(bx + d * (bw + bg), 468, bw, 48, str(d + 1), False, size=20)
+    _instr("Fill 1-%d in every row and column, obeying the signs." % n, 132, 700)
+
+
+def _draw_logic():
+    n = P["n"]
+    ox, oy, cell, gap = _geo("logic")
+    for gy in range(n):
+        for gx in range(n):
+            px, py = ox + gx * (cell + gap), oy + gy * (cell + gap)
+            _panel(px, py, cell, cell, "rgba(24, 34, 62, 0.95)",
+                   "rgba(150, 180, 240, 0.3)", 8)
+            m = P["marks"][gy][gx]
+            if m:
+                ctx.textAlign = "center"
+                ctx.font = "800 %dpx %s" % (int(cell * 0.5), FONT)
+                ctx.fillStyle = "#7ef0c0" if m == TICK else "#ff8b8b"
+                ctx.fillText("\u2713" if m == TICK else "\u2717",
+                             px + cell / 2, py + cell / 2 + cell * 0.17)
+    ctx.textAlign = "right"
+    ctx.fillStyle = "#eaf2ff"
+    ctx.font = "700 15px %s" % FONT
+    for gy in range(n):
+        ctx.fillText(P["people"][gy], ox - 12,
+                     oy + gy * (cell + gap) + cell / 2 + 5)
+    ctx.textAlign = "center"
+    ctx.font = "700 13px %s" % FONT
+    for gx in range(n):
+        ctx.fillText(P["pets"][gx], ox + gx * (cell + gap) + cell / 2, oy - 10)
+    y = oy + n * (cell + gap) + 24
+    for c in P["clues"]:
+        _wrap(c, W / 2, y, 780, 14, "#9fb3d9")
+        y += 19
 
 
 # ---------------------------------------------------------------------------
@@ -1314,20 +1760,34 @@ def _draw_solved():
 _PUZZLE_DRAW = {
     "lights": _draw_lights, "memory": _draw_memory, "seq": _draw_seq,
     "riddle": _draw_riddle, "slide": _draw_slide, "hanoi": _draw_hanoi,
-    "code": _draw_code, "sudoku": _draw_sudoku, "nonogram": _draw_nonogram,
-    "queens": _draw_queens,
+    "crack": _draw_crack, "sudoku": _draw_sudoku, "nonogram": _draw_nonogram,
+    "queens": _draw_queens, "futoshiki": _draw_futoshiki, "logic": _draw_logic,
 }
 
-# the slice of the canvas each board occupies, so the preview can zoom to it
-_SOL_REGION = {
-    "lights": (300, 120, 600, 420),
-    "memory": (220, 130, 680, 420),
-    "slide": (300, 120, 600, 420),
-    "hanoi": (90, 130, 810, 440),
-    "sudoku": (290, 120, 620, 530),
-    "nonogram": (330, 170, 680, 510),
-    "queens": (250, 120, 650, 530),
-}
+
+def _sol_region(kind):
+    """The slice of the canvas the current board occupies, for the preview."""
+    if kind == "memory":
+        cols = 3 if len(P["deck"]) <= 6 else 4
+        rows = (len(P["deck"]) + cols - 1) // cols
+        w = cols * 130 + (cols - 1) * 16
+        h = rows * 118 + (rows - 1) * 16
+        return (W / 2 - w / 2 - 12, 138, W / 2 + w / 2 + 12, 138 + h + 12)
+    if kind == "hanoi":
+        return (95, 140, 805, 435)
+    if kind in ("seq", "riddle", "crack"):
+        return (180, 100, 720, 500)
+    ox, oy, cell, gap = _geo(kind)
+    n = _grid_n(kind)
+    size = n * cell + (n - 1) * gap
+    x0, y0 = ox - 12, oy - 12
+    x1, y1 = ox + size + 12, oy + size + 12
+    if kind in ("nonogram", "logic"):
+        x0 -= 78
+        y0 -= 30
+    if kind in ("sudoku", "futoshiki"):
+        y1 += 72
+    return (x0, y0, x1, y1)
 
 
 def _draw_solution():
@@ -1359,7 +1819,7 @@ def _draw_solution():
         ctx.font = "800 %dpx %s" % (38 if len(ans) < 12 else 22, FONT)
         ctx.fillText(ans, px + pw / 2, py + ph / 2 + 6)
     else:
-        x0, y0, x1, y1 = _SOL_REGION.get(kind, (240, 110, 660, 520))
+        x0, y0, x1, y1 = _sol_region(kind)
         s = min(pw / (x1 - x0), ph / (y1 - y0)) * 0.94
         ctx.save()
         ctx.beginPath()
