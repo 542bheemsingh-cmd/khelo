@@ -47,10 +47,12 @@ The classic race home, with the full board and the full rules.
   opponent and it goes back to their yard. The four coloured start squares and
   the four star squares are safe. A 6, a capture or getting a token home all earn
   you another roll.
-- **Animated.** The die drops in from above, tumbling and spinning before it
-  lands with a clack. Tokens hop square by square along the ring. A captured
-  token walks all the way back to its yard rather than teleporting. Confetti
-  celebrates the win.
+- **A real 3D die.** The die is rendered with [three.js](https://threejs.org)
+  (MIT) — a rounded cube with pip textures, proper lighting and a soft shadow.
+  On every roll it drops in from above, tumbling on all three axes for **two
+  seconds**, bounces twice and settles on the number you rolled. Tokens hop
+  square by square along the ring, a captured token walks all the way back to
+  its yard rather than teleporting, and confetti celebrates the win.
 - **Sound for everything.** The die rattle and its landing clack, the wooden tock
   of a token moving, the whoosh of a capture, a chime for a token reaching home,
   and a fanfare for the win — all synthesised, so there are no audio files.
