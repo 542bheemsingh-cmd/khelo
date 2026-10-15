@@ -50,7 +50,7 @@ def adj(a, b):
 def settle(limit=600):
     for _ in range(limit):
         game.update(0.05)
-        if game.anim is None and game.rolling <= 0:
+        if not game.anims and game.rolling <= 0:
             return True
     return False
 
@@ -80,6 +80,9 @@ check("each colour has a start square on the ring",
 check("starts are the four corners' exits",
       {game.TRACK[game.START[c]] for c in range(4)} == {(1, 6), (8, 1), (13, 8), (6, 13)})
 check("eight safe squares", len(game.SAFE) == 8)
+check("the stars match the classic board",
+      {game.TRACK[(game.START[c] + 9) % game.TRACK_LEN] for c in range(4)}
+      == {(6, 2), (12, 6), (8, 12), (2, 8)})
 check("the four start squares are safe",
       all(game.START[c] in game.SAFE for c in range(4)))
 
@@ -188,7 +191,7 @@ if hit_pos is not None:
 game.start_game("single", 4)
 s0 = game.my_tokens(game.RED)[0]
 g0 = game.my_tokens(game.GREEN)[0]
-safe_idx = (game.START[game.GREEN] + 8) % game.TRACK_LEN
+safe_idx = (game.START[game.GREEN] + 9) % game.TRACK_LEN
 safe_cell = game.TRACK[safe_idx]
 gp = next((p for p in range(51) if game.path_cell(game.GREEN, p) == safe_cell), None)
 rp = next((p for p in range(51) if game.path_cell(game.RED, p) == safe_cell), None)
@@ -219,14 +222,86 @@ check("both partners home wins the team", game._won(game.RED) and game._won(game
 check("the other team has not won", not game._won(game.GREEN))
 
 
+# --- token designs, names, stacking ----------------------------------------
+print()
+print("--- designs, names and stacking ---")
+check("there are five token designs", len(game.DESIGNS) == 5)
+check("the default design is one of them", game.design in game.DESIGNS)
+for d in game.DESIGNS:
+    game.set_design(d)
+    CALLS.clear()
+    game.draw()
+    check("design %-5s draws" % d, len(CALLS) > 0)
+game.set_design("ball")
+
+game.set_name(game.RED, "Bheem")
+check("a name is stored", game.names[game.RED] == "Bheem")
+game.set_name(game.RED, "   ")
+check("a blank name falls back to the colour", game.names[game.RED] == "Red")
+game.set_name(game.RED, "a-very-long-name-here")
+check("names are trimmed", len(game.names[game.RED]) <= 12)
+game.set_name(game.RED, "Red")
+
+# two tokens on one square must not sit exactly on top of each other
+game.start_game("single", 4)
+a, b = game.my_tokens(game.RED)[0], game.my_tokens(game.RED)[1]
+a["pos"] = 10
+b["pos"] = 10
+game.update(0.016)
+offs = game._stack_offsets()
+check("tokens sharing a square get different offsets",
+      offs.get(id(a)) != offs.get(id(b)) and offs.get(id(a)) != (0.0, 0.0))
+
+# every home token gets its own slot
+game.start_game("single", 4)
+for k, t in enumerate(game.my_tokens(game.RED)):
+    t["pos"] = game.HOME_POS
+spots = {game.token_xy(game.RED, t["i"], game.HOME_POS) for t in game.my_tokens(game.RED)}
+check("all four home tokens have their own slot", len(spots) == 4)
+allspots = set()
+for c in range(4):
+    for i in range(4):
+        allspots.add(game.token_xy(c, i, game.HOME_POS))
+check("no two colours share a home slot", len(allspots) == 16)
+
+# a captured token walks back along the ring rather than teleporting
+game.start_game("single", 4)
+r0 = game.my_tokens(game.RED)[0]
+g0 = game.my_tokens(game.GREEN)[0]
+landing = game.path_cell(game.RED, 2)
+gp = next((p for p in range(game.LAST_TRACK + 1)
+           if game.path_cell(game.GREEN, p) == landing
+           and p not in game.SAFE), None)
+if gp is not None:
+    r0["pos"] = 0
+    g0["pos"] = gp
+    game.turn = 0
+    game.dice = 2
+    game.can_roll = False
+    game.moves = [(r0, 2)]
+    game._choose(r0, 2)
+    # the walk-back begins once the moving token has finished its own hop
+    started = []
+    for _ in range(300):
+        game.update(0.05)
+        started = [a for a in game.anims if a["kind"] == "capture"]
+        if started:
+            break
+    check("the captured token starts a walk-back animation", len(started) == 1)
+    check("the walk-back covers every square on the way",
+          len(started[0]["cells"]) == gp + 1)
+    settle()
+    check("the walk-back ends in the yard", g0["pos"] == -1)
+
+
 # --- screens ---------------------------------------------------------------
 print()
 print("--- screens ---")
 game.state = "mode"
 CALLS.clear(); game.draw()
 check("mode screen draws", len(CALLS) > 60)
-check("mode screen offers both modes",
-      [t for t, _ in game._menu_hit] == ["single", "team"])
+check("mode screen offers both modes plus the design picker",
+      [t for t, _ in game._menu_hit] == ["single", "team", "design"])
 
 game.tap(game._menu_hit[0][1][0] + 10, game._menu_hit[0][1][1] + 10)
 check("choosing single goes to the player count", game.state == "count")
@@ -235,12 +310,34 @@ check("count screen offers 2, 3, 4 and back",
       [t for t, _ in game._menu_hit] == ["2", "3", "4", "back"])
 
 game.tap(game._menu_hit[2][1][0] + 10, game._menu_hit[2][1][1] + 10)
-check("picking 4 starts a 4 player game",
+check("picking 4 goes to set-up", game.state == "setup")
+CALLS.clear(); game.draw()
+check("set-up offers every design plus start and back",
+      len([t for t, _ in game._menu_hit if t.startswith("d:")]) == 5
+      and "start" in [t for t, _ in game._menu_hit]
+      and "back" in [t for t, _ in game._menu_hit])
+check("set-up shows a name field per player", len(game._name_fields) == 4)
+
+# pick a design, then start
+for tag, r in game._menu_hit:
+    if tag == "d:gem":
+        game.tap(r[0] + 5, r[1] + 5)
+check("choosing a design selects it", game.design == "gem")
+for tag, r in game._menu_hit:
+    if tag == "start":
+        game.tap(r[0] + 5, r[1] + 5)
+check("starting gives a 4 player game",
       game.state == "play" and len(game.players) == 4)
+game.set_design("ball")
 
 game.state = "mode"; game.draw()
 game.tap(game._menu_hit[1][1][0] + 10, game._menu_hit[1][1][1] + 10)
-check("choosing team starts straight away",
+check("choosing team goes to set-up", game.state == "setup")
+CALLS.clear(); game.draw()          # refresh the hit list for the set-up screen
+for tag, r in game._menu_hit:
+    if tag == "start":
+        game.tap(r[0] + 5, r[1] + 5)
+check("team game starts with four players",
       game.state == "play" and game.mode == "team" and len(game.players) == 4)
 
 CALLS.clear(); game.draw()
@@ -256,7 +353,7 @@ check("the win screen offers play-again and menu",
 # rolling by tapping the die
 game.start_game("single", 4)
 CALLS.clear(); game.draw()
-game.tap(725, 165)          # the die
+game.tap(game.ROLL_RECT[0] + 40, game.ROLL_RECT[1] + 20)   # the ROLL button
 check("tapping the die rolls", game.rolling > 0 or not game.can_roll)
 settle()
 check("the roll resolves into moves or a pass", game.can_roll or game.moves)
