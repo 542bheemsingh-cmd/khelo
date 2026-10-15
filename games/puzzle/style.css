@@ -1,7 +1,25 @@
 :root {
   --ink: #eaf2ff;
   --glow: #7ef0c0;
-  --bar: 52px;
+  --bar: 56px;
+}
+
+/* ---------------------------------------------------------------------------
+   Design tokens
+   Sizes and spacing follow Material Design 3 (a finger target is at least
+   48 CSS px, with 8 px between targets); the spacing scale follows Open Props
+   (MIT). Every value the chrome uses comes from here.
+   --------------------------------------------------------------------------- */
+:root {
+  --touch: 48px;              /* Material 3 minimum finger target */
+  --gap: 8px;                 /* Material 3 minimum spacing between targets */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-full: 999px;
+  --surface: rgba(20, 32, 62, 0.78);
+  --surface-hi: rgba(34, 52, 96, 0.92);
+  --on-surface: #eaf2ff;
+  --outline: rgba(150, 180, 240, 0.28);
 }
 
 * { box-sizing: border-box; }
@@ -33,7 +51,7 @@ body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap);
   height: var(--bar);
   width: 100%;
   max-width: 1040px;
@@ -44,13 +62,13 @@ body {
 
 .ctrl {
   flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
+  width: var(--touch);
+  height: var(--touch);
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 12px;
-  background: rgba(20, 32, 62, 0.75);
+  border-radius: var(--radius-md);
+  background: var(--surface);
   color: var(--ink);
   font-size: 19px;
   line-height: 1;
@@ -179,7 +197,7 @@ html.fs-on #game { border-radius: 10px; }
 
 /* short screens: trim the control bar so the game keeps its room */
 @media (max-height: 430px) {
-  :root { --bar: 44px; }
-  .ctrl { width: 36px; height: 36px; font-size: 16px; }
+  :root { --bar: 54px; }
+  .ctrl { font-size: 17px; }
   .ctrl.home { font-size: 19px; }
 }
