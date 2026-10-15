@@ -88,6 +88,7 @@
     var ready = false;
     var canvas = document.getElementById("game");
     var screenBox = document.querySelector(".screen");
+    var setUiFn = null;
     var pedals = document.getElementById("pedals");
 
     /* Keep the 900x560 drawing ratio exact so taps map 1:1 and nothing is
@@ -98,6 +99,7 @@
       var s = Math.min(aw / GW, ah / GH);
       canvas.style.width = Math.floor(GW * s) + "px";
       canvas.style.height = Math.floor(GH * s) + "px";
+      if (setUiFn) setUiFn(s);      // tell Python how small the canvas is
       pedals.style.width = Math.floor(GW * s) + "px";   // keep the pedals on the canvas
     }
 
@@ -121,6 +123,7 @@
       enterFn = pyodide.globals.get("enter_key");
       menuFn = pyodide.globals.get("back_to_menu");
       playingFn = pyodide.globals.get("playing");
+      setUiFn = pyodide.globals.get("set_ui");
 
       bar.style.width = "100%";
       ready = true;
