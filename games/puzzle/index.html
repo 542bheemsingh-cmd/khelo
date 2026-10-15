@@ -86,6 +86,7 @@
     var tapFn = null, keyFn = null, kbModeFn = null, ready = false;
     var canvas = document.getElementById("game");
     var screenBox = document.querySelector(".screen");
+    var setUiFn = null;
     var kb = document.getElementById("kb");
     var kbRows = [document.getElementById("kb-row1"), document.getElementById("kb-row2"), document.getElementById("kb-row3")];
     var kbShown = null;
@@ -98,6 +99,7 @@
       var s = Math.min(aw / GW, ah / GH);
       canvas.style.width = Math.floor(GW * s) + "px";
       canvas.style.height = Math.floor(GH * s) + "px";
+      if (setUiFn) setUiFn(s);      // tell Python how small the canvas is
     }
 
     var KEYS = {
@@ -165,6 +167,7 @@
       tapFn = pyodide.globals.get("tap");
       keyFn = pyodide.globals.get("key");
       kbModeFn = pyodide.globals.get("keyboard_mode");
+      setUiFn = pyodide.globals.get("set_ui");
 
       bar.style.width = "100%";
       ready = true;
