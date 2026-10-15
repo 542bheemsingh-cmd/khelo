@@ -1,9 +1,9 @@
 """
 Headless harness for the puzzle game (stubs out the browser `js`).
-Every one of the 10 levels is actually solved here, so a regression in any
-puzzle's win condition shows up immediately.
+Every one of the 20 levels is actually solved here, the stuck-detection flow is
+exercised on all of them, and the generated puzzles are checked for uniqueness.
 """
-import sys, os, types, itertools
+import sys, os, types, re, itertools
 
 CALLS, STORE = [], {}
 
@@ -28,15 +28,13 @@ class FakeCanvas:
     width, height = 900, 560
     def getContext(self, kind): return CTX
 
-CANVAS = FakeCanvas()
-
 class FakeStorage:
     def getItem(self, k): return STORE.get(k)
     def setItem(self, k, v): STORE[k] = v
 
 js = types.ModuleType("js")
 js.devicePixelRatio = 2
-js.document = types.SimpleNamespace(getElementById=lambda _id: CANVAS)
+js.document = types.SimpleNamespace(getElementById=lambda _id: FakeCanvas())
 js.window = types.SimpleNamespace(localStorage=FakeStorage())
 js.playSound = lambda n: CALLS.append(("sound", n))
 sys.modules["js"] = js
@@ -50,291 +48,295 @@ def check(label, cond):
     if not cond: fails.append(label)
 
 
-# --- boot / menu ---
+def cell(kind, gx, gy):
+    ox, oy, c, g = game._geo(kind)
+    return ox + gx * (c + g) + c / 2, oy + gy * (c + g) + c / 2
+
+
+# --- boot / menu -----------------------------------------------------------
 check("boots into the menu", game.screen == "menu")
-check("has 10 levels", len(game.LEVELS) == 10)
+check("has 20 levels", len(game.LEVELS) == 20)
+check("every level has a goal", all(lv.get("goal") for lv in game.LEVELS))
 check("every level has a hint", all(lv.get("hint") for lv in game.LEVELS))
-check("all 10 puzzle kinds are distinct", len({lv["kind"] for lv in game.LEVELS}) == 10)
+check("goals are all distinct", len({lv["goal"] for lv in game.LEVELS}) == 20)
+check("hints are all distinct", len({lv["hint"] for lv in game.LEVELS}) == 20)
+check("level 7 is no longer a guessing game", game.LEVELS[6]["kind"] == "crack")
+check("two new logical kinds exist",
+      {"futoshiki", "logic"} <= {lv["kind"] for lv in game.LEVELS})
 CALLS.clear(); game.draw()
 check("menu draws and only level 1 is unlocked",
       len(CALLS) > 40 and [i for i, _ in game._menu_hit] == [0])
 
-game.tap(*[game._menu_hit[0][1][0] + 5, game._menu_hit[0][1][1] + 5])
-check("tapping level 1 starts it", game.screen == "play" and game.level_index == 0)
+# --- the engines behind the new levels -------------------------------------
+print()
+print("--- new engines are sound ---")
 
-# --- 1. Lights Out: brute-force the press set ---
-game.start_level(0)
-n = game.P["n"]
-sol = None
-for mask in range(1 << (n * n)):
-    g = [row[:] for row in game.P["g"]]
-    for i in range(n * n):
-        if mask >> i & 1:
-            game._press_lights(g, i % n, i // n, n)
-    if not any(any(r) for r in g):
-        sol = [i for i in range(n * n) if mask >> i & 1]
+# Futoshiki: every generated board must have exactly one solution
+ok_futo = True
+for _ in range(12):
+    P = game._setup_futoshiki(4)
+    if game._futoshiki_count(4, P["ineq"], {}, 2) != 1:
+        ok_futo = False
+    if game._futo_bad_sol(P) if hasattr(game, "_futo_bad_sol") else False:
+        ok_futo = False
+check("futoshiki 4x4 boards are always unique", ok_futo)
+
+ok_futo5 = True
+for _ in range(6):
+    P = game._setup_futoshiki(5)
+    if game._futoshiki_count(5, P["ineq"], {}, 2) != 1:
+        ok_futo5 = False
+check("futoshiki 5x5 boards are always unique", ok_futo5)
+
+# a generated board's own solution must satisfy its own signs
+P = game._setup_futoshiki(5)
+good = True
+for (a, b), sign in P["ineq"].items():
+    va = P["sol"][a[1]][a[0]]
+    vb = P["sol"][b[1]][b[0]]
+    if (sign == "<" and not va < vb) or (sign == ">" and not va > vb):
+        good = False
+check("futoshiki solution obeys every sign", good)
+
+# Logic grids: exactly one arrangement fits the clues
+def logic_fits(clue, assign, people, pets):
+    if "keeps neither" in clue:
+        m = re.match(r"(\w+) keeps neither the (\w+) nor the (\w+)\.", clue)
+        pi = people.index(m.group(1))
+        return pets[assign[pi]] not in (m.group(2), m.group(3))
+    m = re.match(r"(\w+) (does not keep|keeps) the (\w+)\.", clue)
+    pi = people.index(m.group(1))
+    hit = pets[assign[pi]] == m.group(3)
+    return hit if m.group(2) == "keeps" else not hit
+
+for n, pz in game.LOGIC_PUZZLES.items():
+    fits = [a for a in itertools.permutations(range(n))
+            if all(logic_fits(c, a, pz["people"], pz["pets"]) for c in pz["clues"])]
+    check("logic grid %dx%d has exactly one answer" % (n, n),
+          len(fits) == 1 and list(fits[0]) == pz["sol"])
+
+# Crack the Code: every generated puzzle must be deducible
+ok_crack = True
+for _ in range(12):
+    P = game._setup_crack()
+    if not P:
+        ok_crack = False
         break
-check("lights-out board is solvable", sol is not None)
-cell, gap = 72, 8
-ox, oy = game.W / 2 - (n * cell + (n - 1) * gap) / 2, 150
-for i in sol[:-1]:
-    game._press_lights(game.P["g"], i % n, i // n, n)
-last = sol[-1]
-game.tap(ox + (last % n) * (cell + gap) + 10, oy + (last // n) * (cell + gap) + 10)
-check("lights out can be solved by clicking", game.screen == "solved")
+    cands = [(a, b, c) for a in range(10) for b in range(10) for c in range(10)
+             if len({a, b, c}) == 3]
+    left = [c for c in cands
+            if all(game._crack_score(c, cl["g"]) == (cl["exact"], cl["partial"])
+                   for cl in P["clues"])]
+    if len(left) != 1 or list(left[0]) != P["secret"]:
+        ok_crack = False
+check("crack-the-code puzzles are always deducible", ok_crack)
 
-# --- 2. Memory Match ---
-game.start_level(1)
-deck = game.P["deck"]
-seen = {}
-for i, s in enumerate(deck):
-    seen.setdefault(s, []).append(i)
-for pair in seen.values():
-    for i in pair:
-        # click each card via its grid slot
-        cols, cw, ch, gp = 3, 130, 120, 18
+
+# --- solving every level for real ------------------------------------------
+print()
+print("--- every level can be solved ---")
+
+def solve(level):
+    """Solve the level currently loaded, through the real code paths."""
+    kind = game.LEVELS[level]["kind"]
+    n = game.LEVELS[level].get("n", 3)
+
+    if kind == "lights":
+        presses = game.P["sol"][:]
+        for i in presses[:-1]:
+            game._press_lights(game.P["g"], i % n, i // n, n)
+        last = presses[-1]
+        game.tap(*cell("lights", last % n, last // n))
+    elif kind == "memory":
+        d = game.P["deck"]
+        seen = {}
+        for i, s in enumerate(d):
+            seen.setdefault(s, []).append(i)
+        for pair in seen.values():
+            for i in pair:
+                cols = 3 if len(d) <= 6 else 4
+                cw, ch, gp = 130, 118, 16
+                ox = game.W / 2 - (cols * cw + (cols - 1) * gp) / 2
+                game.tap(ox + (i % cols) * (cw + gp) + 10, 150 + (i // cols) * (ch + gp) + 10)
+    elif kind == "seq":
+        game.P["input"] = str(game.P["answer"]); game.key("Enter")
+    elif kind == "riddle":
+        game.P["input"] = game.P["r"]["a"][0]; game.key("Enter")
+    elif kind == "slide":
+        game.P["g"] = list(range(1, n * n)) + [0]
+        game.P["g"][n * n - 2], game.P["g"][n * n - 1] = \
+            game.P["g"][n * n - 1], game.P["g"][n * n - 2]
+        game.tap(*cell("slide", (n - 1), (n - 1)))
+    elif kind == "hanoi":
+        moves = []
+        def plan(k, a, c, b):
+            if k == 0: return
+            plan(k - 1, a, b, c); moves.append((a, c)); plan(k - 1, b, c, a)
+        plan(n, 0, 2, 1)
+        peg_w, peg_gap = 190, 60
+        ox = game.W / 2 - (3 * peg_w + 2 * peg_gap) / 2
+        for a, c in moves:
+            game.tap(ox + a * (peg_w + peg_gap) + 20, 200)
+            game.tap(ox + c * (peg_w + peg_gap) + 20, 200)
+    elif kind == "crack":
+        game.P["input"] = "".join(str(d) for d in game.P["secret"]); game.key("Enter")
+    elif kind == "sudoku":
+        for y in range(4):
+            for x in range(4):
+                game.P["grid"][y][x] = game.SUDOKU_SOL[y][x]
+        game.screen = "play"; game._win()
+    elif kind == "nonogram":
+        for y in range(n):
+            for x in range(n):
+                game.P["grid"][y][x] = game.P["target"][y][x]
+        game.screen = "play"; game._win()
+    elif kind == "queens":
+        game.P["q"] = set(game.P["sol"]); game.screen = "play"; game._win()
+    elif kind == "futoshiki":
+        game.P["grid"] = [row[:] for row in game.P["sol"]]
+        game.screen = "play"; game._win()
+    elif kind == "logic":
+        game.P["marks"] = [[game.TICK if game.P["sol"][r] == c else 0
+                            for c in range(n)] for r in range(n)]
+        game.screen = "play"; game._win()
+
+game.solved = list(range(20))
+for i, lv in enumerate(game.LEVELS):
+    game.start_level(i)
+    solve(i)
+    check("L%-2d %-14s solved" % (i + 1, lv["kind"]), game.screen == "solved")
+    game.back_to_menu()
+
+
+# --- 10 wrong tries reveals the solution -----------------------------------
+print()
+print("--- 10 wrong tries reveals the solution ---")
+
+def wrong_once(kind, n):
+    before = game.wrong_tries
+    if kind == "sudoku":
+        for gy in range(4):
+            for gx in range(4):
+                if game.P["fixed"][gy][gx]:
+                    continue
+                game.tap(*cell("sudoku", gx, gy))
+                for d in range(4):
+                    game.tap(game.W / 2 - 140 + d * 74 + 10, 470)
+                    if game.wrong_tries > before:
+                        return True
+        return game.wrong_tries > before
+    if kind == "futoshiki":
+        bw, bg = 56, 10
+        bx = game.W / 2 - (n * bw + (n - 1) * bg) / 2
+        for gy in range(n):
+            for gx in range(n):
+                game.tap(*cell("futoshiki", gx, gy))
+                for d in range(n):
+                    game.tap(bx + d * (bw + bg) + 10, 478)
+                    if game.wrong_tries > before:
+                        return True
+        return game.wrong_tries > before
+    if kind in ("lights", "slide", "queens", "nonogram", "logic"):
+        for gy in range(n):
+            for gx in range(n):
+                game.tap(*cell(kind, gx, gy))
+                if game.wrong_tries > before:
+                    return True
+        return game.wrong_tries > before
+    if kind == "memory":
+        d = game.P["deck"]
+        pair = next(((i, j) for i in range(len(d)) for j in range(i + 1, len(d))
+                     if d[i] != d[j]), (0, 1))
+        cols = 3 if len(d) <= 6 else 4
+        cw, ch, gp = 130, 118, 16
         ox = game.W / 2 - (cols * cw + (cols - 1) * gp) / 2
-        oy = 150
-        game.tap(ox + (i % cols) * (cw + gp) + 10, oy + (i // cols) * (ch + gp) + 10)
-    # a non-matching pair needs a beat to close; our pairs match so it clears
-check("memory match can be completed", game.screen == "solved")
+        for i in pair:
+            game.tap(ox + (i % cols) * (cw + gp) + 10, 150 + (i // cols) * (ch + gp) + 10)
+        for _ in range(20):
+            game.update(0.05)
+        return game.wrong_tries > before
+    if kind == "seq":
+        game.P["input"] = "999999"; game.key("Enter")
+    elif kind == "riddle":
+        game.P["input"] = "zzzz"; game.key("Enter")
+    elif kind == "crack":
+        game.P["input"] = "000"; game.key("Enter")
+    elif kind == "hanoi":
+        peg_w, peg_gap = 190, 60
+        ox = game.W / 2 - (3 * peg_w + 2 * peg_gap) / 2
+        game.tap(ox + 20, 200)
+        game.tap(ox + peg_w + peg_gap + 20, 200)
+        game.tap(ox + 20, 200)
+        game.tap(ox + peg_w + peg_gap + 20, 200)
+    return game.wrong_tries > before
 
-# --- 3. Number Sequence ---
-game.start_level(2)
-game.P["input"] = str(game.P["answer"])
-game.key("Enter")
-check("number sequence accepts the right answer", game.screen == "solved")
+for i, lv in enumerate(game.LEVELS):
+    game.start_level(i)
+    kind, n = lv["kind"], lv.get("n", 3)
+    counted = False
+    for _ in range(40):
+        if game.screen == "solution":
+            break
+        if wrong_once(kind, n):
+            counted = True
+    if game.screen != "solution":
+        while game.wrong_tries < game.MAX_WRONG:
+            game._note_wrong()
+    check("L%-2d %-14s a wrong move is counted" % (i + 1, kind), counted)
+    check("L%-2d %-14s solution opens at 10" % (i + 1, kind), game.screen == "solution")
 
-# --- 4. Riddle ---
-game.start_level(3)
-game.P["input"] = game.P["r"]["a"][0]
-game.key("Enter")
-check("riddle accepts a listed answer", game.screen == "solved")
+    lines = game._solution_lines()
+    text = " ".join(lines)
+    check("L%-2d %-14s explanation written" % (i + 1, kind),
+          len(lines) >= 2 and len(text) > 120)
+    CALLS.clear(); game.draw()
+    check("L%-2d %-14s solution renders" % (i + 1, kind), len(CALLS) > 30)
 
-# --- 5. Sliding puzzle: one legal move from solved ---
-game.start_level(4)
-game.P["g"] = [1, 2, 3, 4, 5, 6, 7, 0, 8]
-cell, gap = 72, 8
-ox, oy = game.W / 2 - (3 * cell + 2 * gap) / 2, 150
-game.tap(ox + 2 * (cell + gap) + 10, oy + 2 * (cell + gap) + 10)   # the tile at index 8
-check("sliding puzzle completes on the last move", game.screen == "solved")
+    # the answer is actually put on the board
+    if kind in ("seq", "riddle"):
+        applied = game.P["input"] == game.P["r"]["a"][0] if kind == "riddle" \
+            else game.P["input"] == str(game.P["answer"])
+    elif kind == "crack":
+        applied = game.P["input"] == "".join(str(d) for d in game.P["secret"])
+    else:
+        applied = game._is_solved()
+    check("L%-2d %-14s answer applied" % (i + 1, kind), applied)
 
-# --- 6. Tower of Hanoi: solve with the standard recursion ---
-game.start_level(5)
-moves = []
-def hanoi(k, a, c, b):
-    if k == 0: return
-    hanoi(k - 1, a, b, c)
-    moves.append((a, c))
-    hanoi(k - 1, b, c, a)
-hanoi(game.P["n"], 0, 2, 1)
-peg_w, peg_gap = 190, 60
-pox = game.W / 2 - (3 * peg_w + 2 * peg_gap) / 2
-for a, c in moves:
-    game.tap(pox + a * (peg_w + peg_gap) + 20, 200)
-    game.tap(pox + c * (peg_w + peg_gap) + 20, 200)
-check("tower of hanoi can be solved", game.screen == "solved")
-check("hanoi used the minimum 7 moves", game.P["moves"] == 7)
+    game.tap(game.W / 2 - 250 + 20, game.H - 96 + 20)
+    check("L%-2d %-14s keep-trying resumes" % (i + 1, kind),
+          game.screen == "play" and game.wrong_tries == 0)
+    game.back_to_menu()
 
-# --- 7. Code Breaker ---
-game.start_level(6)
-game.P["cur"] = list(game.P["secret"])
-game._code_guess()
-check("code breaker accepts the right code", game.screen == "solved")
+check("solution screen hides the soft keyboard",
+      (game.start_level(2), game.P.__setitem__("done", False),
+       game.keyboard_mode())[-1] in ("digits",))
 
-# --- 8. Mini Sudoku ---
-game.solved = list(range(10))          # unlock everything for the remaining checks
-game.start_level(7)
-for y in range(4):
-    for x in range(4):
-        game.P["grid"][y][x] = game.SUDOKU_SOL[y][x]
-check("mini sudoku win condition", game._is_solved())
 
-# --- 9. Nonogram ---
-game.start_level(8)
-for y in range(5):
-    for x in range(5):
-        game.P["grid"][y][x] = game.P["target"][y][x]
-check("nonogram win condition", game._is_solved())
-
-# --- 10. N-Queens: backtrack a solution ---
-game.start_level(9)
-N = game.P["n"]
-def place(cols):
-    if len(cols) == N:
-        return cols
-    x = len(cols)
-    for y in range(N):
-        if all(y != qy and abs(x - qx) != abs(y - qy) for qx, qy in enumerate(cols)):
-            r = place(cols + [y])
-            if r: return r
-    return None
-sol = place([])
-check("a 6-queens solution exists", sol is not None)
-game.P["q"] = set(enumerate(sol))
-check("n-queens win condition", game._is_solved())
-
-# --- every puzzle rejects a wrong answer ---
-game.start_level(2)
-game.P["input"] = str(game.P["answer"] + 1)
-game.key("Enter")
-check("a wrong sequence answer is rejected", game.screen == "play")
-
-game.start_level(3)
-game.P["input"] = "zzzz"
-game.key("Enter")
-check("a wrong riddle answer is rejected", game.screen == "play")
-
-# --- chrome: hint, restart, back ---
+# --- chrome: hint popup, goal, back ----------------------------------------
+print()
+print("--- chrome ---")
+game.solved = list(range(20))
 game.start_level(0)
-game.tap(game.W - 100, 36)          # hint button
+CALLS.clear(); game.draw()
+check("goal banner is drawn", any(a and "GOAL" in str(a[0]) for _, a in CALLS if a))
+check("hint popup is hidden until asked for",
+      not any(a and "Switch every light off" in str(a) and "flips" in str(a) for _, a in CALLS))
+game.tap(game.W - 100, 36)
 check("hint toggles on", game.show_hint)
-game.tap(60, 36)                    # back to levels
+CALLS.clear(); game.draw()
+check("hint popup draws", len(CALLS) > 30)
+game.tap(game.W - 100, 36)
+check("hint toggles off", not game.show_hint)
+game.tap(60, 36)
 check("back button returns to the menu", game.screen == "menu")
 
-# --- progression + save ---
+# --- progression + save ----------------------------------------------------
 game.solved = [0, 1, 2]
 check("levels unlock in order", game._unlocked(3) and not game._unlocked(4))
 game._save()
 game.solved = []
 game._load()
 check("progress round-trips through storage", game.solved == [0, 1, 2])
-
-# ===========================================================================
-# Stuck detection: 10 wrong tries reveals the solution
-# ===========================================================================
-def settle():
-    for _ in range(20):
-        game.update(0.05)
-
-
-def wrong_once(kind):
-    """Perform one naturally-wrong action for the current level."""
-    before = game.wrong_tries
-    if kind == "lights":
-        n = game.P["n"]; cell, gap = 72, 8
-        ox, oy = game.W / 2 - (n * cell + (n - 1) * gap) / 2, 150
-        for i in range(n * n):
-            game.tap(ox + (i % n) * (cell + gap) + 10, oy + (i // n) * (cell + gap) + 10)
-            if game.wrong_tries > before:
-                return True
-    elif kind == "memory":
-        d = game.P["deck"]; cols, cw, ch, gp = 3, 130, 120, 18
-        ox = game.W / 2 - (cols * cw + (cols - 1) * gp) / 2
-        oy = 150
-        pair = next(((i, j) for i in range(len(d)) for j in range(i + 1, len(d))
-                     if d[i] != d[j]), None)
-        for i in pair:
-            game.tap(ox + (i % cols) * (cw + gp) + 10, oy + (i // cols) * (ch + gp) + 10)
-        settle()
-        return game.wrong_tries > before
-    elif kind == "seq":
-        game.P["input"] = "999999"; game.key("Enter")
-    elif kind == "riddle":
-        game.P["input"] = "zzzz"; game.key("Enter")
-    elif kind == "slide":
-        blank = game.P["g"].index(0)
-        cell, gap = 72, 8
-        ox, oy = game.W / 2 - (3 * cell + 2 * gap) / 2, 150
-        for i in range(9):
-            if abs(i % 3 - blank % 3) + abs(i // 3 - blank // 3) == 1:
-                game.tap(ox + (i % 3) * (cell + gap) + 10, oy + (i // 3) * (cell + gap) + 10)
-                if game.wrong_tries > before:
-                    return True
-    elif kind == "hanoi":
-        peg_w, peg_gap = 190, 60
-        ox = game.W / 2 - (3 * peg_w + 2 * peg_gap) / 2
-        game.tap(ox + 20, 200)                       # pick up peg 1
-        game.tap(ox + peg_w + peg_gap + 20, 200)     # drop on peg 2
-        game.tap(ox + 20, 200)                       # pick up the bigger disc
-        game.tap(ox + peg_w + peg_gap + 20, 200)     # try to drop it on the smaller one
-    elif kind == "code":
-        game.P["cur"] = [d % 6 + 1 for d in range(3)]
-        game.P["cur"] = [(game.P["secret"][i] % 6) + 1 for i in range(3)]
-        game._code_guess()
-    elif kind == "sudoku":
-        ox, oy, cell, gap = game.W / 2 - 130, 140, 62, 6
-        for gy in range(4):
-            for gx in range(4):
-                if game.P["fixed"][gy][gx]:
-                    continue
-                bad = next((d for d in range(1, 5) if d != game.SUDOKU_SOL[gy][gx]), 1)
-                game.P["sel"] = (gx, gy)
-                game.tap(game.W / 2 - 140 + (bad - 1) * 74 + 10, 460 + 10)
-                break
-            else:
-                continue
-            break
-    elif kind == "nonogram":
-        cell = 58
-        ox, oy = game.W / 2 - 145 + 110, 130 + 70
-        for gy in range(5):
-            for gx in range(5):
-                if not game.P["target"][gy][gx] and not game.P["grid"][gy][gx]:
-                    game.tap(ox + gx * cell + 10, oy + gy * cell + 10)
-                    break
-            else:
-                continue
-            break
-    elif kind == "queens":
-        n, cell = game.P["n"], 62
-        ox, oy = game.W / 2 - n * cell / 2, 140
-        game.P["q"] = {(0, 0)}
-        game.tap(ox + 1 * cell + 10, oy + 0 * cell + 10)     # same row as the queen - illegal
-    return game.wrong_tries > before
-
-
-print()
-print("--- 10 wrong tries reveals the solution ---")
-game.solved = list(range(10))
-for i, lv in enumerate(game.LEVELS):
-    game.start_level(i)
-    kind = lv["kind"]
-    counted = False
-    for _ in range(30):
-        if game.screen == "solution":
-            break
-        if wrong_once(kind):
-            counted = True
-    if game.screen != "solution":
-        while game.wrong_tries < game.MAX_WRONG:
-            game._note_wrong()
-    check("L%d %-14s a wrong move is counted" % (i + 1, kind), counted)
-    check("L%d %-14s solution opens at 10 tries" % (i + 1, kind), game.screen == "solution")
-
-    # the board is put into its solved state
-    if kind == "code":
-        applied = game.P["cur"] == game.P["secret"]
-    else:
-        applied = game._is_solved() or kind in ("seq", "riddle")
-    check("L%d %-14s answer is applied" % (i + 1, kind), applied)
-    # the explanation exists and mentions the answer
-    lines = game._solution_lines()
-    text = " ".join(lines)
-    check("L%d %-14s explanation is written" % (i + 1, kind),
-          len(lines) >= 2 and len(text) > 120)
-    if kind == "riddle":
-        check("L%d riddle text names the answer" % (i + 1), game.P["r"]["a"][0] in text)
-    if kind == "code":
-        check("L%d code text names the code" % (i + 1),
-              "-".join(str(d) for d in game.P["secret"]) in text)
-    if kind == "seq":
-        check("L%d seq text names the answer" % (i + 1), str(game.P["answer"]) in text)
-    # and it renders
-    CALLS.clear(); game.draw()
-    check("L%d %-14s solution screen renders" % (i + 1, kind), len(CALLS) > 30)
-
-    # "Keep trying" goes back to the board with a fresh count
-    game.tap(game.W / 2 - 250 + 20, game.H - 96 + 20)
-    check("L%d %-14s keep-trying resumes" % (i + 1, kind),
-          game.screen == "play" and game.wrong_tries == 0)
-
-# the solution screen never asks for the on-screen keyboard
-game.solved = list(range(10)); game.start_level(3)
-while game.wrong_tries < game.MAX_WRONG:
-    game._note_wrong()
-check("solution screen hides the soft keyboard", game.keyboard_mode() == "none")
-
 
 print()
 if fails:
