@@ -262,6 +262,18 @@ _confetti = []
 
 ROLL_DUR = 2.0          # the die takes its time
 
+# The die is not fair. A 6 is twice as likely as a plain number, 1 and 4 are a
+# little likelier than the rest, and 2, 3 and 5 share what is left equally:
+#     6 -> 30%,  1 -> 15%,  4 -> 15%,  2, 3, 5 -> 13.33% each
+DICE_PCT = {
+    1: 15.0,
+    2: 40.0 / 3.0,
+    3: 40.0 / 3.0,
+    4: 15.0,
+    5: 40.0 / 3.0,
+    6: 30.0,
+}
+
 
 def _sound(name):
     try:
@@ -374,11 +386,17 @@ def legal_moves(c, d):
     return out
 
 
+def _roll_face():
+    """Pick a face using the table above rather than an even 1-in-6."""
+    faces = sorted(DICE_PCT)
+    return _rng.choices(faces, weights=[DICE_PCT[f] for f in faces])[0]
+
+
 def roll():
     global rolling, roll_t, dice, can_roll
     if state != "play" or anims or rolling > 0 or not can_roll:
         return
-    dice = _rng.randint(1, 6)
+    dice = _roll_face()
     rolling = ROLL_DUR
     roll_t = 0.0
     can_roll = False
