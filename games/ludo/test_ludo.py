@@ -361,6 +361,34 @@ check("tapping the die rolls", game.rolling > 0 or not game.can_roll)
 settle()
 check("the roll resolves into moves or a pass", game.can_roll or game.moves)
 
+# --- the weighted die -------------------------------------------------------
+print()
+print("--- the die is weighted ---")
+check("the weights add up to 100%", abs(sum(game.DICE_PCT.values()) - 100.0) < 1e-9)
+check("a six is the likeliest face",
+      max(game.DICE_PCT, key=lambda f: game.DICE_PCT[f]) == 6)
+check("one and four come next",
+      sorted(game.DICE_PCT, key=lambda f: -game.DICE_PCT[f])[:3] == [6, 1, 4])
+check("six is at least twice as likely as a plain number",
+      game.DICE_PCT[6] >= 2 * game.DICE_PCT[2])
+check("two, three and five share the rest equally",
+      game.DICE_PCT[2] == game.DICE_PCT[3] == game.DICE_PCT[5]
+      and abs(3 * game.DICE_PCT[2] - 40.0) < 1e-9)
+
+import random as _random
+game._rng = _random.Random(11)
+_N = 60000
+_counts = {}
+for _ in range(_N):
+    _f = game._roll_face()
+    _counts[_f] = _counts.get(_f, 0) + 1
+check("every face can still come up", len(_counts) == 6)
+for _f in sorted(game.DICE_PCT):
+    _got = 100.0 * _counts[_f] / _N
+    check("face %d lands near %.2f%% (got %.2f%%)" % (_f, game.DICE_PCT[_f], _got),
+          abs(_got - game.DICE_PCT[_f]) < 1.2)
+check("a six really does beat a two", _counts[6] > _counts[2] * 1.9)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
