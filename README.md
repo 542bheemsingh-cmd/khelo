@@ -62,6 +62,10 @@ The classic race home, with the full board and the full rules.
   opponent and it goes back to their yard. The four coloured start squares and
   the four star squares are safe. A 6, a capture or getting a token home all earn
   you another roll.
+- **A loaded die.** This one is not fair, on purpose: a **6 comes up 30%** of the
+  time, a **1 and a 4 come up 15%** each, and **2, 3 and 5 share the remaining
+  40% equally** (13.33% each). Tokens come out of the yard quickly, so the game
+  keeps moving instead of stalling.
 - **A real 3D die.** The die is rendered with [three.js](https://threejs.org)
   (MIT) — a rounded cube with pip textures, proper lighting and a soft shadow.
   On every roll it drops in from above, tumbling on all three axes for **two
