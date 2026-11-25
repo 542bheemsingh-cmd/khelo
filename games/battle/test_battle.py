@@ -856,6 +856,46 @@ for sd in (91, 92, 93, 94):
     paths.add((round(game.plane["x"] / 50), round(game.plane["z"] / 50)))
 check("every round flies a different line", len(paths) >= 3)
 
+# --- the circle, and what the bots do about it ---------------------------
+print()
+print("--- the circle ---")
+begin(seed=50)
+game.zone["cx"] = game.zone["tx"] = game.WORLD_W * 0.5
+game.zone["cz"] = game.zone["tz"] = game.WORLD_H * 0.5
+game.zone["r"] = game.zone["tr"] = 120.0
+
+outside = [b for b in game.bots
+           if math.hypot(b["x"] - game.zone["cx"], b["z"] - game.zone["cz"]) > 120]
+check("some bots are outside the circle", len(outside) > 0)
+before = [(b["x"], b["z"], math.hypot(b["x"] - game.zone["cx"],
+                                      b["z"] - game.zone["cz"])) for b in outside]
+for _ in range(120):
+    game.update(1 / 60)
+closer = 0
+for b, (bx, bz, bd) in zip(outside, before):
+    nd = math.hypot(b["x"] - game.zone["cx"], b["z"] - game.zone["cz"])
+    if nd < bd - 1.0:
+        closer += 1
+check("bots outside the circle run for it", closer >= max(1, len(outside) // 2))
+
+# the new circle is always put on dry land
+begin(seed=51)
+wet = 0
+for _ in range(10):
+    game.zone_timer = 0.0
+    game.update(1 / 60)
+    if not game.land_at(game.zone["tx"], game.zone["tz"]):
+        wet += 1
+check("the next circle is always on land", wet == 0)
+
+# the minimap shows where the circle is going
+game.zone["tr"] = game.zone["r"] * 0.5
+CALLS.clear()
+game.set_size(900, 560)
+game.draw()
+check("the next circle is drawn on the map",
+      any(c in ("setLineDash", "arc") for c in CALLS))
+
 print()
 if fails:
     print("FAILURES:", fails)
