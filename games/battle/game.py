@@ -665,7 +665,9 @@ def update(dt):
         if not b["alive"] and b.get("dying", 0) > 0:
             b["dying"] = max(0.0, b["dying"] - dt)
 
-    cam_yaw += look_dx
+    # growing yaw swings the aim to the LEFT of the screen (screen-right is
+    # rotate(forward, -90) = (-cos y, sin y)), so a right drag must lower it
+    cam_yaw -= look_dx
     cam_pitch = max(0.06, min(0.95, cam_pitch + look_dy))
     look_dx = look_dy = 0.0
 
