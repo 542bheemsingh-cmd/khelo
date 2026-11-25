@@ -62,8 +62,16 @@ A third-person battle royale, in 3D, on a map shaped like India.
   (CC0) and simplified to 189 points. Nothing here is sketched by hand.
 - **Real 3D.** Python builds a heightfield mesh from that outline plus fractal
   noise — beaches, rolling hills, rocky peaks — and
-  [three.js](https://threejs.org) (MIT) draws it with a sea around it, 430 trees
-  and scattered boulders. The coast is a hard wall: you cannot walk into water.
+  [three.js](https://threejs.org) (MIT) draws it with a sea around it, 1,600 trees,
+  4,600 grass tufts and scattered boulders. The coast is a hard wall: you cannot
+  walk into water.
+- **Towns.** Ten settlements of eight to sixteen buildings each, with pitched
+  roofs and the odd taller tower. They are solid — you cannot walk through a wall.
+- **Roads and bridges.** Eleven roads link the towns, bending gently and
+  following the ground. Where a road meets water it becomes a bridge, with a
+  deck, railings and support posts.
+- **A map you can read.** The minimap in the corner shows the whole country, the
+  towns, the roads, every crate, the closing zone and which way you are facing.
 - **A third-person camera** that sits behind your soldier, and steps in when a
   tree would block the view.
 - **Nine bots** that wander, chase you when they spot you, and shoot back.
