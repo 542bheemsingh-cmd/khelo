@@ -420,7 +420,8 @@
           dist = Math.max(12.5, dist * 0.80);   // step in, but never crowd
         }
         camera.position.set(cx, p[1] + height, cz);
-        camera.lookAt(p[0], p[1] + 3.6, p[2]);
+        // aim a little ahead of the soldier, so the crosshair marks the target
+        camera.lookAt(p[0] + Math.sin(yaw) * 14, p[1] + 4.2, p[2] + Math.cos(yaw) * 14);
 
         // keep the sun following the player so lighting stays even
         sunLight.position.set(p[0] - 120, 260, p[2] - 80);
@@ -439,15 +440,19 @@
 
     /* ==================================================================
        Input
+         phone  - a stick wherever your left thumb lands, look on the right,
+                  a big FIRE button bottom-right
+         laptop - WASD, move the mouse to look, click or Space to fire
        ================================================================== */
     let tapFn = null, primaryFn = null, moveFn = null, lookFn = null, fireFn = null,
-        drawFn = null, updateFn = null, sendFn = null, sizeFn = null,
-        pyodide = null, running = false;
+        stickFn = null, drawFn = null, updateFn = null, sendFn = null, sizeFn = null,
+        pyodide = null, running = false, playing = false;
 
     const keys = {};
     let stickId = null, stickOX = 0, stickOY = 0, stickX = 0, stickY = 0;
     let lookId = null, lookX = 0, lookY = 0;
-    let firingTouch = false, firingKey = false;
+    let firingTouch = false, firingKey = false, firingMouse = false;
+    let locked = false;
 
     function cssSize() {
       return { w: screenBox.clientWidth, h: screenBox.clientHeight };
@@ -467,55 +472,85 @@
       if (sizeFn) sizeFn(w, h);
     }
 
-    function pushMove() {
-      if (moveFn) moveFn(stickX, stickY);
+    function fireCentre() {
+      const s = cssSize();
+      return { x: s.w - 104, y: s.h - 104, r: 64 };
     }
-    function pushFire() {
-      if (fireFn) fireFn(firingTouch || firingKey);
-    }
+    function pushMove() { if (moveFn) moveFn(stickX, stickY); }
+    function pushFire() { if (fireFn) fireFn(firingTouch || firingKey || firingMouse); }
+    function pushStick(cx, cy, on) { if (stickFn) stickFn(cx, cy, on); }
 
-    function stickCentre() { const s = cssSize(); return { x: 96, y: s.h - 96 }; }
-    function fireCentre() { const s = cssSize(); return { x: s.w - 96, y: s.h - 96 }; }
+    // Python tells us when a round is on, so the menus keep a normal cursor
+    window.set_playing = function (on) {
+      playing = !!on;
+      if (!playing) {
+        firingTouch = firingKey = firingMouse = false;
+        stickId = lookId = null;
+        stickX = stickY = 0;
+        pushMove(); pushFire(); pushStick(0, 0, false);
+        if (document.pointerLockElement) document.exitPointerLock();
+      }
+    };
+
+    function localPoint(e) {
+      const r = gameCanvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
 
     gameCanvas.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       audio();
-      const s = cssSize();
-      const x = e.clientX - gameCanvas.getBoundingClientRect().left;
-      const y = e.clientY - gameCanvas.getBoundingClientRect().top;
-      // always let Python see the click first - the menus live there
-      if (tapFn) tapFn(x, y);
+      const p = localPoint(e);
+      const wasPlaying = playing;
 
-      const sc = stickCentre(), fc = fireCentre();
-      if (Math.hypot(x - sc.x, y - sc.y) < 130) {
-        stickId = e.pointerId; stickOX = x; stickOY = y; stickX = stickY = 0;
+      // the menus live in Python - always give it the click first
+      if (tapFn) tapFn(p.x, p.y);
+      if (!wasPlaying) return;      // that click started a round, nothing else
+
+      if (e.pointerType === "mouse") {
+        if (!document.pointerLockElement) {
+          try { gameCanvas.requestPointerLock(); } catch (err) {}
+          lookId = e.pointerId; lookX = p.x; lookY = p.y;   // fallback drag
+          return;
+        }
+        firingMouse = true; pushFire();
         return;
       }
-      if (Math.hypot(x - fc.x, y - fc.y) < 105) {
+
+      const fc = fireCentre();
+      if (Math.hypot(p.x - fc.x, p.y - fc.y) < fc.r + 20) {
         firingTouch = true; pushFire();
         return;
       }
-      lookId = e.pointerId; lookX = x; lookY = y;
+      if (p.x < cssSize().w * 0.5) {
+        // a stick right where the thumb landed
+        stickId = e.pointerId; stickOX = p.x; stickOY = p.y;
+        stickX = stickY = 0;
+        pushMove(); pushStick(p.x, p.y, true);
+        return;
+      }
+      lookId = e.pointerId; lookX = p.x; lookY = p.y;
     });
 
     gameCanvas.addEventListener("pointermove", (e) => {
-      const x = e.clientX - gameCanvas.getBoundingClientRect().left;
-      const y = e.clientY - gameCanvas.getBoundingClientRect().top;
+      const p = localPoint(e);
       if (e.pointerId === stickId) {
-        const dx = x - stickOX, dy = y - stickOY;
+        const dx = p.x - stickOX, dy = p.y - stickOY;
         const m = Math.hypot(dx, dy) || 1;
         const k = Math.min(1, m / 62) / m;
-        stickX = dx * k; stickY = -dy * k;
+        stickX = dx * k;
+        stickY = -dy * k;
         pushMove();
-      } else if (e.pointerId === lookId) {
-        if (lookFn) lookFn((x - lookX) * 0.006, (y - lookY) * 0.004);
-        lookX = x; lookY = y;
+      } else if (e.pointerId === lookId && !locked) {
+        if (lookFn) lookFn((p.x - lookX) * 0.006, (p.y - lookY) * 0.004);
+        lookX = p.x; lookY = p.y;
       }
     });
 
     function endPointer(e) {
       if (e.pointerId === stickId) {
-        stickId = null; stickX = stickY = 0; pushMove();
+        stickId = null; stickX = stickY = 0;
+        pushMove(); pushStick(0, 0, false);
       } else if (e.pointerId === lookId) {
         lookId = null;
       } else if (firingTouch) {
@@ -526,6 +561,18 @@
     gameCanvas.addEventListener("pointercancel", endPointer);
     gameCanvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
+    // mouse look, once the pointer is locked
+    document.addEventListener("pointerlockchange", () => {
+      locked = document.pointerLockElement === gameCanvas;
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!locked || !lookFn) return;
+      lookFn(e.movementX * 0.0024, e.movementY * 0.0018);
+    });
+    document.addEventListener("mouseup", () => {
+      if (firingMouse) { firingMouse = false; pushFire(); }
+    });
+
     // a real keyboard
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
@@ -534,8 +581,11 @@
         keys[k] = true; updateKeys();
         e.preventDefault();
       } else if (k === " " || k === "enter") {
-        firingKey = true; pushFire();
-        if (primaryFn) primaryFn();
+        if (!playing) {
+          if (primaryFn) primaryFn();
+        } else {
+          firingKey = true; pushFire();
+        }
         e.preventDefault();
       }
     });
@@ -551,24 +601,11 @@
       if (keys["d"] || keys["arrowright"]) x += 1;
       if (keys["w"] || keys["arrowup"]) y += 1;
       if (keys["s"] || keys["arrowdown"]) y -= 1;
-      const m = Math.hypot(x, y) || 1;
-      stickX = x / m * (x || y ? 1 : 0);
-      stickY = y / m * (x || y ? 1 : 0);
+      const m = Math.hypot(x, y);
+      if (m > 0) { x /= m; y /= m; }
+      stickX = x; stickY = y;
       pushMove();
     }
-
-    // dragging with the mouse on a laptop turns the camera
-    let mouseDown = false, mouseX = 0, mouseY = 0;
-    gameCanvas.addEventListener("mousedown", (e) => {
-      if (e.pointerType === "touch") return;
-      mouseDown = true; mouseX = e.clientX; mouseY = e.clientY;
-    });
-    window.addEventListener("mouseup", () => { mouseDown = false; });
-    window.addEventListener("mousemove", (e) => {
-      if (!mouseDown || !lookFn) return;
-      lookFn((e.clientX - mouseX) * 0.006, (e.clientY - mouseY) * 0.004);
-      mouseX = e.clientX; mouseY = e.clientY;
-    });
 
     // the HUD is a 2D canvas on top, so clicks there must reach the game too
     hudCanvas.style.pointerEvents = "none";
@@ -623,6 +660,7 @@
       updateFn = pyodide.globals.get("update");
       sendFn = pyodide.globals.get("send_frame");
       sizeFn = pyodide.globals.get("set_size");
+      stickFn = pyodide.globals.get("set_stick");
       try {
         pyodide.globals.get("set_touch_ui")(
           window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window);
