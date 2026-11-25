@@ -1634,8 +1634,11 @@ def _draw_menu():
     c.fillRect(0, 0, W, H)
     a = 0.55 + 0.35 * math.sin(_clock * 2.6)
     c.textAlign = "center"
-    c.fillStyle = "rgba(234, 242, 255, %.2f)" % a
     c.font = "700 %dpx %s" % (_fs(15), FONT)
+    # a soft shadow keeps the prompt readable over bright ground
+    c.fillStyle = "rgba(4, 10, 24, %.2f)" % (a * 0.75)
+    c.fillText("tap to continue", W / 2, H - 31)
+    c.fillStyle = "rgba(234, 242, 255, %.2f)" % a
     c.fillText("tap to continue", W / 2, H - 32)
 
 
