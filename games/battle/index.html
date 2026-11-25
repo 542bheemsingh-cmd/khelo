@@ -680,10 +680,11 @@
 
         if (st.menu) {
           // a slow lap of the whole country, so the menu has a world behind it
+          // close enough that the fog does not wash the country out
           const a = now * 0.09;
-          camera.position.set(WORLD.w / 2 + Math.cos(a) * 1250, 620,
-                              WORLD.h / 2 + Math.sin(a) * 1250);
-          camera.lookAt(WORLD.w / 2, 0, WORLD.h / 2);
+          camera.position.set(WORLD.w / 2 + Math.cos(a) * 780, 400,
+                              WORLD.h / 2 + Math.sin(a) * 780);
+          camera.lookAt(WORLD.w / 2, 10, WORLD.h / 2);
           if (playerRig) playerRig.visible = false;
           for (let i = 0; i < botRigs.length; i++) botRigs[i].visible = false;
           for (let i = 0; i < bulletPool.length; i++) bulletPool[i].visible = false;
