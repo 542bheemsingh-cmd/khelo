@@ -520,6 +520,9 @@ hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
 pings = []                # gunfire marks on the minimap
 
+message_t = 0.0           # how long the line under the compass still shows
+_last_message = ""
+
 STATS_KEY = "khelo_battle_stats"
 stats = {"matches": 0, "wins": 0, "best_kills": 0, "best_place": 0}
 
@@ -1019,6 +1022,13 @@ def update(dt):
         return
 
     elapsed += dt
+
+    # a line of text that has said its piece fades away instead of sitting there
+    global _last_message, message_t
+    if message != _last_message:
+        _last_message = message
+        message_t = 4.5
+    message_t = max(0.0, message_t - dt)
 
     if hitmark > 0:
         hitmark = max(0.0, hitmark - dt)
@@ -1655,23 +1665,22 @@ def _draw_play_hud():
     c.textBaseline = "alphabetic"
 
     # ---- 23. compass -------------------------------------------------------
-    cw_, chh = 240, 18
+    cw_, chh = 250, 24
     cx0 = W / 2 - cw_ / 2
-    _panel(cx0, 8, cw_, chh, "rgba(8, 14, 30, 0.72)", "rgba(150,180,240,0.18)", 6)
+    _panel(cx0, 8, cw_, chh, "rgba(8, 14, 30, 0.72)", "rgba(150,180,240,0.18)", 8)
     heading = compass_bearing()
     for deg, label in ((0, "N"), (90, "E"), (180, "S"), (270, "W")):
         d = ((deg - heading + 180) % 360) - 180
-        if abs(d) > 68:
+        if abs(d) > 66:
             continue
-        px = W / 2 + d * (cw_ / 150.0)
+        px = W / 2 + d * (cw_ / 155.0)
         c.textAlign = "center"
-        c.fillStyle = "#eaf2ff" if label in ("N", "E", "S", "W") else "#8fa3c9"
-        c.font = "800 %dpx %s" % (_fs(10), FONT)
-        c.fillText(label, px, 22)
-    c.textAlign = "center"
+        c.fillStyle = "#eaf2ff"
+        c.font = "800 %dpx %s" % (_fs(11), FONT)
+        c.fillText(label, px, 25)
+    # a green tick marks exactly where you are pointing
     c.fillStyle = "#7ef0c0"
-    c.font = "800 %dpx %s" % (_fs(9), FONT)
-    c.fillText("%03d" % int(heading), W / 2, 34)
+    c.fillRect(W / 2 - 1.5, 8, 3, 5)
 
     # ---- 29. alive count and placement ------------------------------------
     _panel(W / 2 - 78, 42, 156, 44, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 10)
@@ -1683,15 +1692,18 @@ def _draw_play_hud():
     c.font = "700 %dpx %s" % (_fs(10), FONT)
     c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 79)
 
-    if message:
-        _wrap(message, W / 2, 112, min(520, W - 60), 12, "#cfe0ff")
+    if message and message_t > 0.0:
+        a = min(1.0, message_t / 0.8)
+        _wrap(message, W / 2, 112, min(520, W - 60), 12,
+              "rgba(207, 224, 255, %.2f)" % a)
 
     # ---- 24 25. health, stamina, weapon and magazine ----------------------
     bx = 18
-    by = (H - 200) if TOUCH_UI else (H - 96)
+    by = (H - 206) if TOUCH_UI else (H - 96)
     bw = min(260, W * 0.42)
 
-    _panel(bx - 6, by - 8, bw + 12, 42, "rgba(8, 14, 30, 0.82)", "rgba(150,180,240,0.2)", 9)
+    _panel(bx - 6, by - 8, bw + 12, 90, "rgba(8, 14, 30, 0.82)",
+           "rgba(150,180,240,0.2)", 10)
     frac = max(0.0, min(1.0, p["hp"] / 100.0))
     c.fillStyle = "rgba(60, 74, 108, 0.7)"
     c.fillRect(bx, by, bw, 24)
@@ -1707,7 +1719,7 @@ def _draw_play_hud():
     c.fillText("HP", bx + 9 + (34 if p["hp"] >= 100 else 24), by + 18)
 
     # stamina, right under the health
-    sy = by + 30
+    sy = by + 29
     c.fillStyle = "rgba(60, 74, 108, 0.55)"
     c.fillRect(bx, sy, bw, 6)
     c.fillStyle = "#5aaaff" if stamina > 20 else "#ff8a3d"
@@ -1715,9 +1727,8 @@ def _draw_play_hud():
 
     # the weapon and its magazine
     w = WEAPONS[weapon]
-    ty = sy + 26
-    _panel(bx - 6, ty - 15, bw + 12, 34, "rgba(8, 14, 30, 0.72)",
-           "rgba(150,180,240,0.16)", 8)
+    ty = sy + 25
+
     c.textAlign = "left"
     c.fillStyle = "#ffd23f"
     c.font = "800 %dpx %s" % (_fs(12), FONT)
@@ -1732,16 +1743,16 @@ def _draw_play_hud():
     if reloading > 0:
         rw = bw * (1.0 - reloading / w["reload"])
         c.fillStyle = "rgba(255, 210, 63, 0.28)"
-        c.fillRect(bx, ty + 8, bw, 5)
+        c.fillRect(bx, ty + 6, bw, 5)
         c.fillStyle = "#ffd23f"
-        c.fillRect(bx, ty + 8, rw, 5)
+        c.fillRect(bx, ty + 6, rw, 5)
         c.fillStyle = "#ffd23f"
         c.font = "800 %dpx %s" % (_fs(10), FONT)
-        c.fillText("RELOADING", bx, ty + 26)
+        c.fillText("RELOADING", bx, ty + 22)
     elif mag <= 0:
         c.fillStyle = "#ff5c7a"
         c.font = "800 %dpx %s" % (_fs(10), FONT)
-        c.fillText("PRESS R", bx, ty + 26)
+        c.fillText("PRESS R", bx, ty + 22)
 
     # ---- 26. the arc that says where the hurt came from -------------------
     if p["hurt"] > 0.05:
@@ -1801,10 +1812,10 @@ def _draw_play_hud():
             sx, sy2 = STICK["x"], STICK["y"]
             base_a, knob_a = 0.40, 0.82
         else:
-            sx, sy2 = 92, H - 72
+            sx, sy2 = 92, H - 64
             base_a, knob_a = 0.18, 0.30
         c.beginPath()
-        c.arc(sx, sy2, 54, 0, 6.2832)
+        c.arc(sx, sy2, 50, 0, 6.2832)
         c.fillStyle = "rgba(12, 20, 40, %.2f)" % base_a
         c.fill()
         c.lineWidth = 2
