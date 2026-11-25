@@ -319,6 +319,21 @@ def _index_buildings():
         _BGRID.setdefault((gx, gz), []).append(i)
 
 
+def nearest_land(x, z, step=24.0, rings=90):
+    """The closest dry ground, so a drop over water does not end in the sea."""
+    if land_at(x, z):
+        return x, z
+    for k in range(1, rings + 1):
+        r = k * step
+        for a in range(12):
+            ang = a * 0.523599
+            nx = x + math.cos(ang) * r
+            nz = z + math.sin(ang) * r
+            if 2.0 < nx < WORLD_W - 2.0 and 2.0 < nz < WORLD_H - 2.0 and land_at(nx, nz):
+                return nx, nz
+    return x, z
+
+
 def blocked(x, z):
     """Land you can stand on: dry ground with no building on it."""
     if not land_at(x, z):
@@ -488,6 +503,15 @@ shake = 0.0               # screen shake, handed to the renderer
 hurt_dir = 0.0            # which way the last hit came from, for the arc
 placement = 0
 paused = False
+
+# the drop: plane in, jump, parachute, land
+PLANE_ALT = 330.0
+PLANE_SPEED = 200.0
+plane = {"x": 0.0, "z": 0.0, "yaw": 0.0, "travelled": 0.0, "len": 1.0}
+drop_v = 0.0
+drop_hx = 0.0
+drop_hz = 0.0
+chute = False
 _clock = 0.0               # always ticking, so the menu can orbit
 hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
@@ -589,6 +613,71 @@ def set_pause(on):
     _notify_playing(not paused)
 
 
+def jump():
+    """Step out of the plane."""
+    global state, drop_v, drop_hx, drop_hz, chute, cam_yaw
+    if state != "plane":
+        return
+    p = player
+    p["x"] = plane["x"]
+    p["z"] = plane["z"]
+    p["y"] = PLANE_ALT
+    p["yaw"] = plane["yaw"]
+    cam_yaw = plane["yaw"]
+    drop_v = -34.0
+    drop_hx = math.sin(plane["yaw"]) * PLANE_SPEED * 0.55
+    drop_hz = math.cos(plane["yaw"]) * PLANE_SPEED * 0.55
+    chute = False
+    state = "fall"
+    _sound("start")
+
+
+def _update_plane(dt):
+    plane["x"] += math.sin(plane["yaw"]) * PLANE_SPEED * dt
+    plane["z"] += math.cos(plane["yaw"]) * PLANE_SPEED * dt
+    plane["travelled"] += PLANE_SPEED * dt
+    if plane["travelled"] >= plane["len"]:
+        jump()          # no stragglers, the plane pushes you out
+
+
+def _update_fall(dt):
+    global drop_v, drop_hx, drop_hz, chute, state, pvx, pvz, message
+    p = player
+    ground = height_at(p["x"], p["z"])
+    if (p["y"] - ground) < 95.0 and not chute:
+        chute = True
+        drop_v = max(drop_v, -60.0)      # the canopy bites, but not instantly
+        _sound("home")
+    if chute:
+        # settle at -18 m/s: converge upward and clamp there
+        drop_v = min(-18.0, drop_v + 55.0 * dt)
+    else:
+        drop_v = max(-105.0, drop_v - 42.0 * dt)
+
+    nx = p["x"] + drop_hx * dt
+    nz = p["z"] + drop_hz * dt
+    if not blocked(nx, p["z"]):
+        p["x"] = max(4.0, min(WORLD_W - 4.0, nx))
+    if not blocked(p["x"], nz):
+        p["z"] = max(4.0, min(WORLD_H - 4.0, nz))
+    drag = 1.0 - min(1.0, dt * (2.2 if chute else 0.5))
+    drop_hx *= drag
+    drop_hz *= drag
+
+    p["y"] += drop_v * dt
+    ground = height_at(p["x"], p["z"])
+    if p["y"] <= ground:
+        if not land_at(p["x"], p["z"]):
+            p["x"], p["z"] = nearest_land(p["x"], p["z"])
+        p["y"] = None
+        pvx = drop_hx * 0.35
+        pvz = drop_hz * 0.35
+        drop_hx = drop_hz = 0.0
+        chute = False
+        state = "play"
+        message = "You landed. The zone closes in %d seconds." % int(zone_timer)
+
+
 def set_fire(on):
     global firing
     firing = bool(on)
@@ -650,6 +739,17 @@ def tap(x, y):
                     set_swap()
                 return
     if state == "menu":
+        _sound("tap")
+        start_game()
+        return
+    if state == "plane":
+        if _in(JUMP_RECT, x, y):
+            _sound("tap")
+            jump()
+        return
+    if state == "fall":
+        return
+    if state == "menu_old":
         for tag, r in _menu_hit:
             if _in(r, x, y):
                 _sound("start")
@@ -677,10 +777,44 @@ def tap(x, y):
 # ---------------------------------------------------------------------------
 # Starting a round
 # ---------------------------------------------------------------------------
+def plan_flight():
+    """A different line across the country every round.
+
+    The run starts just outside the map and ends just outside it, so the plane
+    is always over the ground by the time you can reach the jump button.
+    """
+    ang = _rng.uniform(0.0, 6.283185)
+    cx = WORLD_W / 2 + _rng.uniform(-320.0, 320.0)
+    cz = WORLD_H / 2 + _rng.uniform(-320.0, 320.0)
+    sx, sz = math.sin(ang), math.cos(ang)
+    pad = 150.0
+
+    def outside(x, z):
+        return not (-pad <= x <= WORLD_W + pad and -pad <= z <= WORLD_H + pad)
+
+    x0, z0 = cx, cz
+    for _ in range(400):
+        nx, nz = x0 - sx * 25.0, z0 - sz * 25.0
+        if outside(nx, nz):
+            break
+        x0, z0 = nx, nz
+    x1, z1 = cx, cz
+    for _ in range(400):
+        nx, nz = x1 + sx * 25.0, z1 + sz * 25.0
+        if outside(nx, nz):
+            break
+        x1, z1 = nx, nz
+
+    plane["x"], plane["z"], plane["yaw"] = x0, z0, ang
+    plane["travelled"] = 0.0
+    plane["len"] = math.hypot(x1 - x0, z1 - z0) + 30.0
+
+
 def start_game(seed=None):
     global state, player, bots, shots, zone, message, elapsed, result
     global zone_timer, zone_phase, cam_yaw, cam_pitch, move_x, move_z, firing
     global pvx, pvz, hitmark, hits, feed
+    global drop_v, drop_hx, drop_hz, chute
 
     if not _READY:
         build_terrain()
@@ -743,6 +877,14 @@ def start_game(seed=None):
     hits[:] = []
     feed[:] = []
     firing = False
+
+    # start up in the plane, not on the ground
+    plan_flight()
+    drop_v = 0.0
+    drop_hx = drop_hz = 0.0
+    chute = False
+    player["y"] = None
+    state = "plane"
     _sound("start")
 
 
@@ -817,6 +959,20 @@ def update(dt):
     global _clock
     dt = min(max(float(dt), 0.0), 0.06)
     _clock += dt
+
+    if state == "plane":
+        cam_yaw = plane["yaw"]
+        cam_pitch = 0.30
+        look_dx = look_dy = 0.0
+        _update_plane(dt)
+        return
+    if state == "fall":
+        cam_yaw -= look_dx
+        cam_pitch = max(0.06, min(0.95, cam_pitch + look_dy))
+        look_dx = look_dy = 0.0
+        _update_fall(dt)
+        return
+
     if state != "play" or paused:
         look_dx = look_dy = 0.0
         return
@@ -1072,7 +1228,8 @@ def _frame_json():
             "p": [WORLD_W / 2, 0, WORLD_H / 2, 0, 0, 0, 0],
             "b": [], "s": [], "h": [], "pk": [], "dn": [],
             "z": [WORLD_W / 2, WORLD_H / 2, 60],
-            "cam": [a, 0.9], "sh": 0, "crouch": 0, "wp": 0, "menu": 1,
+            "mode": "menu", "cam": [a, 0.9], "sh": 0, "crouch": 0, "wp": 0,
+            "menu": 1, "chute": 0, "alt": 0,
         })
     p = player
     b = []
@@ -1089,8 +1246,15 @@ def _frame_json():
                   round(t["z"], 2), round(t["dx"], 1), round(t["dz"], 1)])
     h = [[round(e["x"], 2), round(height_at(e["x"], e["z"]) + 1.4, 2), round(e["z"], 2),
           round(e["life"], 2)] for e in hits]
+    alt = (p["y"] - height_at(p["x"], p["z"])) if p.get("y") is not None else 0.0
     return json.dumps({
-        "p": [round(p["x"], 2), round(height_at(p["x"], p["z"]), 2),
+        "mode": state,
+        "pl": [round(plane["x"], 2), PLANE_ALT, round(plane["z"], 2),
+               round(plane["yaw"], 3)],
+        "chute": 1 if chute else 0,
+        "alt": round(alt, 1),
+        "p": [round(p["x"], 2),
+              round(p["y"] if p.get("y") is not None else height_at(p["x"], p["z"]), 2),
               round(p["z"], 2), round(p["yaw"], 3),
               1 if p["alive"] else 0, round(p["hp"], 1),
               round(math.hypot(pvx, pvz), 2)],
@@ -1356,6 +1520,10 @@ def draw():
     if state == "menu":
         _draw_menu()
         return
+    if state == "plane":
+        _draw_plane_hud()
+    if state == "fall":
+        _draw_fall_hud()
     if state == "play":
         _draw_play_hud()
     if state == "over":
@@ -1364,34 +1532,17 @@ def draw():
 
 
 def _draw_menu():
+    """No words to read - just a prompt at the bottom of the screen."""
     global _menu_hit
     _menu_hit = []
     c = hctx
-    c.fillStyle = "rgba(4, 10, 24, 0.72)"
+    c.fillStyle = "rgba(4, 10, 24, 0.55)"
     c.fillRect(0, 0, W, H)
-
+    a = 0.55 + 0.35 * math.sin(_clock * 2.6)
     c.textAlign = "center"
-    c.fillStyle = "#ffffff"
-    c.font = "800 %dpx %s" % (_fs(40), FONT)
-    c.fillText("KHELO", W / 2, H / 2 - 96)
-    c.fillStyle = "#ffb703"
-    c.fillText("BATTLEGROUND", W / 2, H / 2 - 56)
-
-    _wrap("Drop onto the map with %d bots. The blue zone closes in." % BOT_COUNT,
-          W / 2, H / 2 - 20, min(560, W - 80), 15)
-    _wrap("Last one standing wins. Move, aim, fire.", W / 2, H / 2 + 6,
-          min(560, W - 80), 14, "#8fa3c9")
-
-    bw, bh = 220, 54
-    _button(W / 2 - bw / 2, H / 2 + 40, bw, bh, "DROP IN", True, "#ffb703", size=19)
-    _menu_hit.append(("play", (W / 2 - bw / 2, H / 2 + 40, bw, bh)))
-
-    _wrap("Laptop: WASD to move \u00b7 click once to grab the mouse, then move it to look",
-          W / 2, H / 2 + 126, min(640, W - 50), 12, "#7f93bb")
-    _wrap("Click or Space to fire \u00b7 Esc lets the mouse go",
-          W / 2, H / 2 + 148, min(640, W - 50), 12, "#7f93bb")
-    _wrap("Phone: a stick appears under your left thumb \u00b7 drag the right side to look \u00b7 FIRE",
-          W / 2, H / 2 + 174, min(640, W - 50), 12, "#7f93bb")
+    c.fillStyle = "rgba(234, 242, 255, %.2f)" % a
+    c.font = "700 %dpx %s" % (_fs(15), FONT)
+    c.fillText("tap to continue", W / 2, H - 32)
 
 
 def compass_bearing():
@@ -1633,6 +1784,39 @@ def _draw_pause():
     _button(px + 30, py + 146, pw - 60, 44, "Quit to menu", False, size=15)
     _menu_hit = [("resume", (px + 30, py + 84, pw - 60, 50)),
                  ("quit", (px + 30, py + 146, pw - 60, 44))]
+
+
+JUMP_RECT = (0, 0, 0, 0)
+
+
+def _draw_plane_hud():
+    """You are in the plane. One button: jump."""
+    global JUMP_RECT
+    c = hctx
+    bw, bh = min(260, W - 80), 64
+    bx, by = (W - bw) / 2, H - 104
+    JUMP_RECT = (bx, by, bw, bh)
+    _button(bx, by, bw, bh, "JUMP", True, "#ffb703")
+
+    c.textAlign = "center"
+    c.fillStyle = "rgba(207, 224, 255, 0.85)"
+    c.font = "700 %dpx %s" % (_fs(12), FONT)
+    c.fillText("in the plane", W / 2, by - 16)
+
+
+def _draw_fall_hud():
+    """Free fall, then the canopy opens near the ground."""
+    c = hctx
+    p = player
+    alt = (p["y"] - height_at(p["x"], p["z"])) if p.get("y") is not None else 0.0
+    c.textAlign = "center"
+    c.fillStyle = "#eaf2ff"
+    c.font = "800 %dpx %s" % (_fs(16), FONT)
+    c.fillText("%d m" % max(0, int(alt)), W / 2, 58)
+    if chute:
+        c.fillStyle = "#7ef0c0"
+        c.font = "700 %dpx %s" % (_fs(12), FONT)
+        c.fillText("parachute open", W / 2, 80)
 
 
 def _draw_over():
