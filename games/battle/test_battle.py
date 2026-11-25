@@ -158,13 +158,14 @@ check("the player faces the way it walks",
       abs(math.sin(game.player["yaw"])) + abs(math.cos(game.player["yaw"])) > 0.9)
 
 game.set_move(0.0, 0.0)
-for _ in range(10):
+for _ in range(60):
     game.update(1 / 60)
 still = (game.player["x"], game.player["z"])
-for _ in range(10):
+for _ in range(20):
     game.update(1 / 60)
-check("letting go stops the player",
-      abs(game.player["x"] - still[0]) < 0.01 and abs(game.player["z"] - still[1]) < 0.01)
+check("letting go brings the player to rest",
+      abs(game.player["x"] - still[0]) < 0.05 and abs(game.player["z"] - still[1]) < 0.05)
+check("the player really has stopped", math.hypot(game.pvx, game.pvz) < 0.2)
 
 # the coast must not let you walk out to sea - walk in every direction for a
 # while and the player must never end up standing on water
@@ -231,6 +232,92 @@ check("the kill is counted", game.player["kills"] >= 1)
 check("the alive count drops", game.alive_count() == 9)
 
 # ---------------------------------------------------------------------------
+# Which way is which
+# ---------------------------------------------------------------------------
+print()
+print("--- which way is which ---")
+
+# with cam_yaw 0 the camera looks along +z, so the screen's right is -x
+game.start_game(seed=30)
+game.cam_yaw = 0.0
+game.player["yaw"] = 0.0
+game.player["x"], game.player["z"] = 400.0, 500.0
+x0, z0 = game.player["x"], game.player["z"]
+game.set_move(1.0, 0.0)                 # D
+for _ in range(40):
+    game.update(1 / 60)
+check("D moves to the right of the screen", game.player["x"] < x0 - 2.0)
+check("D does not sneak forwards", abs(game.player["z"] - z0) < 1.0)
+
+game.start_game(seed=31)
+game.cam_yaw = 0.0
+game.player["yaw"] = 0.0
+game.player["x"], game.player["z"] = 400.0, 500.0
+x0, z0 = game.player["x"], game.player["z"]
+game.set_move(-1.0, 0.0)                # A
+for _ in range(40):
+    game.update(1 / 60)
+check("A moves to the left of the screen", game.player["x"] > x0 + 2.0)
+
+game.start_game(seed=32)
+game.cam_yaw = 0.0
+game.player["yaw"] = 0.0
+game.player["x"], game.player["z"] = 400.0, 500.0
+z0 = game.player["z"]
+game.set_move(0.0, 1.0)                 # W
+for _ in range(40):
+    game.update(1 / 60)
+check("W walks forwards", game.player["z"] > z0 + 2.0)
+
+# the soldier has weight: it ramps up to speed and eases back down
+game.start_game(seed=33)
+game.set_move(1.0, 0.0)
+game.update(1 / 60)
+v1 = math.hypot(game.pvx, game.pvz)
+for _ in range(30):
+    game.update(1 / 60)
+v2 = math.hypot(game.pvx, game.pvz)
+check("the soldier speeds up instead of snapping", v1 < v2 * 0.7)
+check("it reaches its top speed", abs(v2 - game.PLAYER_SPEED) < 1.5)
+game.set_move(0.0, 0.0)
+for _ in range(6):
+    game.update(1 / 60)
+v3 = math.hypot(game.pvx, game.pvz)
+check("letting go slows it down", v3 < v2 * 0.7)
+
+# ---------------------------------------------------------------------------
+# Shooting feedback
+# ---------------------------------------------------------------------------
+print()
+print("--- shooting feedback ---")
+game.start_game(seed=34)
+game.cam_yaw = 0.0
+game.player["x"], game.player["z"] = 300.0, 500.0
+b = game.bots[0]
+b["x"], b["z"] = 304.0, 548.0
+b["hp"] = 100.0
+game.player["cool"] = 0.0
+game.player["ammo"] = 40
+for _ in range(80):
+    game.player["cool"] = 0.0
+    game.fire()
+    game.update(1 / 60)
+    if b["hp"] < 100.0:
+        break
+check("a hit puts a marker on the crosshair", game.hitmark > 0)
+check("a hit throws sparks", len(game.hits) > 0)
+
+for _ in range(120):
+    game.player["cool"] = 0.0
+    game.fire()
+    game.update(1 / 60)
+    if not b["alive"]:
+        break
+check("a downed bot leaves a body for a moment", b.get("dying", 0) > 0)
+check("the kill lands in the feed",
+      any("downed" in f["text"] for f in game.feed))
+
+# ---------------------------------------------------------------------------
 # The zone
 # ---------------------------------------------------------------------------
 print()
@@ -277,9 +364,10 @@ WORLD.frames.clear()
 game.send_frame()
 check("a frame is sent", len(WORLD.frames) == 1)
 st = json.loads(WORLD.frames[-1])
-check("the frame has the player", len(st["p"]) == 6)
+check("the frame has the player and its speed", len(st["p"]) == 7)
 check("the frame lists the living bots", len(st["b"]) == 9)
-check("each bot has four numbers", all(len(b) == 4 for b in st["b"]))
+check("each bot carries health and a dying timer",
+      all(len(b) == 6 for b in st["b"]))
 check("the frame has the zone", len(st["z"]) == 3)
 check("the frame has the camera", len(st["cam"]) == 2)
 check("every number in the frame is finite",
@@ -308,9 +396,10 @@ check("the soldier faces where you aim",
       abs(game.player["yaw"] - 0.0) < 1e-6)
 
 game.cam_yaw = 0.9
-game.update(1 / 60)
+for _ in range(40):
+    game.update(1 / 60)
 check("turning the camera turns the soldier",
-      abs(game.player["yaw"] - 0.9) < 1e-6)
+      abs(game.player["yaw"] - 0.9) < 0.02)
 
 # a shot must follow the camera, not wherever the soldier last walked
 game.start_game(seed=21)
