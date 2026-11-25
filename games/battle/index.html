@@ -160,10 +160,10 @@
       const c = new THREE.Color();
       if (h < water + 0.6) c.setHex(0x2f5d7c);            // sea bed
       else if (h < water + 2.2) c.setHex(0xd8cba0);       // sand
-      else if (h < 20) c.setHex(0x3f7a4a);                // grass
-      else if (h < 28) c.setHex(0x37693f);                // darker green
-      else if (h < 35) c.setHex(0x6b6152);                // rock
-      else if (h < 40) c.setHex(0x8a8172);                // bare rock
+      else if (h < 23) c.setHex(0x3f7a4a);                // grass
+      else if (h < 31) c.setHex(0x37693f);                // darker green
+      else if (h < 38) c.setHex(0x6b6152);                // rock
+      else if (h < 43) c.setHex(0x8a8172);                // bare rock
       else c.setHex(0xd9e2ea);                            // snow
       return c;
     }
@@ -201,6 +201,13 @@
           pos[k * 3 + 2] = (j + 0.5) * cellZ;
           tmp.copy(terrainColour(hh, water));
           tmp.multiplyScalar(0.88 + 0.26 * hash01(i, j));
+          // steep ground sits in its own shade, so hills read as hills
+          const hL = heights[j * nx + Math.max(0, i - 1)];
+          const hR = heights[j * nx + Math.min(nx - 1, i + 1)];
+          const hD = heights[Math.max(0, j - 1) * nx + i];
+          const hU = heights[Math.min(nz - 1, j + 1) * nx + i];
+          const slope = (Math.abs(hR - hL) + Math.abs(hU - hD)) / (2 * cellX);
+          tmp.multiplyScalar(1.0 - Math.min(0.30, slope * 0.55));
           col[k * 3] = tmp.r; col[k * 3 + 1] = tmp.g; col[k * 3 + 2] = tmp.b;
         }
       }
@@ -225,8 +232,9 @@
       // the sea
       const seaGeo = new THREE.PlaneGeometry(w * 3, h * 3, 1, 1);
       seaGeo.rotateX(-Math.PI / 2);
-      waterMesh = new THREE.Mesh(seaGeo, new THREE.MeshLambertMaterial({
-        color: 0x2d6d9e, transparent: true, opacity: 0.86
+      waterMesh = new THREE.Mesh(seaGeo, new THREE.MeshPhongMaterial({
+        color: 0x2d6d9e, specular: 0x9fd6ff, shininess: 70,
+        transparent: true, opacity: 0.88
       }));
       waterMesh.position.set(w / 2, water, h / 2);
       scene.add(waterMesh);
@@ -242,6 +250,7 @@
       const leaves = new THREE.InstancedMesh(leafGeo, leafMat, treeCount);
       const m4 = new THREE.Matrix4();
       const q = new THREE.Quaternion();
+      const tint = new THREE.Color();
       let placed = 0, guard = 0;
       while (placed < treeCount && guard < treeCount * 40) {
         guard++;
@@ -256,12 +265,19 @@
         trunks.setMatrixAt(placed, m4);
         m4.compose(new THREE.Vector3(x, hh + 5.3 * s, z), q, new THREE.Vector3(s, s, s));
         leaves.setMatrixAt(placed, m4);
+        // a little variety in the canopy, so the forest is not one flat green
+        tint.setHSL(0.275 + rnd() * 0.065, 0.40 + rnd() * 0.26, 0.22 + rnd() * 0.16);
+        leaves.setColorAt(placed, tint);
+        tint.setHSL(0.08 + rnd() * 0.04, 0.30 + rnd() * 0.18, 0.18 + rnd() * 0.10);
+        trunks.setColorAt(placed, tint);
         treePos.push({ x: x, z: z });
         placed++;
       }
       trunks.count = placed; leaves.count = placed;
       trunks.instanceMatrix.needsUpdate = true;
       leaves.instanceMatrix.needsUpdate = true;
+      if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
+      if (trunks.instanceColor) trunks.instanceColor.needsUpdate = true;
       scene.add(trunks); scene.add(leaves);
 
       const rockGeo = new THREE.DodecahedronGeometry(2.2, 0);
@@ -279,10 +295,13 @@
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.283);
         m4.compose(new THREE.Vector3(x, hh + 0.9 * s, z), q, new THREE.Vector3(s, s * 0.8, s));
         rocks.setMatrixAt(rp, m4);
+        tint.setHSL(0.10, 0.04 + rnd() * 0.06, 0.34 + rnd() * 0.18);
+        rocks.setColorAt(rp, tint);
         rp++;
       }
       rocks.count = rp;
       rocks.instanceMatrix.needsUpdate = true;
+      if (rocks.instanceColor) rocks.instanceColor.needsUpdate = true;
       scene.add(rocks);
 
       // distant peaks, so the horizon is not an empty edge
