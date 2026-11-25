@@ -379,6 +379,17 @@ for i, lv in enumerate(game.LEVELS):
     game.back_to_menu()
 
 
+# --- regression: retry() used to write a local, so it never changed screen --
+print()
+print("--- regressions ---")
+game._setup()
+game.screen = "solved"
+game.retry()
+check("retry puts you back on the board", game.screen == "play")
+game.screen = "menu"
+game.retry()
+check("retry works from the menu too", game.screen == "play")
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
