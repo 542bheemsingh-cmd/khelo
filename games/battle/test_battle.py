@@ -780,6 +780,18 @@ CALLS.clear()
 game.draw()
 check("the HUD survives a phone-sized canvas", len(CALLS) > 80)
 
+# --- regression: the compass used to call south "N" ------------------------
+print()
+print("--- compass and minimap arrow agree ---")
+for yaw_deg, want in ((0, 180), (90, 90), (180, 0), (270, 270)):
+    game.cam_yaw = math.radians(yaw_deg)
+    got = game.compass_bearing()
+    check("yaw %d points to bearing %d (got %.0f)" % (yaw_deg, want, got),
+          abs(((got - want + 180) % 360) - 180) < 0.5)
+
+game.cam_yaw = math.pi
+check("facing north reads as 0 degrees", abs(game.compass_bearing()) < 0.5)
+
 print()
 if fails:
     print("FAILURES:", fails)
