@@ -1536,7 +1536,7 @@ def _draw_menu():
     global _menu_hit
     _menu_hit = []
     c = hctx
-    c.fillStyle = "rgba(4, 10, 24, 0.55)"
+    c.fillStyle = "rgba(4, 10, 24, 0.40)"
     c.fillRect(0, 0, W, H)
     a = 0.55 + 0.35 * math.sin(_clock * 2.6)
     c.textAlign = "center"
