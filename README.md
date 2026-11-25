@@ -55,7 +55,8 @@ from one block.
 
 ## Khelo Battleground
 
-A third-person battle royale, in 3D, on a map shaped like India.
+A third-person battle royale, in 3D, on a map shaped like India — towns,
+roads, bridges and all.
 
 - **A real map, not a drawing.** The landmass is the actual mainland outline,
   taken from [DataMeet's open India boundary data](https://github.com/datameet/maps)
