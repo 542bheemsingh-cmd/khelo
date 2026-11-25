@@ -371,9 +371,19 @@
         const roofMat = new THREE.MeshLambertMaterial({ color: 0x7d4438 });
         const walls = new THREE.InstancedMesh(wallGeo, wallMat, blds.length);
         const roofs = new THREE.InstancedMesh(roofGeo, roofMat, blds.length);
+        // windows and a door, so a town looks lived in
+        const winGeo = new THREE.BoxGeometry(1, 1, 0.16);
+        const winMat = new THREE.MeshLambertMaterial({ color: 0x2b3648 });
+        const doorGeo = new THREE.BoxGeometry(1, 1, 0.18);
+        const doorMat = new THREE.MeshLambertMaterial({ color: 0x4a3524 });
+        const windows = new THREE.InstancedMesh(winGeo, winMat, blds.length * 6);
+        const doors = new THREE.InstancedMesh(doorGeo, doorMat, blds.length);
+        let wi = 0, di = 0;
         const noRot = new THREE.Quaternion();
         const yRot = new THREE.Quaternion().setFromAxisAngle(
           new THREE.Vector3(0, 1, 0), Math.PI / 4);
+        const yRot90 = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 1, 0), Math.PI / 2);
         for (let i = 0; i < blds.length; i++) {
           const b = blds[i];
           blockPos.push({ x: b[0], z: b[1], r: Math.max(b[2], b[3]) * 0.6 });
@@ -394,11 +404,32 @@
                       0.24 + rnd() * 0.20);
           roofs.setColorAt(i, tint);
 
+          // windows on all four walls, so no side is a blank slab
+          const wy = gy + bh * 0.60;
+          for (const zf of [bz + bd / 2 + 0.11, bz - bd / 2 - 0.11]) {
+            for (const off of [-0.24, 0.24]) {
+              m4.compose(new THREE.Vector3(bx + bw * off, wy, zf), noRot,
+                         new THREE.Vector3(1.05, 1.50, 1));
+              windows.setMatrixAt(wi++, m4);
+            }
+          }
+          for (const xf of [bx + bw / 2 + 0.11, bx - bw / 2 - 0.11]) {
+            m4.compose(new THREE.Vector3(xf, wy, bz), yRot90,
+                       new THREE.Vector3(1.05, 1.50, 1));
+            windows.setMatrixAt(wi++, m4);
+          }
+          m4.compose(new THREE.Vector3(bx, gy + 1.05, bz + bd / 2 + 0.11), noRot,
+                     new THREE.Vector3(1.45, 2.30, 1));
+          doors.setMatrixAt(di++, m4);
         }
         walls.instanceMatrix.needsUpdate = true;
         roofs.instanceMatrix.needsUpdate = true;
         if (walls.instanceColor) walls.instanceColor.needsUpdate = true;
         if (roofs.instanceColor) roofs.instanceColor.needsUpdate = true;
+        windows.count = wi; doors.count = di;
+        windows.instanceMatrix.needsUpdate = true;
+        doors.instanceMatrix.needsUpdate = true;
+        scene.add(windows); scene.add(doors);
         scene.add(walls); scene.add(roofs);
 
         // ---- roads, and bridges where a road meets water ----
