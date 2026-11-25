@@ -137,6 +137,8 @@
     let WORLD = { w: 1000, h: 1000, water: -2 };
     let treePos = [];
     let flashTimer = 0, flashMesh = null, camSmooth = null, lastT = 0;
+    const cratePool = [], dmgPool = [], dustPool = [];
+    let dustTimer = 0, fovNow = 62;
     let ready3d = false;
 
     function rngFactory(seed) {
@@ -375,8 +377,37 @@
       armR.position.x = 1.25;
       g.add(armR);
 
-      const gun = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 2.0), darkMat);
-      gun.position.set(1.25, 3.0, 0.9);
+      // boots
+      const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.5, 1.3), darkMat);
+      bootL.position.set(-0.45, 0.25, 0.1);
+      g.add(bootL);
+      const bootR = bootL.clone();
+      bootR.position.x = 0.45;
+      g.add(bootR);
+
+      // a pack on the back
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.15, 0.5),
+        new THREE.MeshLambertMaterial({ color: 0x4a5162 }));
+      pack.position.set(0, 3.05, -0.72);
+      g.add(pack);
+
+      // shoulder pads
+      const padL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.45, 0.9), darkMat);
+      padL.position.set(-1.25, 3.75, 0.1);
+      g.add(padL);
+      const padR = padL.clone();
+      padR.position.x = 1.25;
+      g.add(padR);
+
+      // a visor across the helmet
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 0.12),
+        new THREE.MeshLambertMaterial({ color: 0x1d2637 }));
+      visor.position.set(0, 4.35, 0.6);
+      g.add(visor);
+
+      // the gun, swapped out when the weapon changes
+      const gun = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.30, 2.2), darkMat);
+      gun.position.set(1.25, 3.0, 1.0);
       g.add(gun);
 
       // a soft blob shadow, cheaper than a real shadow map
@@ -388,7 +419,8 @@
       blob.position.y = 0.08;
       g.add(blob);
 
-      g.userData = { legs: legs, arms: [armL, armR], walk: 0 };
+      g.userData = { legs: legs, arms: [armL, armR], walk: 0, gun: gun,
+                     bodyMat: bodyMat, darkMat: darkMat };
       return g;
     }
 
@@ -420,6 +452,46 @@
         m.visible = false;
         scene.add(m);
         sparkPool.push(m);
+      }
+
+      // crates: green for health, yellow for ammo
+      const crateGeo = new THREE.BoxGeometry(2.4, 2.0, 2.4);
+      for (let i = 0; i < 16; i++) {
+        const h = new THREE.Mesh(crateGeo, new THREE.MeshLambertMaterial({
+          color: 0x2fbf6a, emissive: 0x0d3d22
+        }));
+        const a = new THREE.Mesh(crateGeo, new THREE.MeshLambertMaterial({
+          color: 0xd9a827, emissive: 0x3d2c08
+        }));
+        h.visible = false; a.visible = false;
+        scene.add(h); scene.add(a);
+        cratePool.push({ health: h, ammo: a });
+      }
+
+      // floating damage numbers
+      for (let i = 0; i < 10; i++) {
+        const cv = document.createElement("canvas");
+        cv.width = 128; cv.height = 64;
+        const tex = new THREE.CanvasTexture(cv);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: tex, transparent: true, depthWrite: false
+        }));
+        sp.visible = false;
+        sp.scale.set(6, 3, 1);
+        scene.add(sp);
+        dmgPool.push({ sprite: sp, canvas: cv, tex: tex });
+      }
+
+      // footstep dust
+      const dustGeo = new THREE.SphereGeometry(0.9, 5, 4);
+      for (let i = 0; i < 12; i++) {
+        const m = new THREE.Mesh(dustGeo, new THREE.MeshBasicMaterial({
+          color: 0xcfc7a8, transparent: true, opacity: 0
+        }));
+        m.visible = false;
+        scene.add(m);
+        dustPool.push({ mesh: m, life: 0 });
       }
 
       // the muzzle flash lives on the gun
@@ -475,6 +547,11 @@
         const ud = playerRig.userData;
         ud.walk += speed * dt * 0.34;              // feet keep pace with the walk
         const swing = Math.min(1, speed / 11);
+        playerRig.scale.set(1.3, 1.3 * (st.crouch ? 0.74 : 1), 1.3);
+        if (ud.gun) {
+          const wp = st.wp || 0;
+          ud.gun.scale.set(wp ? 1.6 : 1, wp ? 1.35 : 1, wp ? 0.82 : 1);
+        }
         ud.legs.rotation.x = Math.sin(ud.walk) * 0.62 * swing;
         ud.arms[0].rotation.x = -Math.sin(ud.walk) * 0.46 * swing;
         ud.arms[1].rotation.x = Math.sin(ud.walk) * 0.46 * swing;
@@ -517,6 +594,11 @@
             w.barFill.visible = false;
           } else {
             rig.rotation.x = 0;
+            const flash = b[7] || 0;
+            if (w.bodyMat) {
+              w.bodyMat.emissive.setRGB(Math.min(1, flash * 4), 0, 0);
+              w.bodyMat.color.setHex([0x8a3b3b, 0xa8402f, 0xc74b28][b[6] || 0]);
+            }
             w.walk += dt * 7;
             w.legs.rotation.x = Math.sin(w.walk) * 0.4;
             const show = hp < 100;
@@ -562,6 +644,74 @@
           }
         }
 
+        // ---- crates ----
+        for (let i = 0; i < cratePool.length; i++) {
+          const slot = cratePool[i];
+          if (i < st.pk.length) {
+            const k = st.pk[i];
+            const m = k[3] ? slot.health : slot.ammo;
+            slot.health.visible = false;
+            slot.ammo.visible = false;
+            m.visible = true;
+            m.position.set(k[0], k[1] + Math.sin(now * 2.2 + i) * 0.28, k[2]);
+            m.rotation.y = now * 0.7 + i;
+          } else {
+            slot.health.visible = false;
+            slot.ammo.visible = false;
+          }
+        }
+
+        // ---- floating damage numbers ----
+        for (let i = 0; i < dmgPool.length; i++) {
+          const d = dmgPool[i];
+          if (i < st.dn.length) {
+            const e = st.dn[i];
+            if (d.last !== e[3]) {
+              d.last = e[3];
+              const c2 = d.canvas.getContext("2d");
+              c2.clearRect(0, 0, 128, 64);
+              c2.font = "bold 46px system-ui, sans-serif";
+              c2.textAlign = "center";
+              c2.textBaseline = "middle";
+              c2.lineWidth = 7;
+              c2.strokeStyle = "rgba(0,0,0,0.8)";
+              c2.strokeText(e[3], 64, 34);
+              c2.fillStyle = "#ffe08a";
+              c2.fillText(e[3], 64, 34);
+              d.tex.needsUpdate = true;
+            }
+            d.sprite.visible = true;
+            d.sprite.position.set(e[0], e[1], e[2]);
+          } else {
+            d.sprite.visible = false;
+          }
+        }
+
+        // ---- footstep dust ----
+        dustTimer -= dt;
+        if (speed > 3 && dustTimer <= 0) {
+          dustTimer = 0.17;
+          for (let i = 0; i < dustPool.length; i++) {
+            if (dustPool[i].life <= 0) {
+              dustPool[i].life = 0.55;
+              dustPool[i].mesh.position.set(p[0], p[1] + 0.3, p[2]);
+              dustPool[i].mesh.visible = true;
+              break;
+            }
+          }
+        }
+        for (let i = 0; i < dustPool.length; i++) {
+          const d = dustPool[i];
+          if (d.life > 0) {
+            d.life -= dt;
+            const t = 1 - Math.max(0, d.life) / 0.55;
+            d.mesh.scale.setScalar(0.5 + t * 1.7);
+            d.mesh.material.opacity = 0.32 * (1 - t);
+            d.mesh.position.y += dt * 0.9;
+            if (d.life <= 0) d.mesh.visible = false;
+          }
+        }
+
         // ---- the zone breathes ----
         const z = st.z;
         zoneMesh.position.x = z[0];
@@ -602,6 +752,19 @@
         camera.position.copy(camSmooth);
         camera.lookAt(p[0] + Math.sin(yaw) * 14, p[1] + 4.2, p[2] + Math.cos(yaw) * 14);
 
+        // ---- screen shake and the sprint FOV kick ----
+        const sh = st.sh || 0;
+        if (sh > 0.01) {
+          camera.position.x += (Math.random() - 0.5) * sh * 2.4;
+          camera.position.y += (Math.random() - 0.5) * sh * 2.4;
+        }
+        const wantFov = 62 + (speed > 13 ? 5 : 0);
+        fovNow += (wantFov - fovNow) * Math.min(1, dt * 4);
+        if (Math.abs(camera.fov - fovNow) > 0.02) {
+          camera.fov = fovNow;
+          camera.updateProjectionMatrix();
+        }
+
         sunLight.position.set(p[0] - 120, 260, p[2] - 80);
         sunLight.target.position.set(p[0], p[1], p[2]);
         sunLight.target.updateMatrixWorld();
@@ -625,7 +788,8 @@
        ================================================================== */
     let tapFn = null, primaryFn = null, moveFn = null, lookFn = null, fireFn = null,
         stickFn = null, drawFn = null, updateFn = null, sendFn = null, sizeFn = null,
-        pyodide = null, running = false, playing = false;
+        sprintFn = null, crouchFn = null, reloadFn = null, swapFn = null, pauseFn = null,
+        pyodide = null, running = false, playing = false, crouchOn = false;
 
     const keys = {};
     let stickId = null, stickOX = 0, stickOY = 0, stickX = 0, stickY = 0;
@@ -766,12 +930,19 @@
           firingKey = true; pushFire();
         }
         e.preventDefault();
+      } else if (playing) {
+        if (k === "shift") { if (sprintFn) sprintFn(true); e.preventDefault(); }
+        else if (k === "c") { if (crouchFn) crouchFn(!crouchOn); crouchOn = !crouchOn; e.preventDefault(); }
+        else if (k === "r") { if (reloadFn) reloadFn(); e.preventDefault(); }
+        else if (k === "q") { if (swapFn) swapFn(); e.preventDefault(); }
+        else if (k === "p") { if (pauseFn) pauseFn(true); e.preventDefault(); }
       }
     });
     window.addEventListener("keyup", (e) => {
       const k = e.key.toLowerCase();
       if (keys[k]) { keys[k] = false; updateKeys(); }
       if (k === " " || k === "enter") { firingKey = false; pushFire(); }
+      if (k === "shift" && sprintFn) sprintFn(false);
     });
 
     function updateKeys() {
@@ -840,6 +1011,11 @@
       sendFn = pyodide.globals.get("send_frame");
       sizeFn = pyodide.globals.get("set_size");
       stickFn = pyodide.globals.get("set_stick");
+      sprintFn = pyodide.globals.get("set_sprint");
+      crouchFn = pyodide.globals.get("set_crouch");
+      reloadFn = pyodide.globals.get("set_reload");
+      swapFn = pyodide.globals.get("set_swap");
+      pauseFn = pyodide.globals.get("set_pause");
       try {
         pyodide.globals.get("set_touch_ui")(
           window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window);
