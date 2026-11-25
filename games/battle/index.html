@@ -132,7 +132,8 @@
     const hudCanvas = document.getElementById("hud");
     const screenBox = document.querySelector(".screen");
 
-    let renderer, scene, camera, waterMesh, zoneMesh, zoneRing, playerRig, botRigs = [],
+    let renderer, scene, camera, waterMesh, zoneMesh, zoneRing, playerRig, dirArrow,
+        botRigs = [],
         bulletPool = [], sparkPool = [], sunLight;
     let WORLD = { w: 1000, h: 1000, water: -2 };
     let treePos = [];
@@ -598,6 +599,25 @@
         dustPool.push({ mesh: m, life: 0 });
       }
 
+      // a floating arrow over the soldier, so you can always tell which way
+      // the camera is pointing
+      // a flat arrowhead lying in the ground plane - from behind and above
+      // this reads as an arrow, where a cone just looked like a diamond
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 2.6);          // the point
+      shape.lineTo(-1.7, -1.5);
+      shape.lineTo(0, -0.4);
+      shape.lineTo(1.7, -1.5);
+      shape.closePath();
+      const arrowGeo = new THREE.ShapeGeometry(shape);
+      arrowGeo.rotateX(Math.PI / 2);           // lay it flat, tip toward +z
+      dirArrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({
+        color: 0x7ef0c0, transparent: true, opacity: 0.92,
+        side: THREE.DoubleSide, depthWrite: false
+      }));
+      dirArrow.visible = false;
+      scene.add(dirArrow);
+
       // the muzzle flash lives on the gun
       flashMesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.55, 6, 5),
@@ -649,6 +669,7 @@
                               WORLD.h / 2 + Math.sin(a) * 1250);
           camera.lookAt(WORLD.w / 2, 0, WORLD.h / 2);
           if (playerRig) playerRig.visible = false;
+          if (dirArrow) dirArrow.visible = false;
           for (let i = 0; i < botRigs.length; i++) botRigs[i].visible = false;
           for (let i = 0; i < bulletPool.length; i++) bulletPool[i].visible = false;
           for (let i = 0; i < sparkPool.length; i++) sparkPool[i].visible = false;
@@ -683,6 +704,15 @@
         ud.legs.rotation.x = Math.sin(ud.walk) * 0.62 * swing;
         ud.arms[0].rotation.x = -Math.sin(ud.walk) * 0.46 * swing;
         ud.arms[1].rotation.x = Math.sin(ud.walk) * 0.46 * swing;
+
+        // ---- the direction arrow over our head ----
+        if (dirArrow) {
+          dirArrow.visible = p[4] > 0;
+          dirArrow.position.set(p[0], p[1] + 9.6 + Math.sin(now * 3.2) * 0.35, p[2]);
+          dirArrow.rotation.y = p[3];
+          const pulse = 0.9 + Math.sin(now * 4.0) * 0.1;
+          dirArrow.scale.set(pulse, pulse, pulse);
+        }
 
         // ---- muzzle flash ----
         if (flashMesh) {
