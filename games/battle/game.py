@@ -216,12 +216,18 @@ def land_at(x, z):
     return LAND[j * NX + i]
 
 
-def _random_land(margin=40.0, tries=400):
+def _random_land(margin=40.0, tries=600, lo=None, hi=None):
+    """A random point on dry land. Give lo/hi to keep off beaches and peaks."""
     for _ in range(tries):
         x = _rng.uniform(margin, WORLD_W - margin)
         z = _rng.uniform(margin, WORLD_H - margin)
-        if land_at(x, z):
-            return x, z
+        if not land_at(x, z):
+            continue
+        if lo is not None:
+            h = height_at(x, z)
+            if h < lo or h > hi:
+                continue
+        return x, z
     return WORLD_W / 2, WORLD_H / 2
 
 
@@ -275,6 +281,20 @@ def set_size(w, h):
 # ---------------------------------------------------------------------------
 # Game state
 # ---------------------------------------------------------------------------
+WEAPONS = {
+    "rifle":   {"name": "RIFLE",   "mag": 30, "dmg": 17.0, "cool": 0.16,
+                "pellets": 1, "spread": 0.012, "reload": 1.5},
+    "shotgun": {"name": "SHOTGUN", "mag": 6,  "dmg": 9.0,  "cool": 0.80,
+                "pellets": 6, "spread": 0.075, "reload": 2.2},
+}
+
+# ---- 8. bots come in three grades -----------------------------------------
+TIERS = [
+    {"cool": (1.3, 2.1), "spread": 0.11, "range": 230.0, "strafe": 0.15},  # green
+    {"cool": (0.9, 1.5), "spread": 0.06, "range": 300.0, "strafe": 0.45},  # veteran
+    {"cool": (0.6, 1.0), "spread": 0.03, "range": 360.0, "strafe": 0.80},  # elite
+]
+
 BOT_COUNT = 9
 PLAYER_SPEED = 15.0
 BOT_SPEED = 9.5
@@ -303,6 +323,18 @@ move_z = 0.0
 pvx = 0.0                 # the soldier has weight: it speeds up and slows down
 pvz = 0.0
 hitmark = 0.0             # a little cross on the crosshair when a shot lands
+stamina = 100.0           # 1. sprinting burns it, standing still refills it
+crouching = False
+sprinting = False
+weapon = "rifle"
+mag = 30
+reloading = 0.0
+pickups = []              # health and ammo crates lying about
+dmg_numbers = []          # the numbers that float off a bot you hit
+shake = 0.0               # screen shake, handed to the renderer
+hurt_dir = 0.0            # which way the last hit came from, for the arc
+placement = 0
+paused = False
 hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
 look_dx = 0.0
@@ -356,6 +388,47 @@ def set_look(dx, dy):
     look_dy += float(dy)
 
 
+def set_sprint(on):
+    global sprinting
+    sprinting = bool(on)
+
+
+def set_crouch(on):
+    global crouching
+    crouching = bool(on)
+
+
+def set_swap():
+    """Change weapon - 6. weapon swap."""
+    global weapon, mag, reloading
+    if state != "play" or reloading > 0:
+        return
+    weapon = "shotgun" if weapon == "rifle" else "rifle"
+    mag = WEAPONS[weapon]["mag"]
+    reloading = 0.0
+    _sound("tap")
+
+
+def set_reload():
+    """4. reload, by hand or by itself when the magazine runs dry."""
+    global reloading
+    if state != "play" or reloading > 0:
+        return
+    if mag >= WEAPONS[weapon]["mag"]:
+        return
+    reloading = WEAPONS[weapon]["reload"]
+    _sound("reload")
+
+
+def set_pause(on):
+    global paused
+    if state != "play":
+        paused = False
+        return
+    paused = bool(on)
+    _notify_playing(not paused)
+
+
 def set_fire(on):
     global firing
     firing = bool(on)
@@ -382,8 +455,40 @@ def press_primary():
         start_game()
 
 
+PAUSE_RECT = (16, 12, 58, 44)
+
+
 def tap(x, y):
-    global state
+    global state, paused
+    if state == "play":
+        if paused:
+            for tag, r in _menu_hit:
+                if _in(r, x, y):
+                    _sound("tap")
+                    if tag == "resume":
+                        set_pause(False)
+                    else:
+                        set_pause(False)
+                        state = "menu"
+                        _notify_playing(False)
+                    return
+            return
+        if _in(PAUSE_RECT, x, y):
+            _sound("tap")
+            set_pause(True)
+            return
+        for tag, label, active, r in touch_buttons():
+            if _in(r, x, y):
+                _sound("tap")
+                if tag == "sprint":
+                    set_sprint(not sprinting)
+                elif tag == "crouch":
+                    set_crouch(not crouching)
+                elif tag == "reload":
+                    set_reload()
+                elif tag == "swap":
+                    set_swap()
+                return
     if state == "menu":
         for tag, r in _menu_hit:
             if _in(r, x, y):
@@ -417,19 +522,29 @@ def start_game(seed=None):
 
     _rng.seed(seed if seed is not None else _rng.randrange(1 << 30))
 
-    px, pz = _random_land(120.0)
+    px, pz = _random_land(120.0, lo=WATER_Y + 5.0, hi=26.0)
     player = {"x": px, "z": pz, "yaw": 0.0, "hp": 100.0, "alive": True,
               "cool": 0.0, "kills": 0, "ammo": 120, "hurt": 0.0}
 
     bots = []
     for k in range(BOT_COUNT):
         for _ in range(200):
-            bx, bz = _random_land(80.0)
+            bx, bz = _random_land(80.0, lo=WATER_Y + 5.0, hi=28.0)
             if math.hypot(bx - px, bz - pz) > 220:
                 break
         bots.append({"x": bx, "z": bz, "yaw": _rng.uniform(0, 6.283),
                      "hp": 100.0, "alive": True, "cool": _rng.uniform(0.4, 1.6),
-                     "wander": 0.0, "wx": 0.0, "wz": 0.0, "dying": 0.0})
+                     "wander": 0.0, "wx": 0.0, "wz": 0.0, "dying": 0.0,
+                     "tier": min(2, int(_rng.random() * 3)),
+                     "flash": 0.0, "strafe": 1.0 if _rng.random() < 0.5 else -1.0})
+
+    # 7. health and ammo crates, scattered over the land
+    pickups[:] = []
+    for _ in range(16):
+        gx, gz = _random_land(70.0, lo=WATER_Y + 4.0, hi=26.0)
+        pickups.append({"x": gx, "z": gz,
+                        "kind": "health" if _rng.random() < 0.45 else "ammo",
+                        "taken": False})
 
     shots = []
     zone = {"cx": WORLD_W / 2, "cz": WORLD_H / 2, "r": 640.0,
@@ -445,6 +560,17 @@ def start_game(seed=None):
     cam_pitch = 0.34
     move_x = move_z = 0.0
     pvx = pvz = 0.0
+    global stamina, crouching, sprinting, weapon, mag, reloading, shake
+    global dmg_numbers, hurt_dir, placement, paused
+    stamina = 100.0
+    crouching = sprinting = paused = False
+    weapon = "rifle"
+    mag = WEAPONS["rifle"]["mag"]
+    reloading = 0.0
+    shake = 0.0
+    dmg_numbers[:] = []
+    hurt_dir = 0.0
+    placement = 0
     hitmark = 0.0
     hits[:] = []
     feed[:] = []
@@ -455,11 +581,11 @@ def start_game(seed=None):
 # ---------------------------------------------------------------------------
 # Shooting
 # ---------------------------------------------------------------------------
-def _spawn_shot(x, z, yaw, owner):
+def _spawn_shot(x, z, yaw, owner, dmg=PLAYER_DAMAGE):
     shots.append({"x": x, "z": z,
                   "dx": math.sin(yaw) * BULLET_SPEED,
                   "dz": math.cos(yaw) * BULLET_SPEED,
-                  "life": BULLET_LIFE, "owner": owner})
+                  "life": BULLET_LIFE, "owner": owner, "dmg": dmg})
 
 
 def _nearest_target(x, z, yaw, max_dist=180.0, cone=0.34):
@@ -480,22 +606,35 @@ def _nearest_target(x, z, yaw, max_dist=180.0, cone=0.34):
 
 
 def fire():
-    if state != "play" or not player.get("alive"):
+    global mag, shake
+    if state != "play" or paused or not player.get("alive"):
         return
-    if player["cool"] > 0 or player["ammo"] <= 0:
+    if reloading > 0 or player["cool"] > 0:
         return
-    player["cool"] = FIRE_COOL
-    player["ammo"] -= 1
-    yaw = cam_yaw
-    t = _nearest_target(player["x"], player["z"], yaw)
+    w = WEAPONS[weapon]
+    if mag <= 0:
+        set_reload()
+        return
+
+    player["cool"] = w["cool"]
+    mag -= 1
+    shake = max(shake, 0.45 if weapon == "shotgun" else 0.16)
+
+    base = cam_yaw
+    t = _nearest_target(player["x"], player["z"], base)
     if t is not None:
-        yaw = math.atan2(t["x"] - player["x"], t["z"] - player["z"])
-    _spawn_shot(player["x"], player["z"], yaw, "p")
+        base = math.atan2(t["x"] - player["x"], t["z"] - player["z"])
+    for _ in range(w["pellets"]):
+        _spawn_shot(player["x"], player["z"],
+                    base + _rng.uniform(-w["spread"], w["spread"]),
+                    "p", w["dmg"])
     try:
         js.world3d.flash()
     except Exception:
         pass
     _sound("shot")
+    if mag <= 0:
+        set_reload()
 
 
 # ---------------------------------------------------------------------------
@@ -504,10 +643,11 @@ def fire():
 def update(dt):
     global elapsed, zone_timer, zone_phase, message, state, result
     global cam_yaw, cam_pitch, look_dx, look_dy
-    global hitmark, pvx, pvz
+    global hitmark, pvx, pvz, stamina, mag, reloading, shake
+    global dmg_numbers, hurt_dir, placement
 
     dt = min(max(float(dt), 0.0), 0.06)
-    if state != "play":
+    if state != "play" or paused:
         look_dx = look_dy = 0.0
         return
 
@@ -538,17 +678,29 @@ def update(dt):
         # turn toward the aim instead of snapping to it
         diff = (cam_yaw - p["yaw"] + math.pi) % 6.283185 - math.pi
         p["yaw"] += diff * min(1.0, dt * 15.0)
+        # 1. sprinting burns stamina, 3. crouching is slow and low
+        if crouching:
+            spd = PLAYER_SPEED * 0.52
+        elif sprinting and stamina > 1.0:
+            spd = PLAYER_SPEED * 1.55
+        else:
+            spd = PLAYER_SPEED
+        if sprinting and not crouching and stamina > 0.5:
+            stamina = max(0.0, stamina - 30.0 * dt)
+        else:
+            stamina = min(100.0, stamina + 20.0 * dt)
+
         mx, mz = move_x, move_z
-        mag = math.hypot(mx, mz)
-        if mag > 1.0:
-            mx, mz = mx / mag, mz / mag
-        if mag > 0.08:
+        magd = math.hypot(mx, mz)
+        if magd > 1.0:
+            mx, mz = mx / magd, mz / magd
+        if magd > 0.08:
             # move relative to where the camera is looking
             s, c = math.sin(cam_yaw), math.cos(cam_yaw)
             # screen-right is rotate(forward, -90), so D must go to (-c, +s)
             wx = -mx * c + mz * s
             wz = mx * s + mz * c
-            tvx, tvz = wx * PLAYER_SPEED, wz * PLAYER_SPEED
+            tvx, tvz = wx * spd, wz * spd
         else:
             tvx = tvz = 0.0
         # ease toward the wanted speed, so starts and stops are not instant
@@ -569,29 +721,59 @@ def update(dt):
         if firing:
             fire()
 
+    # 4. reloading
+    if reloading > 0:
+        reloading = max(0.0, reloading - dt)
+        if reloading <= 0.0:
+            mag = WEAPONS[weapon]["mag"]
+
+    # 7. crates you can walk over
+    for pk in pickups:
+        if pk["taken"]:
+            continue
+        if math.hypot(pk["x"] - p["x"], pk["z"] - p["z"]) < 7.0:
+            pk["taken"] = True
+            if pk["kind"] == "health":
+                p["hp"] = min(100.0, p["hp"] + 35.0)
+                message = "Picked up a medkit"
+            else:
+                mag = WEAPONS[weapon]["mag"]
+                reloading = 0.0
+                message = "Picked up ammo"
+            _sound("home")
+
     # --- the bots ---
     for b in bots:
         if not b["alive"]:
             continue
         b["cool"] = max(0.0, b["cool"] - dt)
+        b["flash"] = max(0.0, b.get("flash", 0.0) - dt)
+        tier = TIERS[b.get("tier", 0)]
         dx, dz = p["x"] - b["x"], p["z"] - b["z"]
         d = math.hypot(dx, dz) or 1e-6
-        if p["alive"] and d < 300.0:
+        if p["alive"] and d < tier["range"]:
             b["yaw"] = math.atan2(dx, dz)
             step = BOT_SPEED * dt
             if d > 46.0:
-                nx = b["x"] + dx / d * step
-                nz = b["z"] + dz / d * step
+                ax, az = dx / d, dz / d
             else:
-                nx = b["x"] - dx / d * step * 0.6
-                nz = b["z"] - dz / d * step * 0.6
+                ax, az = -dx / d * 0.6, -dz / d * 0.6
+            if d < 115.0:
+                # 9. sidestep instead of standing still in the open
+                ax += -dz / d * b["strafe"] * tier["strafe"]
+                az += dx / d * b["strafe"] * tier["strafe"]
+            am = math.hypot(ax, az) or 1.0
+            nx = b["x"] + ax / am * step
+            nz = b["z"] + az / am * step
             if land_at(nx, b["z"]):
                 b["x"] = max(2.0, min(WORLD_W - 2.0, nx))
             if land_at(b["x"], nz):
                 b["z"] = max(2.0, min(WORLD_H - 2.0, nz))
             if d < 150.0 and b["cool"] <= 0:
-                b["cool"] = _rng.uniform(0.7, 1.5)
-                _spawn_shot(b["x"], b["z"], b["yaw"] + _rng.uniform(-0.06, 0.06), "b")
+                b["cool"] = _rng.uniform(*tier["cool"])
+                _spawn_shot(b["x"], b["z"],
+                            b["yaw"] + _rng.uniform(-tier["spread"], tier["spread"]),
+                            "b", BOT_DAMAGE)
         else:
             # nobody in sight: drift about
             b["wander"] -= dt
@@ -620,7 +802,10 @@ def update(dt):
         if s["owner"] == "p":
             for b in bots:
                 if b["alive"] and math.hypot(b["x"] - s["x"], b["z"] - s["z"]) < 6.0:
-                    b["hp"] -= PLAYER_DAMAGE
+                    b["hp"] -= s["dmg"]
+                    b["flash"] = 0.16
+                    dmg_numbers.append({"x": s["x"], "z": s["z"],
+                                        "text": "%d" % int(s["dmg"]), "life": 0.75})
                     hit = True
                     hits.append({"x": s["x"], "z": s["z"], "life": 0.45})
                     hitmark = 0.30
@@ -634,8 +819,10 @@ def update(dt):
         else:
             if p["alive"] and math.hypot(p["x"] - s["x"], p["z"] - s["z"]) < 6.0:
                 hits.append({"x": s["x"], "z": s["z"], "life": 0.45})
-                p["hp"] -= BOT_DAMAGE
+                p["hp"] -= s["dmg"]
                 p["hurt"] = 0.5
+                hurt_dir = math.atan2(s["x"] - p["x"], s["z"] - p["z"])
+                shake = max(shake, 0.35)
                 hit = True
                 _sound("hurt")
         if not hit:
@@ -662,21 +849,28 @@ def update(dt):
     zone["cx"] += (zone["tx"] - zone["cx"]) * min(1.0, dt * 0.8)
     zone["cz"] += (zone["tz"] - zone["cz"]) * min(1.0, dt * 0.8)
 
+    zone_dmg = 5.0 + zone_phase * 3.0
     if p["alive"] and math.hypot(p["x"] - zone["cx"], p["z"] - zone["cz"]) > zone["r"]:
-        p["hp"] -= 7.0 * dt
+        p["hp"] -= zone_dmg * dt
         p["hurt"] = 0.2
     for b in bots:
         if b["alive"] and math.hypot(b["x"] - zone["cx"], b["z"] - zone["cz"]) > zone["r"]:
-            b["hp"] -= 7.0 * dt
+            b["hp"] -= zone_dmg * dt
             if b["hp"] <= 0:
                 b["alive"] = False
                 b["dying"] = 1.1
                 feed.insert(0, {"text": "The zone took a bot", "life": 3.5})
 
     # --- who won ---
+    shake = max(0.0, shake - dt * 2.5)
+    for dn in dmg_numbers:
+        dn["life"] -= dt
+    dmg_numbers[:] = [dn for dn in dmg_numbers if dn["life"] > 0]
+
     if p["hp"] <= 0 and p["alive"]:
         p["alive"] = False
         p["hp"] = 0.0
+        placement = alive_count() + 1
         state = "over"
         result = "lose"
         _notify_playing(False)
@@ -684,6 +878,7 @@ def update(dt):
     elif not any(b["alive"] for b in bots):
         state = "over"
         result = "win"
+        placement = 1
         _notify_playing(False)
         _sound("win")
 
@@ -703,7 +898,8 @@ def _frame_json():
             b.append([round(q["x"], 2), round(height_at(q["x"], q["z"]), 2),
                       round(q["z"], 2), round(q["yaw"], 3),
                       max(0.0, round(q["hp"], 0)),
-                      0 if q["alive"] else round(q.get("dying", 0), 2)])
+                      0 if q["alive"] else round(q.get("dying", 0), 2),
+                      int(q.get("tier", 0)), round(q.get("flash", 0.0), 2)])
     s = []
     for t in shots:
         s.append([round(t["x"], 2), round(height_at(t["x"], t["z"]) + 1.6, 2),
@@ -718,8 +914,16 @@ def _frame_json():
         "b": b,
         "s": s,
         "h": h,
+        "pk": [[round(e["x"], 2), round(height_at(e["x"], e["z"]) + 1.2, 2),
+                round(e["z"], 2), 1 if e["kind"] == "health" else 0]
+               for e in pickups if not e["taken"]],
+        "dn": [[round(e["x"], 2), round(height_at(e["x"], e["z"]) + 5.0, 2),
+                round(e["z"], 2), e["text"]] for e in dmg_numbers],
         "z": [round(zone["cx"], 2), round(zone["cz"], 2), round(zone["r"], 2)],
         "cam": [round(cam_yaw, 3), round(cam_pitch, 3)],
+        "sh": round(shake, 3),
+        "wp": 0 if weapon == "rifle" else 1,
+        "crouch": 1 if crouching else 0,
     })
 
 
@@ -799,6 +1003,23 @@ def _wrap(text, x, y, maxw, size=15, color="#9fb3d9"):
 FIRE_R = 64.0
 FIRE_X = 0.0
 FIRE_Y = 0.0
+
+
+def touch_buttons():
+    """The small action buttons that sit along the bottom on a phone."""
+    if not TOUCH_UI:
+        return []
+    labels = [("sprint", "RUN", sprinting), ("crouch", "DUCK", crouching),
+              ("reload", "RELOAD", reloading > 0), ("swap", "SWAP", False)]
+    bw, bh, gap = 62, 40, 8
+    total = len(labels) * bw + (len(labels) - 1) * gap
+    x = W / 2 - total / 2
+    y = H - 58
+    out = []
+    for tag, label, active in labels:
+        out.append((tag, label, active, (x, y, bw, bh)))
+        x += bw + gap
+    return out
 
 
 def fire_button():
@@ -896,8 +1117,54 @@ def _draw_play_hud():
     c = hctx
     p = player
 
-    # health
-    bx, by, bw = 18, (H - 190 if TOUCH_UI else H - 74), min(260, W * 0.42)
+    # the pause button
+    _panel(PAUSE_RECT[0], PAUSE_RECT[1], PAUSE_RECT[2], PAUSE_RECT[3],
+           "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.22)", 12)
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillStyle = "#eaf2ff"
+    c.font = "800 %dpx %s" % (_fs(15), FONT)
+    c.fillText("\u23f8", PAUSE_RECT[0] + PAUSE_RECT[2] / 2,
+               PAUSE_RECT[1] + PAUSE_RECT[3] / 2 + 1)
+    c.textBaseline = "alphabetic"
+
+    # ---- 23. compass -------------------------------------------------------
+    cw_, chh = 240, 18
+    cx0 = W / 2 - cw_ / 2
+    _panel(cx0, 8, cw_, chh, "rgba(8, 14, 30, 0.72)", "rgba(150,180,240,0.18)", 6)
+    heading = (math.degrees(cam_yaw) % 360.0 + 360.0) % 360.0
+    for deg, label in ((0, "N"), (90, "E"), (180, "S"), (270, "W")):
+        d = ((deg - heading + 180) % 360) - 180
+        if abs(d) > 68:
+            continue
+        px = W / 2 + d * (cw_ / 150.0)
+        c.textAlign = "center"
+        c.fillStyle = "#eaf2ff" if label in ("N", "E", "S", "W") else "#8fa3c9"
+        c.font = "800 %dpx %s" % (_fs(10), FONT)
+        c.fillText(label, px, 22)
+    c.textAlign = "center"
+    c.fillStyle = "#7ef0c0"
+    c.font = "800 %dpx %s" % (_fs(9), FONT)
+    c.fillText("%03d" % int(heading), W / 2, 34)
+
+    # ---- 29. alive count and placement ------------------------------------
+    _panel(W / 2 - 78, 38, 156, 44, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 10)
+    c.textAlign = "center"
+    c.fillStyle = "#eaf2ff"
+    c.font = "800 %dpx %s" % (_fs(19), FONT)
+    c.fillText("%d ALIVE" % alive_count(), W / 2, 61)
+    c.fillStyle = "#5aaaff"
+    c.font = "700 %dpx %s" % (_fs(10), FONT)
+    c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 75)
+
+    if message:
+        _wrap(message, W / 2, 98, min(520, W - 60), 12, "#cfe0ff")
+
+    # ---- 24 25. health, stamina, weapon and magazine ----------------------
+    bx = 18
+    by = (H - 200) if TOUCH_UI else (H - 96)
+    bw = min(260, W * 0.42)
+
     _panel(bx - 6, by - 8, bw + 12, 34, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 9)
     frac = max(0.0, min(1.0, p["hp"] / 100.0))
     c.fillStyle = "rgba(60, 74, 108, 0.7)"
@@ -910,27 +1177,53 @@ def _draw_play_hud():
     c.font = "800 %dpx %s" % (_fs(12), FONT)
     c.fillText("%d HP" % max(0, int(p["hp"])), bx + 8, by + 14)
 
-    # ammo + kills
+    # stamina, right under the health
+    sy = by + 24
+    c.fillStyle = "rgba(60, 74, 108, 0.55)"
+    c.fillRect(bx, sy, bw, 6)
+    c.fillStyle = "#5aaaff" if stamina > 20 else "#ff8a3d"
+    c.fillRect(bx, sy, bw * (stamina / 100.0), 6)
+
+    # the weapon and its magazine
+    w = WEAPONS[weapon]
+    ty = sy + 22
+    _panel(bx - 6, ty - 15, bw + 12, 34, "rgba(8, 14, 30, 0.72)",
+           "rgba(150,180,240,0.16)", 8)
     c.textAlign = "left"
-    c.fillStyle = "#9fb3d9"
-    c.font = "700 %dpx %s" % (_fs(13), FONT)
-    c.fillText("AMMO %d" % max(0, int(p["ammo"])), bx, by + 42)
-    c.fillText("KILLS %d" % p["kills"], bx + 110, by + 42)
-
-    # alive + zone timer
-    _panel(W / 2 - 78, 14, 156, 46, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 10)
-    c.textAlign = "center"
+    c.fillStyle = "#ffd23f"
+    c.font = "800 %dpx %s" % (_fs(12), FONT)
+    c.fillText(w["name"], bx, ty)
     c.fillStyle = "#eaf2ff"
-    c.font = "800 %dpx %s" % (_fs(20), FONT)
-    c.fillText("%d ALIVE" % alive_count(), W / 2, 38)
-    c.fillStyle = "#5aaaff"
+    c.font = "800 %dpx %s" % (_fs(15), FONT)
+    c.fillText("%d / %d" % (max(0, mag), w["mag"]), bx + 78, ty)
+    c.fillStyle = "#9fb3d9"
     c.font = "700 %dpx %s" % (_fs(11), FONT)
-    c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 53)
+    c.fillText("KILLS %d" % p["kills"], bx + 168, ty)
 
-    if message:
-        _wrap(message, W / 2, 78, min(520, W - 60), 12, "#cfe0ff")
+    if reloading > 0:
+        rw = bw * (1.0 - reloading / w["reload"])
+        c.fillStyle = "rgba(255, 210, 63, 0.28)"
+        c.fillRect(bx, ty + 8, bw, 5)
+        c.fillStyle = "#ffd23f"
+        c.fillRect(bx, ty + 8, rw, 5)
+        c.fillStyle = "#ffd23f"
+        c.font = "800 %dpx %s" % (_fs(10), FONT)
+        c.fillText("RELOADING", bx, ty + 26)
+    elif mag <= 0:
+        c.fillStyle = "#ff5c7a"
+        c.font = "800 %dpx %s" % (_fs(10), FONT)
+        c.fillText("PRESS R", bx, ty + 26)
 
-    _minimap()
+    # ---- 26. the arc that says where the hurt came from -------------------
+    if p["hurt"] > 0.05:
+        rel = (hurt_dir - cam_yaw + math.pi) % 6.283185 - math.pi
+        a = math.degrees(rel)
+        cxx, cyy = W / 2, H / 2
+        c.beginPath()
+        c.arc(cxx, cyy, 92, math.radians(a - 90 - 22), math.radians(a - 90 + 22))
+        c.lineWidth = 7
+        c.strokeStyle = "rgba(255, 60, 90, %.2f)" % min(1.0, p["hurt"] * 2)
+        c.stroke()
 
     # the kill feed, under the minimap
     fy = min(150, W * 0.26, H * 0.30) + 30
@@ -943,12 +1236,13 @@ def _draw_play_hud():
 
     # the crosshair sits where the bullets go
     cxx, cyy = W / 2, H / 2
+    spread = 8 if crouching else (14 if sprinting else 10)
     c.strokeStyle = "rgba(255, 255, 255, 0.80)"
     c.lineWidth = 2
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         c.beginPath()
-        c.moveTo(cxx + dx * 8, cyy + dy * 8)
-        c.lineTo(cxx + dx * 16, cyy + dy * 16)
+        c.moveTo(cxx + dx * spread, cyy + dy * spread)
+        c.lineTo(cxx + dx * (spread + 7), cyy + dy * (spread + 7))
         c.stroke()
     c.beginPath()
     c.arc(cxx, cyy, 2.2, 0, 6.2832)
@@ -968,27 +1262,39 @@ def _draw_play_hud():
     if TOUCH_UI:
         # the movement stick, drawn wherever the thumb is resting
         if STICK["on"]:
-            sx, sy = STICK["x"], STICK["y"]
+            sx, sy2 = STICK["x"], STICK["y"]
             base_a, knob_a = 0.40, 0.82
         else:
-            sx, sy = 108, H - 108
+            sx, sy2 = 108, H - 108
             base_a, knob_a = 0.18, 0.30
         c.beginPath()
-        c.arc(sx, sy, 66, 0, 6.2832)
+        c.arc(sx, sy2, 66, 0, 6.2832)
         c.fillStyle = "rgba(12, 20, 40, %.2f)" % base_a
         c.fill()
         c.lineWidth = 2
         c.strokeStyle = "rgba(150, 180, 240, 0.42)"
         c.stroke()
         c.beginPath()
-        c.arc(sx + move_x * 46, sy - move_z * 46, 28, 0, 6.2832)
+        c.arc(sx + move_x * 46, sy2 - move_z * 46, 28, 0, 6.2832)
         c.fillStyle = "rgba(126, 240, 192, %.2f)" % knob_a
         c.fill()
 
-        # the fire button - big, and always in the same corner
-        fx, fy = FIRE_X, FIRE_Y
+        # the little action buttons along the bottom
+        for tag, label, active, r in touch_buttons():
+            _panel(r[0], r[1], r[2], r[3],
+                   "rgba(126, 240, 192, 0.85)" if active else "rgba(20, 30, 56, 0.85)",
+                   "rgba(150,180,240,0.35)", 10)
+            c.textAlign = "center"
+            c.textBaseline = "middle"
+            c.fillStyle = "#06101f" if active else "#cfe0ff"
+            c.font = "800 %dpx %s" % (_fs(11), FONT)
+            c.fillText(label, r[0] + r[2] / 2, r[1] + r[3] / 2 + 1)
+            c.textBaseline = "alphabetic"
+
+        # the fire button
+        fx, fy2 = FIRE_X, FIRE_Y
         c.beginPath()
-        c.arc(fx, fy, FIRE_R, 0, 6.2832)
+        c.arc(fx, fy2, FIRE_R, 0, 6.2832)
         c.fillStyle = "rgba(255, 92, 122, 0.86)" if firing else "rgba(255, 92, 122, 0.62)"
         c.fill()
         c.lineWidth = 3
@@ -998,12 +1304,34 @@ def _draw_play_hud():
         c.textBaseline = "middle"
         c.fillStyle = "#ffffff"
         c.font = "800 %dpx %s" % (_fs(15), FONT)
-        c.fillText("FIRE", fx, fy + 1)
+        c.fillText("FIRE", fx, fy2 + 1)
         c.textBaseline = "alphabetic"
 
     if p["hurt"] > 0:
         c.fillStyle = "rgba(255, 40, 70, %.2f)" % (0.30 * p["hurt"] / 0.5)
         c.fillRect(0, 0, W, H)
+
+    if paused:
+        _draw_pause()
+
+
+def _draw_pause():
+    global _menu_hit
+    _menu_hit = []
+    c = hctx
+    c.fillStyle = "rgba(4, 10, 24, 0.78)"
+    c.fillRect(0, 0, W, H)
+    pw, ph = min(380, W - 40), 220
+    px, py = (W - pw) / 2, (H - ph) / 2
+    _panel(px, py, pw, ph, "rgba(12, 20, 42, 0.97)", "#ffb703", 18)
+    c.textAlign = "center"
+    c.fillStyle = "#ffb703"
+    c.font = "800 %dpx %s" % (_fs(26), FONT)
+    c.fillText("PAUSED", W / 2, py + 52)
+    _button(px + 30, py + 84, pw - 60, 50, "Resume", True, "#7ef0c0")
+    _button(px + 30, py + 146, pw - 60, 44, "Quit to menu", False, size=15)
+    _menu_hit = [("resume", (px + 30, py + 84, pw - 60, 50)),
+                 ("quit", (px + 30, py + 146, pw - 60, 44))]
 
 
 def _draw_over():
