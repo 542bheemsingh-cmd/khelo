@@ -161,8 +161,9 @@
       if (h < water + 0.6) c.setHex(0x2f5d7c);            // sea bed
       else if (h < water + 2.2) c.setHex(0xd8cba0);       // sand
       else if (h < 16) c.setHex(0x3f7a4a);                // grass
-      else if (h < 30) c.setHex(0x2f6138);                // darker green
-      else if (h < 44) c.setHex(0x6b6152);                // rock
+      else if (h < 30) c.setHex(0x3d7247);                // darker green
+      else if (h < 38) c.setHex(0x6b6152);                // rock
+      else if (h < 50) c.setHex(0x8a8172);                // bare rock
       else c.setHex(0xd9e2ea);                            // snow
       return c;
     }
@@ -968,10 +969,14 @@
         const yaw = st.cam[0], pitch = st.cam[1];
         const height = 7.4 + pitch * 14;
         let dist = 17;
+        // screen-right in world space, used to nudge the camera off the
+        // soldier's shoulder so the crosshair is never behind his head
+        const rx = -Math.cos(yaw), rz = Math.sin(yaw);
+        const shoulder = 3.4;
         let cx = 0, cz = 0;
         for (let attempt = 0; attempt < 2; attempt++) {
-          cx = p[0] - Math.sin(yaw) * dist;
-          cz = p[2] - Math.cos(yaw) * dist;
+          cx = p[0] - Math.sin(yaw) * dist + rx * shoulder;
+          cz = p[2] - Math.cos(yaw) * dist + rz * shoulder;
           let hitsSomething = false;
           for (let k = 0; k < treePos.length; k++) {
             const t = treePos[k];
@@ -994,7 +999,8 @@
         if (!camSmooth) camSmooth = want.clone();
         camSmooth.lerp(want, Math.min(1, dt * 9));
         camera.position.copy(camSmooth);
-        camera.lookAt(p[0] + Math.sin(yaw) * 14, p[1] + 4.2, p[2] + Math.cos(yaw) * 14);
+        camera.lookAt(p[0] + Math.sin(yaw) * 14 + rx * shoulder, p[1] + 4.6,
+                      p[2] + Math.cos(yaw) * 14 + rz * shoulder);
 
         // ---- screen shake and the sprint FOV kick ----
         const sh = st.sh || 0;
