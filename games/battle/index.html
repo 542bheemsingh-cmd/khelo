@@ -208,6 +208,9 @@
           const hU = heights[Math.min(nz - 1, j + 1) * nx + i];
           const slope = (Math.abs(hR - hL) + Math.abs(hU - hD)) / (2 * cellX);
           tmp.multiplyScalar(1.0 - Math.min(0.30, slope * 0.55));
+          // wide, slow patches, so a field is not one flat green
+          tmp.multiplyScalar(0.93 + 0.11 * (0.5 + 0.5 * Math.sin(
+            i * 0.078 + j * 0.053 + 1.7)));
           col[k * 3] = tmp.r; col[k * 3 + 1] = tmp.g; col[k * 3 + 2] = tmp.b;
         }
       }
@@ -334,8 +337,12 @@
                                      h / 2 + Math.sin(a) * rad),
                    q, new THREE.Vector3(wid, hgt, wid));
         mtns.setMatrixAt(i, m4);
+        tint.setHSL(0.58 + mrnd() * 0.04, 0.12 + mrnd() * 0.10,
+                    0.62 + mrnd() * 0.14);
+        mtns.setColorAt(i, tint);
       }
       mtns.instanceMatrix.needsUpdate = true;
+      if (mtns.instanceColor) mtns.instanceColor.needsUpdate = true;
       scene.add(mtns);
 
       // ---- 14. grass tufts, so the ground is not bare ----
