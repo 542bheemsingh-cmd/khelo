@@ -185,7 +185,9 @@ def build_terrain(seed=7):
             wz = (j + 0.5) * CELL_Z
             h = _fbm(wx / 150.0, wz / 150.0, seed)
             ridge = _fbm(wx / 420.0, wz / 420.0, seed + 91, 2)
-            hill = 4.0 + h * 24.0 + max(0.0, ridge - 0.45) * 52.0
+            # gentler country: the old numbers pushed the median height to 39,
+            # which left the map looking like a desert with snow on it
+            hill = 3.0 + h * 17.0 + max(0.0, ridge - 0.54) * 26.0
             heights[j * NX + i] = WATER_Y + hill * ramp
     HEIGHTS = heights
     LAND = [bool(v) for row in mask for v in row]
