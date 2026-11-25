@@ -17,6 +17,7 @@ static files, so the whole thing hosts on GitHub Pages.
 | 🚙 **[Khelo Climb](https://542bheemsingh-cmd.github.io/khelo/games/hillclimb/)** | Hill-climb driving — 5 locations, 4 vehicles, coins, fuel and obstacles | `→` / `D` = gas, `←` / `A` = brake, or on-screen pedals |
 | 🧩 **[Khelo Puzzles](https://542bheemsingh-cmd.github.io/khelo/games/puzzle/)** | 10 logic puzzles of increasing difficulty, one new kind per level, each with a hint | click / tap, type for the word puzzles |
 | 🎲 **[Khelo Ludo](https://542bheemsingh-cmd.github.io/khelo/games/ludo/)** | The classic board game — 2, 3 or 4 players, or 2 against 2 | tap the dice, then tap a token |
+| 🔤 **[Khelo Word](https://542bheemsingh-cmd.github.io/khelo/games/word/)** | The five letter word game — a daily word for everyone, plus unlimited practice, streaks and a shareable result | type, or tap the on-screen keyboard |
 
 The dashboard at the root lists them all and links into each game.
 
@@ -50,6 +51,26 @@ for the touch targets and spacing, and from [Open Props](https://open-props.styl
 (MIT) for the spacing and radius scale. Both are wired in as CSS custom
 properties at the top of each stylesheet, so the whole arcade can be restyled
 from one block.
+
+## Khelo Word
+
+The five letter word game, the one that started the whole daily-puzzle boom.
+
+- **A word a day.** Everyone playing on the same day gets the same word, so you
+  can compare results. There is also a **Practice** mode with a fresh word every
+  time.
+- **Six guesses.** Each tile turns over and tells you what it found: **green**
+  for the right letter in the right place, **amber** for a letter that is in the
+  word somewhere else, **grey** for a letter the word does not have. Repeated
+  letters are only marked as often as they actually occur.
+- **A real word list.** 5,757 common five letter words can be the answer, and
+  14,947 words are accepted as guesses, so a real word is never rejected.
+- **Streaks and stats.** Games played, win rate, current and best streak, and a
+  guess distribution, all kept in your browser.
+- **Share it.** One button copies an emoji grid to the clipboard — the squares
+  show how you did without giving the word away.
+- **Both keyboards.** Type on a real keyboard, or tap the on-screen one, which
+  colours itself in as you learn letters.
 
 ## Khelo Ludo
 
@@ -241,6 +262,9 @@ real `game.py` — no browser needed:
 ```bash
 python3 games/fly/test_game.py
 python3 games/hillclimb/test_climb.py
+python3 games/puzzle/test_puzzle.py
+python3 games/ludo/test_ludo.py
+python3 games/word/test_word.py
 ```
 
 ## Add a new game
