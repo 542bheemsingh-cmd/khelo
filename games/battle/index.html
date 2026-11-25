@@ -243,11 +243,19 @@
       const rnd = rngFactory(20261125);
       const treeCount = 1600, rockCount = 420;
       const trunkGeo = new THREE.CylinderGeometry(0.42, 0.6, 3.0, 5);
-      const leafGeo = new THREE.ConeGeometry(2.1, 7.0, 6);
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5b4632 });
-      const leafMat = new THREE.MeshLambertMaterial({ color: 0x2c6b3a });
       const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, treeCount);
-      const leaves = new THREE.InstancedMesh(leafGeo, leafMat, treeCount);
+
+      // three kinds of tree, so a forest is not one shape repeated 1600 times
+      const leafKinds = [
+        { geo: new THREE.ConeGeometry(2.1, 7.0, 6), y: 5.3 },   // pine
+        { geo: new THREE.ConeGeometry(1.45, 10.0, 6), y: 6.9 }, // spruce
+        { geo: new THREE.IcosahedronGeometry(2.85, 0), y: 4.3 } // broadleaf
+      ];
+      const leaves = leafKinds.map(k => new THREE.InstancedMesh(
+        k.geo, new THREE.MeshLambertMaterial({ color: 0x2c6b3a }), treeCount));
+      const leafAt = [0, 0, 0];
+
       const m4 = new THREE.Matrix4();
       const q = new THREE.Quaternion();
       const tint = new THREE.Color();
@@ -260,25 +268,32 @@
         const hh = heights[gz * nx + gx];
         if (hh < water + 2.5 || hh > 34) continue;
         const s = 0.7 + rnd() * 0.8;
+        const kind = rnd() < 0.46 ? 0 : (rnd() < 0.58 ? 1 : 2);
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.283);
         m4.compose(new THREE.Vector3(x, hh + 1.5 * s, z), q, new THREE.Vector3(s, s, s));
         trunks.setMatrixAt(placed, m4);
-        m4.compose(new THREE.Vector3(x, hh + 5.3 * s, z), q, new THREE.Vector3(s, s, s));
-        leaves.setMatrixAt(placed, m4);
-        // a little variety in the canopy, so the forest is not one flat green
+        m4.compose(new THREE.Vector3(x, hh + leafKinds[kind].y * s, z), q,
+                   new THREE.Vector3(s, s, s));
+        const set = leaves[kind];
+        set.setMatrixAt(leafAt[kind], m4);
         tint.setHSL(0.275 + rnd() * 0.065, 0.40 + rnd() * 0.26, 0.22 + rnd() * 0.16);
-        leaves.setColorAt(placed, tint);
+        set.setColorAt(leafAt[kind], tint);
+        leafAt[kind]++;
         tint.setHSL(0.08 + rnd() * 0.04, 0.30 + rnd() * 0.18, 0.18 + rnd() * 0.10);
         trunks.setColorAt(placed, tint);
         treePos.push({ x: x, z: z });
         placed++;
       }
-      trunks.count = placed; leaves.count = placed;
+      trunks.count = placed;
       trunks.instanceMatrix.needsUpdate = true;
-      leaves.instanceMatrix.needsUpdate = true;
-      if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
       if (trunks.instanceColor) trunks.instanceColor.needsUpdate = true;
-      scene.add(trunks); scene.add(leaves);
+      scene.add(trunks);
+      for (let k = 0; k < leaves.length; k++) {
+        leaves[k].count = leafAt[k];
+        leaves[k].instanceMatrix.needsUpdate = true;
+        if (leaves[k].instanceColor) leaves[k].instanceColor.needsUpdate = true;
+        scene.add(leaves[k]);
+      }
 
       const rockGeo = new THREE.DodecahedronGeometry(2.2, 0);
       const rockMat = new THREE.MeshLambertMaterial({ color: 0x8b8b86 });
