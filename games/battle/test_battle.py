@@ -433,17 +433,39 @@ for _ in range(80):
         break
 check("something in front of the crosshair gets hit", b["hp"] < 100.0)
 
-# dragging the look area must turn the way you drag
-game.start_game(seed=23)
-y0 = game.cam_yaw
-game.set_look(0.5, 0.0)
-game.update(1 / 60)
-check("dragging right turns you right", game.cam_yaw > y0)
+# dragging must swing the aim toward the side you dragged. the screen-right
+# direction at yaw 0 is (-1, 0), so the aim has to gain -x to have gone right.
+def _aim_after(drag_x, drag_y, seed):
+    game.start_game(seed=seed)
+    game.cam_yaw = 0.0
+    game.player["yaw"] = 0.0
+    game.set_look(drag_x, drag_y)
+    for _ in range(30):
+        game.update(1 / 60)
+    return (math.sin(game.cam_yaw), math.cos(game.cam_yaw))
 
-y1 = game.cam_yaw
-game.set_look(-0.5, 0.0)
-game.update(1 / 60)
-check("dragging left turns you left", game.cam_yaw < y1)
+right = (-1.0, 0.0)                       # screen-right at yaw 0
+fwd = _aim_after(0.4, 0.0, 60)
+check("dragging right swings the aim to the right of the screen",
+      fwd[0] * right[0] + fwd[1] * right[1] > 0.05)
+
+fwd = _aim_after(-0.4, 0.0, 61)
+check("dragging left swings the aim to the left of the screen",
+      fwd[0] * right[0] + fwd[1] * right[1] < -0.05)
+
+# and it has to hold at other headings too, not just due north
+for seed, start in ((62, 1.0), (63, 2.4), (64, -1.7)):
+    game.start_game(seed=seed)
+    game.cam_yaw = start
+    game.player["yaw"] = start
+    before = (math.sin(start), math.cos(start))
+    r0 = (-math.cos(start), math.sin(start))     # screen right at that heading
+    game.set_look(0.35, 0.0)
+    for _ in range(30):
+        game.update(1 / 60)
+    after = (math.sin(game.cam_yaw), math.cos(game.cam_yaw))
+    check("a right drag turns right at heading %.1f" % start,
+          after[0] * r0[0] + after[1] * r0[1] > 0.04)
 
 p0 = game.cam_pitch
 game.set_look(0.0, 0.4)
