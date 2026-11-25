@@ -351,6 +351,16 @@ def _in(rect, x, y):
     return rx <= x <= rx + rw and ry <= y <= ry + rh
 
 
+def press_primary():
+    """Space or Enter on a menu: take the obvious action."""
+    if state == "menu":
+        _sound("start")
+        start_game()
+    elif state == "over":
+        _sound("tap")
+        start_game()
+
+
 def tap(x, y):
     global state
     if state == "menu":
