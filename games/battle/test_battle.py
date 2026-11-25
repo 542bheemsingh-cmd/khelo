@@ -297,6 +297,100 @@ check("the payload has the world size and water line",
       w["w"] == game.WORLD_W and abs(w["water"] - game.WATER_Y) < 0.01)
 
 # ---------------------------------------------------------------------------
+# Aiming and looking
+# ---------------------------------------------------------------------------
+print()
+print("--- aiming and looking ---")
+game.start_game(seed=20)
+game.cam_yaw = 0.0
+game.update(1 / 60)
+check("the soldier faces where you aim",
+      abs(game.player["yaw"] - 0.0) < 1e-6)
+
+game.cam_yaw = 0.9
+game.update(1 / 60)
+check("turning the camera turns the soldier",
+      abs(game.player["yaw"] - 0.9) < 1e-6)
+
+# a shot must follow the camera, not wherever the soldier last walked
+game.start_game(seed=21)
+game.cam_yaw = 1.2
+game.player["x"], game.player["z"] = 300.0, 500.0
+for b in game.bots:
+    b["x"], b["z"] = 120.0, 220.0          # all far outside the aim cone
+game.player["cool"] = 0.0
+game.player["ammo"] = 20
+game.shots = []
+game.fire()
+shot = game.shots[-1]
+ang = math.atan2(shot["dx"], shot["dz"])
+check("a shot follows the camera, not the last step",
+      abs(ang - 1.2) < 1e-6)
+
+# the aim assist still lands hits on something in front of you
+game.start_game(seed=22)
+game.cam_yaw = 0.0
+game.player["x"], game.player["z"] = 300.0, 500.0
+b = game.bots[0]
+b["x"], b["z"] = 306.0, 550.0
+b["hp"] = 100.0
+game.player["cool"] = 0.0
+game.player["ammo"] = 40
+for _ in range(80):
+    game.player["cool"] = 0.0
+    game.fire()
+    game.update(1 / 60)
+    if b["hp"] < 100.0:
+        break
+check("something in front of the crosshair gets hit", b["hp"] < 100.0)
+
+# dragging the look area must turn the way you drag
+game.start_game(seed=23)
+y0 = game.cam_yaw
+game.set_look(0.5, 0.0)
+game.update(1 / 60)
+check("dragging right turns you right", game.cam_yaw > y0)
+
+y1 = game.cam_yaw
+game.set_look(-0.5, 0.0)
+game.update(1 / 60)
+check("dragging left turns you left", game.cam_yaw < y1)
+
+p0 = game.cam_pitch
+game.set_look(0.0, 0.4)
+game.update(1 / 60)
+check("dragging down looks down", game.cam_pitch > p0)
+
+p1 = game.cam_pitch
+game.set_look(0.0, -0.4)
+game.update(1 / 60)
+check("dragging up looks up", game.cam_pitch < p1)
+
+# the pitch stays inside its limits however hard you drag
+for _ in range(40):
+    game.set_look(0.0, 1.0)
+    game.update(1 / 60)
+check("the camera never flips over the top", game.cam_pitch <= 0.96)
+for _ in range(80):
+    game.set_look(0.0, -1.0)
+    game.update(1 / 60)
+check("the camera never goes under the ground", game.cam_pitch >= 0.05)
+
+# the on-screen stick remembers where the thumb is
+game.set_stick(120, 400, True)
+check("the stick knows where the thumb landed",
+      game.STICK["on"] and game.STICK["x"] == 120 and game.STICK["y"] == 400)
+game.set_stick(0, 0, False)
+check("the stick can be let go", not game.STICK["on"])
+
+# the fire button sits where the page looks for it
+game.set_size(900, 560)
+fx, fy, fr = game.fire_button()
+check("the fire button is bottom-right",
+      fx > game.W * 0.75 and fy > game.H * 0.75)
+check("the fire button is big enough for a thumb", fr >= 56)
+
+# ---------------------------------------------------------------------------
 # The HUD
 # ---------------------------------------------------------------------------
 print()
