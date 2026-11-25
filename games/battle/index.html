@@ -293,7 +293,7 @@
       for (let i = 0; i < 64; i++) {
         const a = (i / 64) * Math.PI * 2 + mrnd() * 0.1;
         const rad = 1750 + mrnd() * 420;
-        const hgt = 150 + mrnd() * 340;
+        const hgt = 110 + mrnd() * 240;
         const wid = 150 + mrnd() * 220;
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), mrnd() * 6.283);
         m4.compose(new THREE.Vector3(w / 2 + Math.cos(a) * rad, hgt / 2 - 20,
