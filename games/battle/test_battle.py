@@ -825,10 +825,11 @@ check("a round opens in the plane", game.state == "plane")
 check("the plane starts outside the map",
       not (0 <= game.plane["x"] < game.WORLD_W and 0 <= game.plane["z"] < game.WORLD_H))
 
-x0 = game.plane["x"]
+x0, z0 = game.plane["x"], game.plane["z"]
 for _ in range(30):
     game.update(1 / 60)
-check("the plane flies", abs(game.plane["x"] - x0) > 20.0)
+check("the plane flies",
+      math.hypot(game.plane["x"] - x0, game.plane["z"] - z0) > 40.0)
 
 game.jump()
 check("jumping starts the fall", game.state == "fall")
