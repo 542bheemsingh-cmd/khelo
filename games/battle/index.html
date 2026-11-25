@@ -440,7 +440,7 @@
     /* ==================================================================
        Input
        ================================================================== */
-    let tapFn = null, moveFn = null, lookFn = null, fireFn = null,
+    let tapFn = null, primaryFn = null, moveFn = null, lookFn = null, fireFn = null,
         drawFn = null, updateFn = null, sendFn = null, sizeFn = null,
         pyodide = null, running = false;
 
@@ -483,6 +483,9 @@
       const s = cssSize();
       const x = e.clientX - gameCanvas.getBoundingClientRect().left;
       const y = e.clientY - gameCanvas.getBoundingClientRect().top;
+      // always let Python see the click first - the menus live there
+      if (tapFn) tapFn(x, y);
+
       const sc = stickCentre(), fc = fireCentre();
       if (Math.hypot(x - sc.x, y - sc.y) < 130) {
         stickId = e.pointerId; stickOX = x; stickOY = y; stickX = stickY = 0;
@@ -532,7 +535,7 @@
         e.preventDefault();
       } else if (k === " " || k === "enter") {
         firingKey = true; pushFire();
-        if (tapFn) tapFn(-1, -1);
+        if (primaryFn) primaryFn();
         e.preventDefault();
       }
     });
@@ -612,6 +615,7 @@
       await pyodide.runPythonAsync(src);
 
       tapFn = pyodide.globals.get("tap");
+      primaryFn = pyodide.globals.get("press_primary");
       moveFn = pyodide.globals.get("set_move");
       lookFn = pyodide.globals.get("set_look");
       fireFn = pyodide.globals.get("set_fire");
