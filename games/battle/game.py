@@ -28,10 +28,13 @@ import js
 # data (india-composite.geojson, CC0), simplified to 189 points and scaled so
 # the map is 1000 units tall. North is up (-z).
 # ---------------------------------------------------------------------------
-WORLD_W = 912.5
-WORLD_H = 1000.0
+# the outline below is authored in a 912.5 x 1000 box; the world is scaled up
+# from it so there is room for towns, roads and bridges
+_SRC_W, _SRC_H = 912.5, 1000.0
+WORLD_W = 1825.0
+WORLD_H = 2000.0
 
-RING = [
+_RING_RAW = [
     (291.9, 53.5), (348.8, 36.1), (371.1, 55.6), (382.2, 53.8),
     (371.7, 80.4), (354, 89.1), (350.7, 104.7), (334.6, 105.7),
     (340.9, 117.3), (336.3, 126.2), (350.9, 132.8), (355.2, 150.5),
@@ -80,10 +83,14 @@ RING = [
     (177.4, 10.9), (171.7, 3.9), (217.8, 0)
 ]
 
+_SX = WORLD_W / _SRC_W
+_SZ = WORLD_H / _SRC_H
+RING = [(x * _SX, z * _SZ) for x, z in _RING_RAW]
+
 # ---------------------------------------------------------------------------
 # Terrain
 # ---------------------------------------------------------------------------
-NX, NZ = 120, 132
+NX, NZ = 160, 176
 CELL_X = WORLD_W / NX
 CELL_Z = WORLD_H / NZ
 
@@ -183,6 +190,146 @@ def build_terrain(seed=7):
     HEIGHTS = heights
     LAND = [bool(v) for row in mask for v in row]
     _READY = True
+    build_towns()
+    _index_buildings()
+
+
+# towns, roads and the buildings inside them
+TOWNS = []          # [{"x": .., "z": .., "r": ..}]
+BUILDINGS = []      # [[x, z, w, d, h, rot]]
+ROADS = []          # [[(x, z), ...], ...]
+
+
+def _flat_spot(margin, lo, hi, sep, tries=900):
+    """A reasonably flat piece of land, away from the ones we already have."""
+    best, bestd = None, -1.0
+    for _ in range(tries):
+        x = _rng.uniform(margin, WORLD_W - margin)
+        z = _rng.uniform(margin, WORLD_H - margin)
+        if not land_at(x, z):
+            continue
+        h = height_at(x, z)
+        if h < lo or h > hi:
+            continue
+        # flatness: compare with a few neighbours
+        spread = max(abs(height_at(x + 18, z) - h), abs(height_at(x - 18, z) - h),
+                     abs(height_at(x, z + 18) - h), abs(height_at(x, z - 18) - h))
+        if spread > 7.0:
+            continue
+        if TOWNS:
+            d = min(math.hypot(x - t["x"], z - t["z"]) for t in TOWNS)
+            if d < sep:
+                continue
+            if d > bestd:
+                best, bestd = (x, z), d
+        else:
+            return x, z
+    return best if best else (WORLD_W / 2, WORLD_H / 2)
+
+
+def build_towns(seed=11):
+    """Ten towns, each a little grid of blocks with a few gaps."""
+    TOWNS[:] = []
+    BUILDINGS[:] = []
+    ROADS[:] = []
+    r = random.Random(seed)
+    for _ in range(10):
+        x, z = _flat_spot(150.0, WATER_Y + 6.0, 30.0, 340.0)
+        TOWNS.append({"x": x, "z": z, "r": 0.0})
+
+    for t in TOWNS:
+        n = r.randint(8, 16)
+        span = 120.0
+        placed = []
+        for _ in range(n * 4):
+            if len(placed) >= n:
+                break
+            bx = t["x"] + r.uniform(-span, span)
+            bz = t["z"] + r.uniform(-span, span)
+            if not land_at(bx, bz):
+                continue
+            if height_at(bx, bz) < WATER_Y + 3.0:
+                continue
+            w = r.uniform(9.0, 17.0)
+            d = r.uniform(9.0, 17.0)
+            if any(math.hypot(bx - p[0], bz - p[1]) < (w + p[2]) * 0.62 for p in placed):
+                continue
+            hh = r.uniform(7.0, 13.0)
+            if r.random() < 0.18:
+                hh = r.uniform(17.0, 24.0)      # the odd tower
+            placed.append((bx, bz, w, d, hh))
+            BUILDINGS.append([bx, bz, w, d, hh, 0.0])
+            t["r"] = max(t["r"], math.hypot(bx - t["x"], bz - t["z"]) + 20.0)
+
+    # roads: link each town to its nearest neighbour, plus a couple of extras
+    links = []
+    for i, a in enumerate(TOWNS):
+        best, bd = None, 1e9
+        for j, b in enumerate(TOWNS):
+            if i == j:
+                continue
+            d = math.hypot(a["x"] - b["x"], a["z"] - b["z"])
+            if d < bd:
+                best, bd = j, d
+        if best is not None:
+            pair = (min(i, best), max(i, best))
+            if pair not in links:
+                links.append(pair)
+    for _ in range(3):
+        i = r.randrange(len(TOWNS))
+        j = r.randrange(len(TOWNS))
+        if i != j:
+            pair = (min(i, j), max(i, j))
+            if pair not in links:
+                links.append(pair)
+
+    for i, j in links:
+        ROADS.append(_road_path(TOWNS[i], TOWNS[j], r))
+
+
+def _road_path(a, b, r, steps=16):
+    pts = []
+    dx, dz = b["x"] - a["x"], b["z"] - a["z"]
+    length = math.hypot(dx, dz) or 1.0
+    bend = r.uniform(-0.09, 0.09) * length
+    for k in range(steps + 1):
+        t = k / steps
+        x = a["x"] + dx * t
+        z = a["z"] + dz * t
+        off = math.sin(t * math.pi) * bend
+        x += -dz / length * off
+        z += dx / length * off
+        pts.append((round(x, 1), round(z, 1)))
+    return pts
+
+
+_BGRID = {}
+BGRID_CELL = 200.0
+
+
+def _index_buildings():
+    """Bucket the buildings so a movement check only looks nearby."""
+    _BGRID.clear()
+    for i, b in enumerate(BUILDINGS):
+        gx = int(b[0] / BGRID_CELL)
+        gz = int(b[1] / BGRID_CELL)
+        _BGRID.setdefault((gx, gz), []).append(i)
+
+
+def blocked(x, z):
+    """Land you can stand on: dry ground with no building on it."""
+    if not land_at(x, z):
+        return True
+    gx = int(x / BGRID_CELL)
+    gz = int(z / BGRID_CELL)
+    for dx in (-1, 0, 1):
+        for dz in (-1, 0, 1):
+            for i in _BGRID.get((gx + dx, gz + dz), ()):
+                b = BUILDINGS[i]
+                if (abs(x - b[0]) < b[2] * 0.5 + 1.6
+                        and abs(z - b[1]) < b[3] * 0.5 + 1.6):
+                    return True
+    return False
 
 
 def height_at(x, z):
@@ -227,6 +374,8 @@ def _random_land(margin=40.0, tries=600, lo=None, hi=None):
             h = height_at(x, z)
             if h < lo or h > hi:
                 continue
+        if BUILDINGS and blocked(x, z):
+            continue
         return x, z
     return WORLD_W / 2, WORLD_H / 2
 
@@ -295,7 +444,7 @@ TIERS = [
     {"cool": (0.6, 1.0), "spread": 0.03, "range": 360.0, "strafe": 0.80},  # elite
 ]
 
-BOT_COUNT = 9
+BOT_COUNT = 12
 PLAYER_SPEED = 15.0
 BOT_SPEED = 9.5
 FIRE_COOL = 0.16
@@ -540,20 +689,20 @@ def start_game(seed=None):
 
     # 7. health and ammo crates, scattered over the land
     pickups[:] = []
-    for _ in range(16):
+    for _ in range(26):
         gx, gz = _random_land(70.0, lo=WATER_Y + 4.0, hi=26.0)
         pickups.append({"x": gx, "z": gz,
                         "kind": "health" if _rng.random() < 0.45 else "ammo",
                         "taken": False})
 
     shots = []
-    zone = {"cx": WORLD_W / 2, "cz": WORLD_H / 2, "r": 640.0,
-            "tx": WORLD_W / 2, "tz": WORLD_H / 2, "tr": 640.0}
-    zone_timer = 18.0
+    zone = {"cx": WORLD_W / 2, "cz": WORLD_H / 2, "r": 1250.0,
+            "tx": WORLD_W / 2, "tz": WORLD_H / 2, "tr": 1250.0}
+    zone_timer = 26.0
     zone_phase = 0
     elapsed = 0.0
     result = ""
-    message = "Land, loot and survive. The zone closes in 18 seconds."
+    message = "Land, loot and survive. The zone closes in %d seconds." % int(zone_timer)
     state = "play"
     _notify_playing(True)
     cam_yaw = 0.0
@@ -712,11 +861,11 @@ def update(dt):
         if abs(pvx) > 0.01 or abs(pvz) > 0.01:
             nx = p["x"] + pvx * dt
             nz = p["z"] + pvz * dt
-            if land_at(nx, p["z"]):
+            if not blocked(nx, p["z"]):
                 p["x"] = max(2.0, min(WORLD_W - 2.0, nx))
             else:
                 pvx = 0.0
-            if land_at(p["x"], nz):
+            if not blocked(p["x"], nz):
                 p["z"] = max(2.0, min(WORLD_H - 2.0, nz))
             else:
                 pvz = 0.0
@@ -767,9 +916,9 @@ def update(dt):
             am = math.hypot(ax, az) or 1.0
             nx = b["x"] + ax / am * step
             nz = b["z"] + az / am * step
-            if land_at(nx, b["z"]):
+            if not blocked(nx, b["z"]):
                 b["x"] = max(2.0, min(WORLD_W - 2.0, nx))
-            if land_at(b["x"], nz):
+            if not blocked(b["x"], nz):
                 b["z"] = max(2.0, min(WORLD_H - 2.0, nz))
             if d < 150.0 and b["cool"] <= 0:
                 b["cool"] = _rng.uniform(*tier["cool"])
@@ -785,7 +934,7 @@ def update(dt):
                 b["wx"], b["wz"] = math.sin(a), math.cos(a)
             nx = b["x"] + b["wx"] * BOT_SPEED * 0.5 * dt
             nz = b["z"] + b["wz"] * BOT_SPEED * 0.5 * dt
-            if land_at(nx, nz):
+            if not blocked(nx, nz):
                 b["x"], b["z"] = nx, nz
             else:
                 b["wander"] = 0.0
@@ -835,7 +984,7 @@ def update(dt):
     zone_timer -= dt
     if zone_timer <= 0:
         zone_phase += 1
-        zone_timer = max(11.0, 20.0 - zone_phase * 1.2)
+        zone_timer = max(14.0, 26.0 - zone_phase * 1.2)
         zone["cx"], zone["cz"], zone["r"] = zone["tx"], zone["tz"], zone["tr"]
         nr = max(70.0, zone["r"] * 0.74)
         a = _rng.uniform(0, 6.283)
@@ -943,6 +1092,9 @@ def build_world():
     payload = json.dumps({
         "nx": NX, "nz": NZ, "w": WORLD_W, "h": WORLD_H, "water": WATER_Y,
         "heights": [round(h, 2) for h in HEIGHTS],
+        "buildings": [[round(b[0], 1), round(b[1], 1), round(b[2], 1),
+                       round(b[3], 1), round(b[4], 1)] for b in BUILDINGS],
+        "roads": [[[p[0], p[1]] for p in r] for r in ROADS],
     })
     try:
         js.world3d.build(payload)
@@ -1029,43 +1181,92 @@ def fire_button():
     return (W - 104.0, H - 104.0, FIRE_R)
 
 
+def minimap_size():
+    return min(190.0, W * 0.30, H * 0.34)
+
+
 def _minimap():
-    size = min(150, W * 0.26, H * 0.30)
+    size = minimap_size()
     mx, my = W - size - 16, 16
-    _panel(mx - 4, my - 4, size + 8, size + 8, "rgba(8, 14, 30, 0.82)",
-           "rgba(150,180,240,0.22)", 10)
+    _panel(mx - 5, my - 5, size + 10, size + 10, "rgba(8, 14, 30, 0.86)",
+           "rgba(150,180,240,0.26)", 10)
     sx = size / WORLD_W
     sz = size / WORLD_H
     c = hctx
+
     # the land
     c.beginPath()
     for i, (x, z) in enumerate(RING):
         px, py = mx + x * sx, my + z * sz
         c.moveTo(px, py) if i == 0 else c.lineTo(px, py)
     c.closePath()
-    c.fillStyle = "rgba(74, 120, 96, 0.85)"
+    c.fillStyle = "rgba(56, 96, 72, 0.94)"
     c.fill()
-    c.lineWidth = 1
-    c.strokeStyle = "rgba(160, 220, 190, 0.55)"
+    c.lineWidth = 1.2
+    c.strokeStyle = "rgba(160, 220, 190, 0.62)"
     c.stroke()
+
+    # the roads
+    c.strokeStyle = "rgba(230, 218, 184, 0.5)"
+    c.lineWidth = 1.3
+    for road in ROADS:
+        c.beginPath()
+        for i, (x, z) in enumerate(road):
+            px, py = mx + x * sx, my + z * sz
+            c.moveTo(px, py) if i == 0 else c.lineTo(px, py)
+        c.stroke()
+
+    # the towns
+    for t in TOWNS:
+        c.beginPath()
+        c.arc(mx + t["x"] * sx, my + t["z"] * sz, 3.4, 0, 6.2832)
+        c.fillStyle = "rgba(255, 210, 63, 0.92)"
+        c.fill()
+
+    # crates you have not taken
+    for pk in pickups:
+        if pk["taken"]:
+            continue
+        c.beginPath()
+        c.arc(mx + pk["x"] * sx, my + pk["z"] * sz, 1.7, 0, 6.2832)
+        c.fillStyle = "#7ef0c0" if pk["kind"] == "health" else "#ffd23f"
+        c.fill()
+
     # the zone
     c.beginPath()
-    c.arc(mx + zone["cx"] * sx, my + zone["cz"] * sz, zone["r"] * sx, 0, 6.2832)
+    c.arc(mx + zone["cx"] * sx, my + zone["cz"] * sz,
+          zone["r"] * (sx + sz) * 0.5, 0, 6.2832)
     c.lineWidth = 2
     c.strokeStyle = "rgba(90, 170, 255, 0.95)"
     c.stroke()
+
     # the bots
     for b in bots:
         if b["alive"]:
             c.beginPath()
-            c.arc(mx + b["x"] * sx, my + b["z"] * sz, 2.6, 0, 6.2832)
+            c.arc(mx + b["x"] * sx, my + b["z"] * sz, 2.8, 0, 6.2832)
             c.fillStyle = "#ff5c7a"
             c.fill()
-    # us
+
+    # us, with a little tick showing which way we face
+    px, py = mx + player["x"] * sx, my + player["z"] * sz
     c.beginPath()
-    c.arc(mx + player["x"] * sx, my + player["z"] * sz, 3.4, 0, 6.2832)
+    c.moveTo(px, py)
+    c.lineTo(px + math.sin(player["yaw"]) * 26 * sx,
+             py + math.cos(player["yaw"]) * 26 * sz)
+    c.strokeStyle = "#7ef0c0"
+    c.lineWidth = 1.6
+    c.stroke()
+    c.beginPath()
+    c.arc(px, py, 3.6, 0, 6.2832)
     c.fillStyle = "#7ef0c0"
     c.fill()
+
+    # north
+    c.textAlign = "center"
+    c.fillStyle = "rgba(255,255,255,0.75)"
+    c.font = "800 %dpx %s" % (_fs(9), FONT)
+    c.fillText("N", mx + size / 2, my + 10)
 
 
 def draw():
@@ -1227,8 +1428,10 @@ def _draw_play_hud():
         c.strokeStyle = "rgba(255, 60, 90, %.2f)" % min(1.0, p["hurt"] * 2)
         c.stroke()
 
+    _minimap()
+
     # the kill feed, under the minimap
-    fy = min(150, W * 0.26, H * 0.30) + 30
+    fy = minimap_size() + 40
     for i, f in enumerate(feed[:4]):
         a = min(1.0, f["life"] / 1.2)
         c.textAlign = "right"
