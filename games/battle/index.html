@@ -287,7 +287,7 @@
 
       // distant peaks, so the horizon is not an empty edge
       const mtnGeo = new THREE.ConeGeometry(1, 1, 5);
-      const mtnMat = new THREE.MeshLambertMaterial({ color: 0x63799a });
+      const mtnMat = new THREE.MeshLambertMaterial({ color: 0x8ea6c4 });
       const mtns = new THREE.InstancedMesh(mtnGeo, mtnMat, 64);
       const mrnd = rngFactory(4242);
       for (let i = 0; i < 64; i++) {
@@ -519,8 +519,8 @@
 
       // a soft blob shadow, cheaper than a real shadow map
       const blob = new THREE.Mesh(
-        new THREE.CircleGeometry(2.2, 16),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 })
+        new THREE.CircleGeometry(2.0, 16),
+        new THREE.MeshBasicMaterial({ color: 0x0a1a10, transparent: true, opacity: 0.18 })
       );
       blob.rotation.x = -Math.PI / 2;
       blob.position.y = 0.08;
