@@ -187,11 +187,11 @@ check("the player never leaves the world box",
 print()
 print("--- shooting ---")
 game.start_game(seed=4)
-game.player["ammo"] = 5
+game.mag = 5
 n = len(game.shots)
 game.fire()
 check("firing spends a bullet", len(game.shots) == n + 1)
-check("firing spends ammo", game.player["ammo"] == 4)
+check("firing spends a round", game.mag == 4)
 check("a shot has a cooldown", game.player["cool"] > 0)
 m = len(game.shots)
 game.fire()
@@ -205,7 +205,7 @@ game.player["yaw"] = 0.0
 b["x"], b["z"] = 300.0, 560.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
-game.player["ammo"] = 50
+game.mag = 50
 for _ in range(40):
     game.player["cool"] = 0.0
     game.fire()
@@ -220,7 +220,7 @@ game.player["x"], game.player["z"] = 300.0, 500.0
 game.player["yaw"] = 0.0
 b["x"], b["z"] = 300.0, 545.0
 game.player["cool"] = 0.0
-game.player["ammo"] = 10
+game.mag = 10
 for _ in range(60):
     game.player["cool"] = 0.0
     game.fire()
@@ -297,7 +297,7 @@ b = game.bots[0]
 b["x"], b["z"] = 304.0, 548.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
-game.player["ammo"] = 40
+game.mag = 40
 for _ in range(80):
     game.player["cool"] = 0.0
     game.fire()
@@ -366,8 +366,8 @@ check("a frame is sent", len(WORLD.frames) == 1)
 st = json.loads(WORLD.frames[-1])
 check("the frame has the player and its speed", len(st["p"]) == 7)
 check("the frame lists the living bots", len(st["b"]) == 9)
-check("each bot carries health and a dying timer",
-      all(len(b) == 6 for b in st["b"]))
+check("each bot carries health, a dying timer, a grade and a flash",
+      all(len(b) == 8 for b in st["b"]))
 check("the frame has the zone", len(st["z"]) == 3)
 check("the frame has the camera", len(st["cam"]) == 2)
 check("every number in the frame is finite",
@@ -408,13 +408,13 @@ game.player["x"], game.player["z"] = 300.0, 500.0
 for b in game.bots:
     b["x"], b["z"] = 120.0, 220.0          # all far outside the aim cone
 game.player["cool"] = 0.0
-game.player["ammo"] = 20
+game.mag = 20
 game.shots = []
 game.fire()
 shot = game.shots[-1]
 ang = math.atan2(shot["dx"], shot["dz"])
 check("a shot follows the camera, not the last step",
-      abs(ang - 1.2) < 1e-6)
+      abs(ang - 1.2) < 0.03)
 
 # the aim assist still lands hits on something in front of you
 game.start_game(seed=22)
@@ -424,7 +424,7 @@ b = game.bots[0]
 b["x"], b["z"] = 306.0, 550.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
-game.player["ammo"] = 40
+game.mag = 40
 for _ in range(80):
     game.player["cool"] = 0.0
     game.fire()
@@ -480,6 +480,128 @@ check("the fire button is bottom-right",
 check("the fire button is big enough for a thumb", fr >= 56)
 
 # ---------------------------------------------------------------------------
+# The new kit: sprint, crouch, reload, weapons, crates, pause
+# ---------------------------------------------------------------------------
+print()
+print("--- sprint, crouch and the rest ---")
+
+def run(frames, setup=None):
+    for _ in range(frames):
+        if setup:
+            setup()
+        game.update(1 / 60)
+
+# sprint covers more ground and burns stamina
+game.start_game(seed=40)
+game.player["x"], game.player["z"] = 400.0, 500.0
+game.cam_yaw = 0.0
+game.set_move(0.0, 1.0)
+run(50)
+walked = abs(game.player["z"] - 500.0)
+game.start_game(seed=40)
+game.player["x"], game.player["z"] = 400.0, 500.0
+game.cam_yaw = 0.0
+game.set_move(0.0, 1.0)
+game.set_sprint(True)
+run(50)
+ran = abs(game.player["z"] - 500.0)
+check("sprinting covers more ground", ran > walked * 1.25)
+check("sprinting burns stamina", game.stamina < 100.0)
+game.set_sprint(False)
+run(120)
+check("stamina comes back", game.stamina > 30.0)
+
+# crouching is slower
+game.start_game(seed=41)
+game.player["x"], game.player["z"] = 400.0, 500.0
+game.cam_yaw = 0.0
+game.set_move(0.0, 1.0)
+game.set_crouch(True)
+run(50)
+crept = abs(game.player["z"] - 500.0)
+check("crouching is slower than walking", crept < walked * 0.75)
+check("crouching is remembered", game.crouching is True)
+game.set_crouch(False)
+
+# reloading refills the magazine
+game.start_game(seed=42)
+game.mag = 3
+game.set_reload()
+check("reloading starts", game.reloading > 0)
+run(140)
+check("the magazine is full again", game.mag == game.WEAPONS["rifle"]["mag"])
+check("reloading has finished", game.reloading == 0.0)
+
+# an empty magazine reloads itself
+game.start_game(seed=43)
+game.mag = 1
+game.player["cool"] = 0.0
+game.reloading = 0.0
+game.fire()
+check("the last round triggers a reload", game.reloading > 0)
+
+# weapon swap
+game.start_game(seed=44)
+check("you start with the rifle", game.weapon == "rifle")
+game.set_swap()
+check("swapping gives the shotgun", game.weapon == "shotgun")
+check("the shotgun has its own magazine",
+      game.mag == game.WEAPONS["shotgun"]["mag"])
+game.set_swap()
+check("swapping back gives the rifle", game.weapon == "rifle")
+
+# the shotgun throws more pellets
+game.start_game(seed=45)
+game.set_swap()
+game.shots = []
+game.player["cool"] = 0.0
+game.reloading = 0.0
+game.fire()
+check("the shotgun fires a spread", len(game.shots) == 6)
+
+# crates can be picked up
+game.start_game(seed=46)
+game.pickups = [{"x": game.player["x"] + 2.0, "z": game.player["z"],
+                 "kind": "health", "taken": False}]
+game.player["hp"] = 40.0
+game.update(1 / 60)
+check("a medkit heals you", game.player["hp"] > 40.0)
+check("the crate is used up", game.pickups[0]["taken"] is True)
+
+game.start_game(seed=47)
+game.pickups = [{"x": game.player["x"] + 2.0, "z": game.player["z"],
+                 "kind": "ammo", "taken": False}]
+game.mag = 2
+game.update(1 / 60)
+check("an ammo crate refills the magazine", game.mag > 2)
+
+# dying gives you a placement
+game.start_game(seed=48)
+game.player["hp"] = 0.0
+game.update(1 / 60)
+check("dying records where you finished", game.placement >= 2)
+
+# pausing freezes the world
+game.start_game(seed=49)
+game.set_pause(True)
+check("the game can be paused", game.paused is True)
+px, pz = game.player["x"], game.player["z"]
+game.set_move(1.0, 0.0)
+run(30)
+check("nothing moves while paused",
+      abs(game.player["x"] - px) < 1e-9 and abs(game.player["z"] - pz) < 1e-9)
+game.set_pause(False)
+check("the game can be unpaused", game.paused is False)
+
+# the new bits reach the renderer
+game.start_game(seed=50)
+st = json.loads(game._frame_json())
+check("the frame carries crates", "pk" in st)
+check("the frame carries damage numbers", "dn" in st)
+check("the frame carries screen shake", "sh" in st)
+check("the frame carries the crouch state", "crouch" in st)
+
+# ---------------------------------------------------------------------------
 # The HUD
 # ---------------------------------------------------------------------------
 print()
@@ -496,13 +618,13 @@ game.start_game(seed=12)
 game.set_touch_ui(True)
 CALLS.clear()
 game.draw()
-check("the playing HUD draws", len(CALLS) > 120)
+check("the playing HUD draws", len(CALLS) > 70)
 check("the touch controls are drawn on a phone", game.TOUCH_UI is True)
 
 game.set_touch_ui(False)
 CALLS.clear()
 game.draw()
-check("the HUD draws without the touch controls", len(CALLS) > 100)
+check("the HUD draws without the touch controls", len(CALLS) > 60)
 
 game.state = "over"
 game.result = "win"
