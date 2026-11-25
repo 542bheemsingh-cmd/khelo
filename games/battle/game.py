@@ -1287,19 +1287,26 @@ def _minimap():
             c.fillStyle = "#ff5c7a"
             c.fill()
 
-    # us, drawn as an arrow pointing the way the camera looks
+    # us, drawn as an arrow pointing the way the camera looks. a dark disc
+    # behind it keeps it readable on top of a town dot or a crate
     px, py = mx + player["x"] * sx, my + player["z"] * sz
+    c.beginPath()
+    c.arc(px, py, 9.5, 0, 6.2832)
+    c.fillStyle = "rgba(4, 10, 24, 0.72)"
+    c.fill()
+
     fx, fz = math.sin(player["yaw"]), math.cos(player["yaw"])
     bx, bz = -fz, fx
     c.beginPath()
-    c.moveTo(px + fx * 9.0, py + fz * 9.0)                 # the point
-    c.lineTo(px - fx * 3.5 + bx * 5.0, py - fz * 3.5 + bz * 5.0)
-    c.lineTo(px - fx * 3.5 - bx * 5.0, py - fz * 3.5 - bz * 5.0)
+    c.moveTo(px + fx * 11.0, py + fz * 11.0)               # the point
+    c.lineTo(px - fx * 4.5 + bx * 6.2, py - fz * 4.5 + bz * 6.2)
+    c.lineTo(px - fx * 1.2, py - fz * 1.2)                 # the notch
+    c.lineTo(px - fx * 4.5 - bx * 6.2, py - fz * 4.5 - bz * 6.2)
     c.closePath()
     c.fillStyle = "#7ef0c0"
     c.fill()
-    c.lineWidth = 1.2
-    c.strokeStyle = "rgba(4, 10, 24, 0.85)"
+    c.lineWidth = 1.4
+    c.strokeStyle = "#06101f"
     c.stroke()
 
     c.restore()
@@ -1387,6 +1394,16 @@ def _draw_menu():
           W / 2, H / 2 + 174, min(640, W - 50), 12, "#7f93bb")
 
 
+def compass_bearing():
+    """Where the camera points, as a compass bearing.
+
+    North on this map is -z, so a bearing of 0 means "facing -z". cam_yaw 0
+    faces +z, which is south.
+    """
+    return (math.degrees(math.atan2(math.sin(cam_yaw), -math.cos(cam_yaw)))
+            + 360.0) % 360.0
+
+
 def _draw_play_hud():
     c = hctx
     p = player
@@ -1406,7 +1423,7 @@ def _draw_play_hud():
     cw_, chh = 240, 18
     cx0 = W / 2 - cw_ / 2
     _panel(cx0, 8, cw_, chh, "rgba(8, 14, 30, 0.72)", "rgba(150,180,240,0.18)", 6)
-    heading = (math.degrees(cam_yaw) % 360.0 + 360.0) % 360.0
+    heading = compass_bearing()
     for deg, label in ((0, "N"), (90, "E"), (180, "S"), (270, "W")):
         d = ((deg - heading + 180) % 360) - 180
         if abs(d) > 68:
