@@ -95,12 +95,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def open_spot(clear=80.0, seed=99):
-    """Open ground on the bigger map, with room for a bot further along +z."""
+    """Open ground with a clear run along +z, for a bot and for walking."""
     r = random.Random(seed)
-    for _ in range(900):
+    for _ in range(1500):
         x = r.uniform(240.0, game.WORLD_W - 240.0)
         z = r.uniform(240.0, game.WORLD_H - 320.0)
-        if game.blocked(x, z) or game.blocked(x, z + clear) or game.blocked(x + 40, z):
+        # the whole approach has to be free, not just the two ends
+        if any(game.blocked(x, z + k) for k in range(0, int(max(clear, 150.0)) + 1, 10)):
+            continue
+        if any(game.blocked(x + k, z) for k in (-30, 0, 30, 60)):
             continue
         return x, z
     return game.WORLD_W / 2, game.WORLD_H / 2
