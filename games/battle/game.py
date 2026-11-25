@@ -1287,19 +1287,20 @@ def _minimap():
             c.fillStyle = "#ff5c7a"
             c.fill()
 
-    # us, with a little tick showing which way we face
+    # us, drawn as an arrow pointing the way the camera looks
     px, py = mx + player["x"] * sx, my + player["z"] * sz
+    fx, fz = math.sin(player["yaw"]), math.cos(player["yaw"])
+    bx, bz = -fz, fx
     c.beginPath()
-    c.moveTo(px, py)
-    c.lineTo(px + math.sin(player["yaw"]) * 26 * sx,
-             py + math.cos(player["yaw"]) * 26 * sz)
-    c.strokeStyle = "#7ef0c0"
-    c.lineWidth = 1.6
-    c.stroke()
-    c.beginPath()
-    c.arc(px, py, 3.6, 0, 6.2832)
+    c.moveTo(px + fx * 9.0, py + fz * 9.0)                 # the point
+    c.lineTo(px - fx * 3.5 + bx * 5.0, py - fz * 3.5 + bz * 5.0)
+    c.lineTo(px - fx * 3.5 - bx * 5.0, py - fz * 3.5 - bz * 5.0)
+    c.closePath()
     c.fillStyle = "#7ef0c0"
     c.fill()
+    c.lineWidth = 1.2
+    c.strokeStyle = "rgba(4, 10, 24, 0.85)"
+    c.stroke()
 
     c.restore()
 
