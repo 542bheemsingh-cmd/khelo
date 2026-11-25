@@ -1083,6 +1083,21 @@ def update(dt):
         tier = TIERS[b.get("tier", 0)]
         dx, dz = p["x"] - b["x"], p["z"] - b["z"]
         d = math.hypot(dx, dz) or 1e-6
+
+        # if the circle has left them behind, the circle comes first
+        zdx, zdz = zone["cx"] - b["x"], zone["cz"] - b["z"]
+        zd = math.hypot(zdx, zdz) or 1e-6
+        if zd > zone["r"] * 0.92:
+            b["yaw"] = math.atan2(zdx, zdz)
+            step = BOT_SPEED * 1.15 * dt
+            nx = b["x"] + zdx / zd * step
+            nz = b["z"] + zdz / zd * step
+            if not blocked(nx, b["z"]):
+                b["x"] = max(2.0, min(WORLD_W - 2.0, nx))
+            if not blocked(b["x"], nz):
+                b["z"] = max(2.0, min(WORLD_H - 2.0, nz))
+            continue
+
         if p["alive"] and d < tier["range"]:
             b["yaw"] = math.atan2(dx, dz)
             step = BOT_SPEED * dt
@@ -1172,6 +1187,8 @@ def update(dt):
         off = max(0.0, zone["r"] - nr) * 0.55
         zone["tx"] = max(60.0, min(WORLD_W - 60.0, zone["cx"] + math.cos(a) * off))
         zone["tz"] = max(60.0, min(WORLD_H - 60.0, zone["cz"] + math.sin(a) * off))
+        if not land_at(zone["tx"], zone["tz"]):
+            zone["tx"], zone["tz"] = nearest_land(zone["tx"], zone["tz"])
         zone["tr"] = nr
         message = "The zone is closing."
         _sound("zone")
@@ -1444,6 +1461,17 @@ def _minimap():
     c.lineWidth = 2
     c.strokeStyle = "rgba(90, 170, 255, 0.95)"
     c.stroke()
+
+    # where the circle will be next, so you can start running early
+    if zone["tr"] < zone["r"] - 2.0:
+        c.setLineDash([4, 4])
+        c.beginPath()
+        c.arc(mx + zone["tx"] * sx, my + zone["tz"] * sz,
+              zone["tr"] * (sx + sz) * 0.5, 0, 6.2832)
+        c.lineWidth = 1.6
+        c.strokeStyle = "rgba(255, 255, 255, 0.92)"
+        c.stroke()
+        c.setLineDash([])
 
     # the bots
     for b in bots:
