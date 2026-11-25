@@ -108,6 +108,21 @@ def open_spot(clear=80.0, seed=99):
         return x, z
     return game.WORLD_W / 2, game.WORLD_H / 2
 
+
+def begin(seed=None):
+    """Start a round and get the soldier on the ground, past the plane drop."""
+    game.start_game(seed=seed)
+    game.jump()
+    for _ in range(6000):
+        game.update(1 / 60)
+        if game.state == "play":
+            break
+    return game
+
+
+
+
+
 # ---------------------------------------------------------------------------
 # The map
 # ---------------------------------------------------------------------------
@@ -141,7 +156,7 @@ check("sampling is smooth between grid points",
 # ---------------------------------------------------------------------------
 print()
 print("--- starting a round ---")
-game.start_game(seed=1)
+begin(seed=1)
 check("the game is playing", game.state == "play")
 check("twelve bots spawn", len(game.bots) == game.BOT_COUNT == 12)
 check("every bot is alive to begin with", all(b["alive"] for b in game.bots))
@@ -164,7 +179,7 @@ check("thirteen are alive", game.alive_count() == 13)
 # ---------------------------------------------------------------------------
 print()
 print("--- moving ---")
-game.start_game(seed=2)
+begin(seed=2)
 px, pz = game.player["x"], game.player["z"]
 game.set_move(1.0, 0.0)
 for _ in range(30):
@@ -187,7 +202,7 @@ check("the player really has stopped", math.hypot(game.pvx, game.pvz) < 0.2)
 
 # the coast must not let you walk out to sea - walk in every direction for a
 # while and the player must never end up standing on water
-game.start_game(seed=3)
+begin(seed=3)
 ok = True
 for step in range(900):
     game.set_move(math.sin(step * 0.31), math.cos(step * 0.71))
@@ -204,7 +219,7 @@ check("the player never leaves the world box",
 # ---------------------------------------------------------------------------
 print()
 print("--- shooting ---")
-game.start_game(seed=4)
+begin(seed=4)
 game.mag = 5
 n = len(game.shots)
 game.fire()
@@ -216,11 +231,12 @@ game.fire()
 check("the cooldown stops a second shot straight away", len(game.shots) == m)
 
 # a bot in front takes the damage
-game.start_game(seed=5)
+begin(seed=5)
 b = game.bots[0]
 _ax, _az = open_spot(80.0, 5)
 game.player["x"], game.player["z"] = _ax, _az
 game.player["yaw"] = 0.0
+game.cam_yaw = 0.0
 b["x"], b["z"] = _ax, _az + 60.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
@@ -232,12 +248,13 @@ for _ in range(40):
 check("shooting a bot hurts it", b["hp"] < 100.0)
 
 # kill one and the count goes down
-game.start_game(seed=6)
+begin(seed=6)
 b = game.bots[0]
 b["hp"] = 1.0
 _ax, _az = open_spot(70.0, 6)
 game.player["x"], game.player["z"] = _ax, _az
 game.player["yaw"] = 0.0
+game.cam_yaw = 0.0
 b["x"], b["z"] = _ax, _az + 45.0
 game.player["cool"] = 0.0
 game.mag = 10
@@ -258,7 +275,7 @@ print()
 print("--- which way is which ---")
 
 # with cam_yaw 0 the camera looks along +z, so the screen's right is -x
-game.start_game(seed=30)
+begin(seed=30)
 game.cam_yaw = 0.0
 game.player["yaw"] = 0.0
 _dx, _dz = open_spot(90.0, 30)
@@ -270,7 +287,7 @@ for _ in range(40):
 check("D moves to the right of the screen", game.player["x"] < x0 - 2.0)
 check("D does not sneak forwards", abs(game.player["z"] - z0) < 1.0)
 
-game.start_game(seed=31)
+begin(seed=31)
 game.cam_yaw = 0.0
 game.player["yaw"] = 0.0
 _dx, _dz = open_spot(90.0, 30)
@@ -281,7 +298,7 @@ for _ in range(40):
     game.update(1 / 60)
 check("A moves to the left of the screen", game.player["x"] > x0 + 2.0)
 
-game.start_game(seed=32)
+begin(seed=32)
 game.cam_yaw = 0.0
 game.player["yaw"] = 0.0
 _dx, _dz = open_spot(90.0, 31)
@@ -293,7 +310,7 @@ for _ in range(40):
 check("W walks forwards", game.player["z"] > z0 + 2.0)
 
 # the soldier has weight: it ramps up to speed and eases back down
-game.start_game(seed=33)
+begin(seed=33)
 game.set_move(1.0, 0.0)
 game.update(1 / 60)
 v1 = math.hypot(game.pvx, game.pvz)
@@ -313,7 +330,7 @@ check("letting go slows it down", v3 < v2 * 0.7)
 # ---------------------------------------------------------------------------
 print()
 print("--- shooting feedback ---")
-game.start_game(seed=34)
+begin(seed=34)
 game.cam_yaw = 0.0
 _ax, _az = open_spot(70.0, 34)
 game.player["x"], game.player["z"] = _ax, _az
@@ -346,7 +363,7 @@ check("the kill lands in the feed",
 # ---------------------------------------------------------------------------
 print()
 print("--- the zone ---")
-game.start_game(seed=7)
+begin(seed=7)
 r0 = game.zone["r"]
 game.zone_timer = 0.0
 game.update(1 / 60)
@@ -354,7 +371,7 @@ check("the zone shrinks when its timer runs out", game.zone["tr"] < r0)
 check("the next timer is set", game.zone_timer > 0)
 
 # standing outside hurts - shrink the zone onto the middle first
-game.start_game(seed=8)
+begin(seed=8)
 check("the first zone covers the whole map",
       game.zone["r"] >= math.hypot(game.WORLD_W / 2, game.WORLD_H / 2))
 game.zone["r"] = game.zone["tr"] = 200.0
@@ -371,13 +388,13 @@ check("being outside the zone hurts", game.player["hp"] < hp0)
 # ---------------------------------------------------------------------------
 print()
 print("--- winning and losing ---")
-game.start_game(seed=9)
+begin(seed=9)
 for b in game.bots:
     b["alive"] = False
 game.update(1 / 60)
 check("killing every bot wins", game.state == "over" and game.result == "win")
 
-game.start_game(seed=10)
+begin(seed=10)
 game.player["hp"] = 0.0
 game.update(1 / 60)
 check("running out of health loses", game.state == "over" and game.result == "lose")
@@ -387,7 +404,7 @@ check("running out of health loses", game.state == "over" and game.result == "lo
 # ---------------------------------------------------------------------------
 print()
 print("--- the frame handed to three.js ---")
-game.start_game(seed=11)
+begin(seed=11)
 WORLD.frames.clear()
 game.send_frame()
 check("a frame is sent", len(WORLD.frames) == 1)
@@ -417,11 +434,12 @@ check("the payload has the world size and water line",
 # ---------------------------------------------------------------------------
 print()
 print("--- aiming and looking ---")
-game.start_game(seed=20)
+begin(seed=20)
 game.cam_yaw = 0.0
-game.update(1 / 60)
+for _ in range(40):
+    game.update(1 / 60)
 check("the soldier faces where you aim",
-      abs(game.player["yaw"] - 0.0) < 1e-6)
+      abs(game.player["yaw"] - 0.0) < 0.02)
 
 game.cam_yaw = 0.9
 for _ in range(40):
@@ -430,7 +448,7 @@ check("turning the camera turns the soldier",
       abs(game.player["yaw"] - 0.9) < 0.02)
 
 # a shot must follow the camera, not wherever the soldier last walked
-game.start_game(seed=21)
+begin(seed=21)
 game.cam_yaw = 1.2
 _ax, _az = open_spot(80.0, 21)
 game.player["x"], game.player["z"] = _ax, _az
@@ -446,7 +464,7 @@ check("a shot follows the camera, not the last step",
       abs(ang - 1.2) < 0.03)
 
 # the aim assist still lands hits on something in front of you
-game.start_game(seed=22)
+begin(seed=22)
 game.cam_yaw = 0.0
 _ax, _az = open_spot(70.0, 22)
 game.player["x"], game.player["z"] = _ax, _az
@@ -465,8 +483,9 @@ check("something in front of the crosshair gets hit", b["hp"] < 100.0)
 
 # dragging must swing the aim toward the side you dragged. the screen-right
 # direction at yaw 0 is (-1, 0), so the aim has to gain -x to have gone right.
+
 def _aim_after(drag_x, drag_y, seed):
-    game.start_game(seed=seed)
+    begin(seed=seed)
     game.cam_yaw = 0.0
     game.player["yaw"] = 0.0
     game.set_look(drag_x, drag_y)
@@ -485,7 +504,7 @@ check("dragging left swings the aim to the left of the screen",
 
 # and it has to hold at other headings too, not just due north
 for seed, start in ((62, 1.0), (63, 2.4), (64, -1.7)):
-    game.start_game(seed=seed)
+    begin(seed=seed)
     game.cam_yaw = start
     game.player["yaw"] = start
     before = (math.sin(start), math.cos(start))
@@ -544,14 +563,14 @@ def run(frames, setup=None):
         game.update(1 / 60)
 
 # sprint covers more ground and burns stamina
-game.start_game(seed=40)
+begin(seed=40)
 _dx, _dz = open_spot(90.0, 40)
 game.player["x"], game.player["z"] = _dx, _dz
 game.cam_yaw = 0.0
 game.set_move(0.0, 1.0)
 run(50)
 walked = abs(game.player["z"] - _dz)
-game.start_game(seed=40)
+begin(seed=40)
 _dx, _dz = open_spot(90.0, 41)
 game.player["x"], game.player["z"] = _dx, _dz
 game.cam_yaw = 0.0
@@ -566,7 +585,7 @@ run(120)
 check("stamina comes back", game.stamina > 30.0)
 
 # crouching is slower
-game.start_game(seed=41)
+begin(seed=41)
 _dx, _dz = open_spot(90.0, 42)
 game.player["x"], game.player["z"] = _dx, _dz
 game.cam_yaw = 0.0
@@ -579,7 +598,7 @@ check("crouching is remembered", game.crouching is True)
 game.set_crouch(False)
 
 # reloading refills the magazine
-game.start_game(seed=42)
+begin(seed=42)
 game.mag = 3
 game.set_reload()
 check("reloading starts", game.reloading > 0)
@@ -588,7 +607,7 @@ check("the magazine is full again", game.mag == game.WEAPONS["rifle"]["mag"])
 check("reloading has finished", game.reloading == 0.0)
 
 # an empty magazine reloads itself
-game.start_game(seed=43)
+begin(seed=43)
 game.mag = 1
 game.player["cool"] = 0.0
 game.reloading = 0.0
@@ -596,7 +615,7 @@ game.fire()
 check("the last round triggers a reload", game.reloading > 0)
 
 # weapon swap
-game.start_game(seed=44)
+begin(seed=44)
 check("you start with the rifle", game.weapon == "rifle")
 game.set_swap()
 check("swapping gives the shotgun", game.weapon == "shotgun")
@@ -606,7 +625,7 @@ game.set_swap()
 check("swapping back gives the rifle", game.weapon == "rifle")
 
 # the shotgun throws more pellets
-game.start_game(seed=45)
+begin(seed=45)
 game.set_swap()
 game.shots = []
 game.player["cool"] = 0.0
@@ -615,7 +634,7 @@ game.fire()
 check("the shotgun fires a spread", len(game.shots) == 6)
 
 # crates can be picked up
-game.start_game(seed=46)
+begin(seed=46)
 game.pickups = [{"x": game.player["x"] + 2.0, "z": game.player["z"],
                  "kind": "health", "taken": False}]
 game.player["hp"] = 40.0
@@ -623,7 +642,7 @@ game.update(1 / 60)
 check("a medkit heals you", game.player["hp"] > 40.0)
 check("the crate is used up", game.pickups[0]["taken"] is True)
 
-game.start_game(seed=47)
+begin(seed=47)
 game.pickups = [{"x": game.player["x"] + 2.0, "z": game.player["z"],
                  "kind": "ammo", "taken": False}]
 game.mag = 2
@@ -631,13 +650,13 @@ game.update(1 / 60)
 check("an ammo crate refills the magazine", game.mag > 2)
 
 # dying gives you a placement
-game.start_game(seed=48)
+begin(seed=48)
 game.player["hp"] = 0.0
 game.update(1 / 60)
 check("dying records where you finished", game.placement >= 2)
 
 # pausing freezes the world
-game.start_game(seed=49)
+begin(seed=49)
 game.set_pause(True)
 check("the game can be paused", game.paused is True)
 px, pz = game.player["x"], game.player["z"]
@@ -649,7 +668,7 @@ game.set_pause(False)
 check("the game can be unpaused", game.paused is False)
 
 # the new bits reach the renderer
-game.start_game(seed=50)
+begin(seed=50)
 st = json.loads(game._frame_json())
 check("the frame carries crates", "pk" in st)
 check("the frame carries damage numbers", "dn" in st)
@@ -663,19 +682,19 @@ print()
 print("--- regressions ---")
 
 # the first zone has to cover the map, or people spawn outside and bleed out
-game.start_game(seed=70)
+begin(seed=70)
 check("the opening zone reaches every corner",
       game.zone["r"] >= math.hypot(game.WORLD_W / 2, game.WORLD_H / 2))
 
 # swapping weapons must not be a free reload
-game.start_game(seed=71)
+begin(seed=71)
 game.mag = 3
 game.set_swap()
 game.set_swap()
 check("swapping weapons keeps what is left in the magazine", game.mag == 3)
 
 # the pause key must be able to let you out
-game.start_game(seed=72)
+begin(seed=72)
 game.set_pause(True)
 check("pause stops the game", game.paused is True)
 game.set_pause(True)
@@ -696,7 +715,7 @@ _over = _over[:_over.index("def _draw_pause") if "def _draw_pause" in _over else
 check("the end screen shows where you finished", "placement" in _over)
 
 # a building has to stop a bullet, not just a person
-game.start_game(seed=73)
+begin(seed=73)
 _ax, _az = open_spot(80.0, 73)
 game.player["x"], game.player["z"] = _ax, _az
 game.cam_yaw = 0.0
@@ -752,10 +771,14 @@ game.set_ui(1.0)
 CALLS.clear()
 game.state = "menu"
 game.draw()
-check("the menu draws", len(CALLS) > 40)
-check("the menu has a button", len(game._menu_hit) == 1)
+check("the menu draws", len(CALLS) >= 2)
+check("the menu has no buttons to hunt for", len(game._menu_hit) == 0)
 
-game.start_game(seed=12)
+game.state = "menu"
+game.tap(40.0, 40.0)
+check("a tap anywhere drops you in", game.state == "plane")
+
+begin(seed=12)
 game.set_touch_ui(True)
 CALLS.clear()
 game.draw()
@@ -791,6 +814,46 @@ for yaw_deg, want in ((0, 180), (90, 90), (180, 0), (270, 270)):
 
 game.cam_yaw = math.pi
 check("facing north reads as 0 degrees", abs(game.compass_bearing()) < 0.5)
+
+# ---------------------------------------------------------------------------
+# The drop: plane, jump, parachute, land
+# ---------------------------------------------------------------------------
+print()
+print("--- the drop ---")
+game.start_game(seed=90)
+check("a round opens in the plane", game.state == "plane")
+check("the plane starts outside the map",
+      not (0 <= game.plane["x"] < game.WORLD_W and 0 <= game.plane["z"] < game.WORLD_H))
+
+x0 = game.plane["x"]
+for _ in range(30):
+    game.update(1 / 60)
+check("the plane flies", abs(game.plane["x"] - x0) > 20.0)
+
+game.jump()
+check("jumping starts the fall", game.state == "fall")
+check("you start high up", game.player["y"] is not None and game.player["y"] > 250.0)
+check("the canopy is shut at first", game.chute is False)
+
+saw_chute = False
+for _ in range(6000):
+    game.update(1 / 60)
+    if game.chute:
+        saw_chute = True
+    if game.state == "play":
+        break
+check("the parachute opens on the way down", saw_chute)
+check("you land and the round begins", game.state == "play")
+check("you land on dry ground",
+      game.land_at(game.player["x"], game.player["z"]))
+check("your feet are back on the ground", game.player["y"] is None)
+
+# the flight is different every round
+paths = set()
+for sd in (91, 92, 93, 94):
+    game.start_game(seed=sd)
+    paths.add((round(game.plane["x"] / 50), round(game.plane["z"] / 50)))
+check("every round flies a different line", len(paths) >= 3)
 
 print()
 if fails:
