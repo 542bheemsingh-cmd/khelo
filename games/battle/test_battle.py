@@ -1008,6 +1008,22 @@ game.set_size(900, 560)
 game.draw()
 check("the HUD still draws", len(CALLS) > 30)
 
+# --- the kill feed is readable on any background -------------------------
+print()
+print("--- the kill feed ---")
+begin(seed=82)
+game.feed[:] = []
+game.feed.append({"text": "You downed a bot", "life": 2.0})
+game.feed.append({"text": "The zone took a bot", "life": 2.0})
+game.state = "play"
+game.set_size(900, 560)
+CALLS.clear()
+game.draw()
+check("the kill feed draws", len(CALLS) > 30)
+check("every feed line gets its own backing",
+      CALLS.count("arcTo") >= 4 * 4)
+check("the feed measures its own text", "measureText" in CALLS)
+
 print()
 if fails:
     print("FAILURES:", fails)
