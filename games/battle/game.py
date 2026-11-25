@@ -192,6 +192,7 @@ def build_terrain(seed=7):
     HEIGHTS = heights
     LAND = [bool(v) for row in mask for v in row]
     _READY = True
+    _load_stats()
     build_towns()
     _index_buildings()
 
@@ -518,6 +519,42 @@ _clock = 0.0               # always ticking, so the menu can orbit
 hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
 pings = []                # gunfire marks on the minimap
+
+STATS_KEY = "khelo_battle_stats"
+stats = {"matches": 0, "wins": 0, "best_kills": 0, "best_place": 0}
+
+
+def _load_stats():
+    try:
+        raw = js.localStorage.getItem(STATS_KEY)
+        if raw:
+            d = json.loads(raw)
+            for k in stats:
+                if k in d:
+                    stats[k] = int(d[k])
+    except Exception:
+        pass
+
+
+def _save_stats():
+    try:
+        js.localStorage.setItem(STATS_KEY, json.dumps(stats))
+    except Exception:
+        pass
+
+
+def record_result():
+    """Keep the personal best, so there is something to beat."""
+    stats["matches"] += 1
+    if result == "win":
+        stats["wins"] += 1
+    stats["best_kills"] = max(stats["best_kills"], int(player["kills"]))
+    if placement:
+        if not stats["best_place"]:
+            stats["best_place"] = int(placement)
+        else:
+            stats["best_place"] = min(stats["best_place"], int(placement))
+    _save_stats()
 look_dx = 0.0
 look_dy = 0.0
 firing = False
@@ -1226,6 +1263,7 @@ def update(dt):
         p["alive"] = False
         p["hp"] = 0.0
         placement = alive_count() + 1
+        record_result()
         state = "over"
         result = "lose"
         _notify_playing(False)
@@ -1234,6 +1272,7 @@ def update(dt):
         state = "over"
         result = "win"
         placement = 1
+        record_result()
         _notify_playing(False)
         _sound("win")
 
@@ -1873,7 +1912,7 @@ def _draw_over():
     c.fillStyle = "rgba(4, 10, 24, 0.80)"
     c.fillRect(0, 0, W, H)
 
-    cw, ch = min(460, W - 40), 280
+    cw, ch = min(460, W - 40), 312
     cx, cy = (W - cw) / 2, (H - ch) / 2
     _panel(cx, cy, cw, ch, "rgba(12, 20, 42, 0.97)",
            "#22c55e" if result == "win" else "#ff5c7a", 20)
@@ -1893,11 +1932,19 @@ def _draw_over():
     c.font = "800 %dpx %s" % (_fs(17), FONT)
     c.fillText("#%d of %d" % (max(1, placement), BOT_COUNT + 1), W / 2, cy + 124)
 
+    # your record so far
+    c.fillStyle = "#8fa3c9"
+    c.font = "700 %dpx %s" % (_fs(11), FONT)
+    c.fillText("%d matches  \u00b7  %d wins  \u00b7  best %d kills  \u00b7  best #%d"
+               % (stats["matches"], stats["wins"], stats["best_kills"],
+                  stats["best_place"] or BOT_COUNT + 1),
+               W / 2, cy + 150)
+
     bw = min(200, (cw - 60) / 2)
-    _button(cx + 20, cy + ch - 130, bw, 52, "Drop again", True,
+    _button(cx + 20, cy + ch - 140, bw, 52, "Drop again", True,
             "#22c55e" if result == "win" else "#ffb703")
-    _button(cx + cw - bw - 20, cy + ch - 130, bw, 52, "Menu", False)
-    _button(cx + 20, cy + ch - 66, cw - 40, 44, "Back to the arcade", False, size=15)
-    _menu_hit = [("again", (cx + 20, cy + ch - 130, bw, 52)),
-                 ("menu", (cx + cw - bw - 20, cy + ch - 130, bw, 52)),
-                 ("arcade", (cx + 20, cy + ch - 66, cw - 40, 44))]
+    _button(cx + cw - bw - 20, cy + ch - 140, bw, 52, "Menu", False)
+    _button(cx + 20, cy + ch - 76, cw - 40, 44, "Back to the arcade", False, size=15)
+    _menu_hit = [("again", (cx + 20, cy + ch - 140, bw, 52)),
+                 ("menu", (cx + cw - bw - 20, cy + ch - 140, bw, 52)),
+                 ("arcade", (cx + 20, cy + ch - 76, cw - 40, 44))]
