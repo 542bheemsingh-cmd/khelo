@@ -1590,14 +1590,14 @@ def _draw_play_hud():
     c.fillText("%03d" % int(heading), W / 2, 34)
 
     # ---- 29. alive count and placement ------------------------------------
-    _panel(W / 2 - 78, 38, 156, 44, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 10)
+    _panel(W / 2 - 78, 42, 156, 44, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 10)
     c.textAlign = "center"
     c.fillStyle = "#eaf2ff"
     c.font = "800 %dpx %s" % (_fs(19), FONT)
-    c.fillText("%d ALIVE" % alive_count(), W / 2, 61)
+    c.fillText("%d ALIVE" % alive_count(), W / 2, 65)
     c.fillStyle = "#5aaaff"
     c.font = "700 %dpx %s" % (_fs(10), FONT)
-    c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 75)
+    c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 79)
 
     if message:
         _wrap(message, W / 2, 112, min(520, W - 60), 12, "#cfe0ff")
@@ -1717,17 +1717,17 @@ def _draw_play_hud():
             sx, sy2 = STICK["x"], STICK["y"]
             base_a, knob_a = 0.40, 0.82
         else:
-            sx, sy2 = 108, H - 108
+            sx, sy2 = 92, H - 72
             base_a, knob_a = 0.18, 0.30
         c.beginPath()
-        c.arc(sx, sy2, 66, 0, 6.2832)
+        c.arc(sx, sy2, 54, 0, 6.2832)
         c.fillStyle = "rgba(12, 20, 40, %.2f)" % base_a
         c.fill()
         c.lineWidth = 2
         c.strokeStyle = "rgba(150, 180, 240, 0.42)"
         c.stroke()
         c.beginPath()
-        c.arc(sx + move_x * 46, sy2 - move_z * 46, 28, 0, 6.2832)
+        c.arc(sx + move_x * 38, sy2 - move_z * 38, 22, 0, 6.2832)
         c.fillStyle = "rgba(126, 240, 192, %.2f)" % knob_a
         c.fill()
 
@@ -1802,6 +1802,7 @@ def _draw_plane_hud():
     c.fillStyle = "rgba(207, 224, 255, 0.85)"
     c.font = "700 %dpx %s" % (_fs(12), FONT)
     c.fillText("in the plane", W / 2, by - 16)
+    _minimap()
 
 
 def _draw_fall_hud():
@@ -1817,6 +1818,7 @@ def _draw_fall_hud():
         c.fillStyle = "#7ef0c0"
         c.font = "700 %dpx %s" % (_fs(12), FONT)
         c.fillText("parachute open", W / 2, 80)
+    _minimap()
 
 
 def _draw_over():
