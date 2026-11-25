@@ -18,6 +18,7 @@ static files, so the whole thing hosts on GitHub Pages.
 | 🧩 **[Khelo Puzzles](https://542bheemsingh-cmd.github.io/khelo/games/puzzle/)** | 10 logic puzzles of increasing difficulty, one new kind per level, each with a hint | click / tap, type for the word puzzles |
 | 🎲 **[Khelo Ludo](https://542bheemsingh-cmd.github.io/khelo/games/ludo/)** | The classic board game — 2, 3 or 4 players, or 2 against 2 | tap the dice, then tap a token |
 | 🔤 **[Khelo Word](https://542bheemsingh-cmd.github.io/khelo/games/word/)** | The five letter word game — a daily word for everyone, plus unlimited practice, streaks and a shareable result | type, or tap the on-screen keyboard |
+| 🎯 **[Khelo Battleground](https://542bheemsingh-cmd.github.io/khelo/games/battle/)** | A 3D third-person battle royale on a map shaped like India — nine bots, a closing blue zone, last one standing | `WASD` + drag to look + click, or a stick and a FIRE button |
 
 The dashboard at the root lists them all and links into each game.
 
@@ -51,6 +52,31 @@ for the touch targets and spacing, and from [Open Props](https://open-props.styl
 (MIT) for the spacing and radius scale. Both are wired in as CSS custom
 properties at the top of each stylesheet, so the whole arcade can be restyled
 from one block.
+
+## Khelo Battleground
+
+A third-person battle royale, in 3D, on a map shaped like India.
+
+- **A real map, not a drawing.** The landmass is the actual mainland outline,
+  taken from [DataMeet's open India boundary data](https://github.com/datameet/maps)
+  (CC0) and simplified to 189 points. Nothing here is sketched by hand.
+- **Real 3D.** Python builds a heightfield mesh from that outline plus fractal
+  noise — beaches, rolling hills, rocky peaks — and
+  [three.js](https://threejs.org) (MIT) draws it with a sea around it, 430 trees
+  and scattered boulders. The coast is a hard wall: you cannot walk into water.
+- **A third-person camera** that sits behind your soldier, and steps in when a
+  tree would block the view.
+- **Nine bots** that wander, chase you when they spot you, and shoot back.
+- **The zone.** A blue wall closes onto a shrinking circle, exactly like the
+  genre it comes from. Stand outside it and you lose health fast.
+- **HUD** with health, ammo, kills, the alive count, the zone timer and a
+  minimap of the whole country.
+- **Controls.** Desktop: `WASD` to move, drag to look, click or `Space` to fire.
+  Phone: a stick bottom-left, drag the right side to look, `FIRE` bottom-right.
+
+All the logic is Python — terrain generation, bots, bullets, the zone and the
+camera all run in `game.py` under Pyodide. three.js only draws what Python
+tells it to.
 
 ## Khelo Word
 
@@ -265,6 +291,7 @@ python3 games/hillclimb/test_climb.py
 python3 games/puzzle/test_puzzle.py
 python3 games/ludo/test_ludo.py
 python3 games/word/test_word.py
+python3 games/battle/test_battle.py
 ```
 
 ## Add a new game
