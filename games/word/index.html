@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1224">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Khelo Word - a daily five letter word game, written in Python and played in the browser.">
+  <title>Khelo Word - Daily Word Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-orient="portrait">
+  <main class="stage">
+    <div class="bar">
+      <a class="ctrl home" href="../../" title="All games" aria-label="All games">&#8962;</a>
+      <span class="grow"></span>
+      <button id="mute" class="ctrl" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
+        <span id="mute-icon" aria-hidden="true">&#128266;</span>
+      </button>
+      <button id="fs" class="ctrl" type="button" aria-pressed="false" title="Full screen" aria-label="Full screen">&#9974;</button>
+    </div>
+
+    <div class="screen">
+      <canvas id="game" width="480" height="820" aria-label="Khelo Word"></canvas>
+
+      <div id="loader" class="loader">
+        <div class="loader-card">
+          <h1>KHELO<span>WORD</span></h1>
+          <p id="loader-msg">Starting up…</p>
+          <div class="bar-track"><i id="loader-bar"></i></div>
+          <p class="loader-note">A Python game running in your browser via Pyodide.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script>
+    var GW = 480, GH = 820;
+
+    /* ------------------------------------------------------------------
+       Sound: synthesised, so there are no audio files to load.
+       ------------------------------------------------------------------ */
+    var actx = null, muted = false, noiseBuf = null;
+
+    function audio() {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      return actx;
+    }
+
+    function noiseSource() {
+      if (noiseBuf) return noiseBuf;
+      var n = Math.floor(actx.sampleRate * 0.5);
+      noiseBuf = actx.createBuffer(1, n, actx.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      return noiseBuf;
+    }
+
+    function noise(dur, vol, freq, q, when) {
+      var t = when || actx.currentTime;
+      var src = actx.createBufferSource();
+      src.buffer = noiseSource();
+      var f = actx.createBiquadFilter();
+      f.type = "bandpass";
+      f.frequency.value = freq;
+      f.Q.value = q || 1;
+      var g = actx.createGain();
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(actx.destination);
+      src.start(t); src.stop(t + dur + 0.02);
+    }
+
+    function tone(f0, f1, dur, type, vol, when) {
+      var t = when || actx.currentTime;
+      var o = actx.createOscillator();
+      var g = actx.createGain();
+      o.type = type || "sine";
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    }
+
+    window.playSound = function (name) {
+      if (muted) return;
+      try {
+        audio();
+        var t = actx.currentTime, k;
+        switch (name) {
+          case "tap":
+            tone(760, 640, 0.04, "square", 0.045);
+            noise(0.018, 0.025, 3200, 8);
+            break;
+          case "flip":
+            // five little ticks, one for each tile turning over
+            for (k = 0; k < 5; k++) {
+              noise(0.03, 0.05, 2200, 7, t + k * 0.10);
+              tone(520 - k * 40, 400 - k * 30, 0.045, "triangle", 0.05, t + k * 0.10);
+            }
+            break;
+          case "win":
+            var notes = [523, 659, 784, 1047, 1319];
+            for (k = 0; k < notes.length; k++) {
+              tone(notes[k], notes[k], 0.30, "triangle", 0.09, t + k * 0.13);
+            }
+            break;
+          case "lose":
+            tone(330, 120, 0.55, "sine", 0.10);
+            tone(220, 90, 0.55, "triangle", 0.06, t + 0.10);
+            break;
+          case "deny":
+            tone(240, 150, 0.16, "sawtooth", 0.075);
+            break;
+          case "start":
+            tone(300, 660, 0.26, "square", 0.07);
+            break;
+        }
+      } catch (err) { /* audio is a nicety */ }
+    };
+
+    var tapFn = null, keyFn = null, setUiFn = null, ready = false;
+    var canvas = document.getElementById("game");
+    var screenBox = document.querySelector(".screen");
+
+    function fit() {
+      var aw = screenBox.clientWidth, ah = screenBox.clientHeight;
+      if (!aw || !ah) return;
+      var s = Math.min(aw / GW, ah / GH);
+      canvas.style.width = Math.floor(GW * s) + "px";
+      canvas.style.height = Math.floor(GH * s) + "px";
+      if (setUiFn) setUiFn(s);      // tell Python how small the canvas is
+    }
+
+    async function boot() {
+      var msg = document.getElementById("loader-msg");
+      var bar = document.getElementById("loader-bar");
+      msg.textContent = "Downloading the Python runtime…";
+      var pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" });
+
+      bar.style.width = "55%";
+      msg.textContent = "Loading the words…";
+      var parts = await Promise.all([
+        fetch("game.py", { cache: "no-store" }).then(function (r) { return r.text(); }),
+        fetch("answers.txt", { cache: "no-store" }).then(function (r) { return r.text(); }),
+        fetch("words.txt", { cache: "no-store" }).then(function (r) { return r.text(); })
+      ]);
+
+      bar.style.width = "80%";
+      msg.textContent = "Loading game.py…";
+      await pyodide.runPythonAsync(parts[0]);
+
+      tapFn = pyodide.globals.get("tap");
+      keyFn = pyodide.globals.get("key");
+      setUiFn = pyodide.globals.get("set_ui");
+      pyodide.globals.get("set_words")(parts[1], parts[2]);
+
+      bar.style.width = "100%";
+      ready = true;
+      document.getElementById("loader").classList.add("is-hidden");
+      fit();
+
+      var update = pyodide.globals.get("update");
+      var draw = pyodide.globals.get("draw");
+      var last = performance.now();
+      function frame(now) {
+        var dt = (now - last) / 1000;
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    function canvasPoint(e) {
+      var r = canvas.getBoundingClientRect();
+      return [ (e.clientX - r.left) / r.width * GW,
+               (e.clientY - r.top) / r.height * GH ];
+    }
+
+    canvas.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      if (!ready || !tapFn) return;
+      audio();
+      var p = canvasPoint(e);
+      tapFn(p[0], p[1]);
+    });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+    /* a real keyboard, for anyone playing on a laptop */
+    window.addEventListener("keydown", function (e) {
+      if (!ready || !keyFn) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      var k = null;
+      if (e.key === "Enter") k = "enter";
+      else if (e.key === "Backspace") k = "back";
+      else if (e.key === " " || e.key === "Spacebar") k = " ";
+      else if (/^[a-zA-Z]$/.test(e.key)) k = e.key.toLowerCase();
+      else if (/^[12]$/.test(e.key)) k = e.key;
+      if (k) {
+        keyFn(k);
+        e.preventDefault();
+      }
+    });
+
+    document.getElementById("mute").addEventListener("click", function (e) {
+      muted = !muted;
+      document.getElementById("mute-icon").innerHTML = muted ? "&#128263;" : "&#128266;";
+      e.currentTarget.setAttribute("aria-pressed", String(muted));
+      e.currentTarget.blur();
+    });
+
+    /* ---- full screen ---- */
+    (function () {
+      var stage = document.querySelector(".stage");
+      var btn = document.getElementById("fs");
+      var wide = document.body.dataset.orient === "landscape";
+
+      function mark(on) {
+        btn.innerHTML = on ? "&#10064;" : "&#9974;";
+        btn.setAttribute("aria-pressed", String(on));
+        btn.title = on ? "Exit full screen" : "Full screen";
+        document.documentElement.classList.toggle("fs-on", on);
+        setTimeout(fit, 60);
+      }
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        btn.blur();
+        if (document.fullscreenElement) { document.exitFullscreen(); return; }
+        if (stage.requestFullscreen) {
+          var p = stage.requestFullscreen({ navigationUI: "hide" });
+          if (p && p.then) p.then(function () { mark(true); }, function () { mark(true); });
+          else mark(true);
+        } else {
+          mark(true);
+        }
+      });
+      document.addEventListener("fullscreenchange", function () {
+        mark(!!document.fullscreenElement);
+      });
+      mark(false);
+    })();
+
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    document.addEventListener("fullscreenchange", fit);
+
+    boot().catch(function (err) {
+      document.getElementById("loader-msg").textContent = "Could not start the game: " + err;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
