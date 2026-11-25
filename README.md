@@ -71,8 +71,10 @@ A third-person battle royale, in 3D, on a map shaped like India.
   genre it comes from. Stand outside it and you lose health fast.
 - **HUD** with health, ammo, kills, the alive count, the zone timer and a
   minimap of the whole country.
-- **Controls.** Desktop: `WASD` to move, drag to look, click or `Space` to fire.
-  Phone: a stick bottom-left, drag the right side to look, `FIRE` bottom-right.
+- **Controls.** Desktop: `WASD` to move, click once to grab the mouse and then
+  move it to look, click or `Space` to fire. Phone: a stick appears under your
+  left thumb, drag the right side to look, `FIRE` bottom-right, with RUN / DUCK /
+  RELOAD / SWAP along the bottom. `R` reloads, `Q` swaps weapon, `P` pauses.
 
 All the logic is Python — terrain generation, bots, bullets, the zone and the
 camera all run in `game.py` under Pyodide. three.js only draws what Python
