@@ -1009,6 +1009,7 @@ def next_level():
 
 
 def retry():
+    global screen
     _setup()
     screen = "play"
 
