@@ -418,7 +418,7 @@ def _after_roll():
 
 
 def _pass_turn():
-    global turn, can_roll, moves
+    global turn, can_roll, moves, message
     if dice == 6:
         can_roll = True          # a 6 always earns another go
         moves = []
