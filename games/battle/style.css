@@ -101,8 +101,17 @@ body {
 
 /* full screen (and the iOS fallback that fills the viewport) */
 .stage:fullscreen { background: #05070f; }
+
+/* in full screen the game should fill the whole display: no bar above it, no
+   padding around it, and no rounded corners */
+.stage:fullscreen .bar,
+html.fs-on .bar { display: none; }
+.stage:fullscreen .screen,
+html.fs-on .screen { padding: 0; }
 .stage:fullscreen #game,
-html.fs-on #game { border-radius: 10px; }
+.stage:fullscreen #hud,
+html.fs-on #game,
+html.fs-on #hud { border-radius: 0; }
 
 /* ---------------- soft keyboard ---------------- */
 .kb {
