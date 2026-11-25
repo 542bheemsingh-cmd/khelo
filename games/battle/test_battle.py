@@ -84,6 +84,10 @@ js.devicePixelRatio = 2
 js.document = types.SimpleNamespace(getElementById=lambda i: _El())
 js.playSound = lambda n: SOUNDS.append(n)
 js.world3d = WORLD
+_STORE = {}
+js.localStorage = types.SimpleNamespace(
+    getItem=lambda k: _STORE.get(k),
+    setItem=lambda k, v: _STORE.__setitem__(k, v))
 sys.modules["js"] = js
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -922,6 +926,61 @@ for _ in range(200):
     game.update(1 / 60)
     b["cool"] = 99.0
 check("the marks fade away", len(game.pings) == 0)
+
+# --- the record carries over between rounds ------------------------------
+print()
+print("--- your record ---")
+game.stats.update({"matches": 0, "wins": 0, "best_kills": 0, "best_place": 0})
+_STORE.clear()
+
+begin(seed=70)
+game.player["kills"] = 6
+game.placement = 1
+game.result = "win"
+game.record_result()
+check("a win counts as a match", game.stats["matches"] == 1)
+check("a win counts as a win", game.stats["wins"] == 1)
+check("the kills are remembered", game.stats["best_kills"] == 6)
+check("the best placing is remembered", game.stats["best_place"] == 1)
+
+game.player["kills"] = 2
+game.placement = 5
+game.result = "lose"
+game.record_result()
+check("a second match is counted", game.stats["matches"] == 2)
+check("a loss is not a win", game.stats["wins"] == 1)
+check("a worse round does not lower the best kills", game.stats["best_kills"] == 6)
+check("a worse round does not lower the best placing", game.stats["best_place"] == 1)
+
+game.player["kills"] = 11
+game.placement = 2
+game.record_result()
+check("a better kill count is kept", game.stats["best_kills"] == 11)
+check("the best placing still stands", game.stats["best_place"] == 1)
+
+# and it survives a reload
+game.stats.update({"matches": 0, "wins": 0, "best_kills": 0, "best_place": 0})
+game._load_stats()
+check("the record comes back after a reload", game.stats["best_kills"] == 11)
+check("so do the match and win counts",
+      game.stats["matches"] == 3 and game.stats["wins"] == 1)
+
+# --- the end-screen buttons sit where they are drawn ---------------------
+print()
+print("--- end screen buttons ---")
+game.state = "over"
+game.result = "win"
+game.placement = 1
+game.set_size(900, 560)
+game.draw()
+src = open(os.path.join(HERE, "game.py"), encoding="utf-8").read()
+over = src[src.index("def _draw_over"):]
+over = over[:over.index("def _draw_pause")] if "def _draw_pause" in over else over
+import re as _re
+drawn = [int(m) for m in _re.findall(r"_button\([^,]+, cy \+ ch - (\d+)", over)]
+hits = [int(m) for m in _re.findall(r'"\w+", \(cx \+ [^,]+, cy \+ ch - (\d+)', over)]
+check("every button is drawn and hit-tested at the same spot",
+      sorted(drawn) == sorted(hits) and len(drawn) == 3)
 
 print()
 if fails:
