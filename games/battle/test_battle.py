@@ -896,6 +896,33 @@ game.draw()
 check("the next circle is drawn on the map",
       any(c in ("setLineDash", "arc") for c in CALLS))
 
+# --- gunfire shows up on the map -----------------------------------------
+print()
+print("--- gunfire on the map ---")
+begin(seed=60)
+game.pings[:] = []
+game.zone["r"] = game.zone["tr"] = 9000.0        # keep the circle out of it
+b = game.bots[0]
+b["x"], b["z"] = game.player["x"] + 40.0, game.player["z"] + 40.0
+b["cool"] = 0.0
+b["hp"] = 100.0
+fired = False
+for _ in range(180):
+    b["cool"] = 0.0
+    game.update(1 / 60)
+    if game.pings:
+        fired = True
+        break
+check("a bot shooting leaves a mark on the map", fired)
+check("the mark is where the bot is",
+      math.hypot(game.pings[0]["x"] - b["x"], game.pings[0]["z"] - b["z"]) < 60.0)
+
+# and the marks fade away again
+for _ in range(200):
+    game.update(1 / 60)
+    b["cool"] = 99.0
+check("the marks fade away", len(game.pings) == 0)
+
 print()
 if fails:
     print("FAILURES:", fails)
