@@ -137,7 +137,7 @@
     let WORLD = { w: 1000, h: 1000, water: -2 };
     let treePos = [];
     let flashTimer = 0, flashMesh = null, camSmooth = null, lastT = 0;
-    const cratePool = [], dmgPool = [], dustPool = [];
+    const cratePool = [], dmgPool = [], dustPool = [], blockPos = [];
     let dustTimer = 0, fovNow = 62;
     let ready3d = false;
 
@@ -354,6 +354,7 @@
           new THREE.Vector3(0, 1, 0), Math.PI / 4);
         for (let i = 0; i < blds.length; i++) {
           const b = blds[i];
+          blockPos.push({ x: b[0], z: b[1], r: Math.max(b[2], b[3]) * 0.6 });
           const bx = b[0], bz = b[1], bw = b[2], bd = b[3], bh = b[4];
           const gy = sample(bx, bz);
           m4.compose(new THREE.Vector3(bx, gy + bh / 2, bz), noRot,
@@ -559,7 +560,7 @@
 
       // crates: green for health, yellow for ammo
       const crateGeo = new THREE.BoxGeometry(2.4, 2.0, 2.4);
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 32; i++) {
         const h = new THREE.Mesh(crateGeo, new THREE.MeshLambertMaterial({
           color: 0x2fbf6a, emissive: 0x0d3d22
         }));
@@ -693,10 +694,19 @@
                 o.material.opacity = Math.max(0, dying / 1.1);
               }
             });
+            w.opacity = 0;
             w.barBg.visible = false;
             w.barFill.visible = false;
           } else {
             rig.rotation.x = 0;
+            if (w.opacity !== 1) {
+              rig.traverse(function (o) {
+                if (o.material && o.material.opacity !== undefined) {
+                  o.material.opacity = 1;
+                }
+              });
+              w.opacity = 1;
+            }
             const flash = b[7] || 0;
             if (w.bodyMat) {
               w.bodyMat.emissive.setRGB(Math.min(1, flash * 4), 0, 0);
@@ -839,13 +849,21 @@
         for (let attempt = 0; attempt < 2; attempt++) {
           cx = p[0] - Math.sin(yaw) * dist;
           cz = p[2] - Math.cos(yaw) * dist;
-          let blocked = false;
+          let hitsSomething = false;
           for (let k = 0; k < treePos.length; k++) {
             const t = treePos[k];
             const dx = t.x - cx, dz = t.z - cz;
-            if (dx * dx + dz * dz < 16) { blocked = true; break; }
+            if (dx * dx + dz * dz < 16) { hitsSomething = true; break; }
           }
-          if (!blocked) break;
+          if (!hitsSomething) {
+            for (let k = 0; k < blockPos.length; k++) {
+              const t = blockPos[k];
+              const dx = t.x - cx, dz = t.z - cz;
+              const rr = t.r + 4;
+              if (dx * dx + dz * dz < rr * rr) { hitsSomething = true; break; }
+            }
+          }
+          if (!hitsSomething) break;
           dist = Math.max(12.5, dist * 0.80);
         }
         const bob = speed > 2 ? Math.sin(now * 9.5) * 0.30 * Math.min(1, speed / 13) : 0;
@@ -927,12 +945,18 @@
     function pushStick(cx, cy, on) { if (stickFn) stickFn(cx, cy, on); }
 
     // Python tells us when a round is on, so the menus keep a normal cursor
+    window.openArcade = function () {
+      window.location.href = "../../";
+    };
+
     window.set_playing = function (on) {
       playing = !!on;
       if (!playing) {
         firingTouch = firingKey = firingMouse = false;
         stickId = lookId = null;
         stickX = stickY = 0;
+        crouchOn = false;
+        camSmooth = null;
         pushMove(); pushFire(); pushStick(0, 0, false);
         if (document.pointerLockElement) document.exitPointerLock();
       }
