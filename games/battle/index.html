@@ -548,13 +548,18 @@
       torso.position.y = 2.9;
       g.add(torso);
 
-      const head = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 1.15), skinMat);
-      head.position.y = 4.35;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(1.10, 1.15, 1.05), skinMat);
+      head.position.y = 4.32;
       g.add(head);
 
-      const helmet = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.55, 1.35), bodyMat);
-      helmet.position.y = 4.95;
+      // a domed helmet sits better than a slab
+      const helmet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.78, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.58),
+        bodyMat);
+      helmet.scale.set(1.0, 0.86, 1.0);
+      helmet.position.y = 4.62;
       g.add(helmet);
+
 
       const armMat = new THREE.MeshLambertMaterial({
         color: new THREE.Color(colour).multiplyScalar(0.76)
@@ -1310,6 +1315,7 @@
 
       scene = new THREE.Scene();
       scene.background = skyTexture();
+
       scene.fog = new THREE.Fog(0xbcd9ef, 600, 2400);
 
       camera = new THREE.PerspectiveCamera(62, 1.6, 0.5, 5000);
