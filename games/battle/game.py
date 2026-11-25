@@ -477,6 +477,7 @@ crouching = False
 sprinting = False
 weapon = "rifle"
 mag = 30
+MAG = {"rifle": 30, "shotgun": 6}     # what is left in each weapon
 reloading = 0.0
 pickups = []              # health and ammo crates lying about
 dmg_numbers = []          # the numbers that float off a bot you hit
@@ -548,12 +549,13 @@ def set_crouch(on):
 
 
 def set_swap():
-    """Change weapon - 6. weapon swap."""
+    """Change weapon, keeping whatever is left in each magazine."""
     global weapon, mag, reloading
-    if state != "play" or reloading > 0:
+    if state != "play" or reloading > 0 or paused:
         return
+    MAG[weapon] = mag
     weapon = "shotgun" if weapon == "rifle" else "rifle"
-    mag = WEAPONS[weapon]["mag"]
+    mag = MAG.get(weapon, WEAPONS[weapon]["mag"])
     reloading = 0.0
     _sound("tap")
 
@@ -570,11 +572,16 @@ def set_reload():
 
 
 def set_pause(on):
+    """Pause or resume. Calling it with the same value toggles, so the pause
+    key and the pause button can never strand you on the menu."""
     global paused
     if state != "play":
         paused = False
         return
-    paused = bool(on)
+    if bool(on) == paused:
+        paused = not paused
+    else:
+        paused = bool(on)
     _notify_playing(not paused)
 
 
@@ -610,6 +617,10 @@ PAUSE_RECT = (16, 12, 58, 44)
 def tap(x, y):
     global state, paused
     if state == "play":
+        if _in(PAUSE_RECT, x, y):
+            _sound("tap")
+            set_pause(not paused)
+            return
         if paused:
             for tag, r in _menu_hit:
                 if _in(r, x, y):
@@ -621,10 +632,6 @@ def tap(x, y):
                         state = "menu"
                         _notify_playing(False)
                     return
-            return
-        if _in(PAUSE_RECT, x, y):
-            _sound("tap")
-            set_pause(True)
             return
         for tag, label, active, r in touch_buttons():
             if _in(r, x, y):
@@ -651,6 +658,11 @@ def tap(x, y):
                 _sound("tap")
                 if tag == "again":
                     start_game()
+                elif tag == "arcade":
+                    try:
+                        js.openArcade()
+                    except Exception:
+                        pass
                 else:
                     state = "menu"
                     _notify_playing(False)
@@ -696,8 +708,9 @@ def start_game(seed=None):
                         "taken": False})
 
     shots = []
-    zone = {"cx": WORLD_W / 2, "cz": WORLD_H / 2, "r": 1250.0,
-            "tx": WORLD_W / 2, "tz": WORLD_H / 2, "tr": 1250.0}
+    _cover = math.hypot(WORLD_W / 2, WORLD_H / 2) + 40.0
+    zone = {"cx": WORLD_W / 2, "cz": WORLD_H / 2, "r": _cover,
+            "tx": WORLD_W / 2, "tz": WORLD_H / 2, "tr": _cover}
     zone_timer = 26.0
     zone_phase = 0
     elapsed = 0.0
@@ -714,7 +727,9 @@ def start_game(seed=None):
     stamina = 100.0
     crouching = sprinting = paused = False
     weapon = "rifle"
-    mag = WEAPONS["rifle"]["mag"]
+    MAG["rifle"] = WEAPONS["rifle"]["mag"]
+    MAG["shotgun"] = WEAPONS["shotgun"]["mag"]
+    mag = MAG["rifle"]
     reloading = 0.0
     shake = 0.0
     dmg_numbers[:] = []
@@ -877,6 +892,7 @@ def update(dt):
         reloading = max(0.0, reloading - dt)
         if reloading <= 0.0:
             mag = WEAPONS[weapon]["mag"]
+            MAG[weapon] = mag
 
     # 7. crates you can walk over
     for pk in pickups:
@@ -889,6 +905,7 @@ def update(dt):
                 message = "Picked up a medkit"
             else:
                 mag = WEAPONS[weapon]["mag"]
+                MAG[weapon] = mag
                 reloading = 0.0
                 message = "Picked up ammo"
             _sound("home")
@@ -947,7 +964,7 @@ def update(dt):
             continue
         s["x"] += s["dx"] * dt
         s["z"] += s["dz"] * dt
-        if not land_at(s["x"], s["z"]):
+        if blocked(s["x"], s["z"]):
             continue
         hit = False
         if s["owner"] == "p":
@@ -1361,7 +1378,7 @@ def _draw_play_hud():
     c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 75)
 
     if message:
-        _wrap(message, W / 2, 98, min(520, W - 60), 12, "#cfe0ff")
+        _wrap(message, W / 2, 106, min(520, W - 60), 12, "#cfe0ff")
 
     # ---- 24 25. health, stamina, weapon and magazine ----------------------
     bx = 18
@@ -1561,10 +1578,15 @@ def _draw_over():
     c.fillText("%d kills  \u00b7  survived %ds" % (player["kills"], int(elapsed)),
                W / 2, cy + 96)
 
+    c.fillStyle = "#ffd23f"
+    c.font = "800 %dpx %s" % (_fs(17), FONT)
+    c.fillText("#%d of %d" % (max(1, placement), BOT_COUNT + 1), W / 2, cy + 124)
+
     bw = min(200, (cw - 60) / 2)
     _button(cx + 20, cy + ch - 130, bw, 52, "Drop again", True,
             "#22c55e" if result == "win" else "#ffb703")
     _button(cx + cw - bw - 20, cy + ch - 130, bw, 52, "Menu", False)
     _button(cx + 20, cy + ch - 66, cw - 40, 44, "Back to the arcade", False, size=15)
     _menu_hit = [("again", (cx + 20, cy + ch - 130, bw, 52)),
-                 ("menu", (cx + cw - bw - 20, cy + ch - 130, bw, 52))]
+                 ("menu", (cx + cw - bw - 20, cy + ch - 130, bw, 52)),
+                 ("arcade", (cx + 20, cy + ch - 66, cw - 40, 44))]
