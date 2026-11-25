@@ -386,9 +386,18 @@
                      new THREE.Vector3(Math.max(bw, bd) * 0.80, bh * 0.42,
                                        Math.max(bw, bd) * 0.80));
           roofs.setMatrixAt(i, m4);
+          // every house its own shade, so a town is not a row of clones
+          tint.setHSL(0.09 + rnd() * 0.05, 0.08 + rnd() * 0.14,
+                      0.58 + rnd() * 0.16);
+          walls.setColorAt(i, tint);
+          tint.setHSL(0.01 + rnd() * 0.05, 0.34 + rnd() * 0.26,
+                      0.26 + rnd() * 0.16);
+          roofs.setColorAt(i, tint);
         }
         walls.instanceMatrix.needsUpdate = true;
         roofs.instanceMatrix.needsUpdate = true;
+        if (walls.instanceColor) walls.instanceColor.needsUpdate = true;
+        if (roofs.instanceColor) roofs.instanceColor.needsUpdate = true;
         scene.add(walls); scene.add(roofs);
 
         // ---- roads, and bridges where a road meets water ----
