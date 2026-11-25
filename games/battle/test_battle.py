@@ -982,6 +982,32 @@ hits = [int(m) for m in _re.findall(r'"\w+", \(cx \+ [^,]+, cy \+ ch - (\d+)', o
 check("every button is drawn and hit-tested at the same spot",
       sorted(drawn) == sorted(hits) and len(drawn) == 3)
 
+# --- the line under the compass does not sit there forever ----------------
+print()
+print("--- the message line ---")
+begin(seed=80)
+game.message = "A fresh line of text."
+game.update(1 / 60)
+check("a new line starts its timer", game.message_t > 4.0)
+for _ in range(180):
+    game.update(1 / 60)
+check("it is still there after three seconds", game.message_t > 0.0)
+for _ in range(150):
+    game.update(1 / 60)
+check("and then it fades away", game.message_t == 0.0)
+
+# a new line gets its own timer
+game.message = "Something else happened."
+game.update(1 / 60)
+check("a new line starts the timer again", game.message_t > 4.0)
+
+# the HUD is one panel, not two boxes stacked up
+CALLS.clear()
+game.state = "play"
+game.set_size(900, 560)
+game.draw()
+check("the HUD still draws", len(CALLS) > 30)
+
 print()
 if fails:
     print("FAILURES:", fails)
