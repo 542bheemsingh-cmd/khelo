@@ -389,6 +389,25 @@ for _f in sorted(game.DICE_PCT):
           abs(_got - game.DICE_PCT[_f]) < 1.2)
 check("a six really does beat a two", _counts[6] > _counts[2] * 1.9)
 
+# --- regression: the turn message was written to a local and thrown away ---
+print()
+print("--- regressions ---")
+game.start_game("single", 4)
+game.dice = 3
+game.message = ""
+game._pass_turn()
+check("passing the turn tells you whose go it is",
+      game.message.endswith("to roll.") and len(game.message) > 8)
+
+# a 6 keeps the turn, so the message must not change hands
+game.start_game("single", 4)
+who = game.cur()
+game.dice = 6
+game.message = "keep"
+game._pass_turn()
+check("rolling a six keeps the same player", game.cur() == who)
+check("rolling a six does not print the next player's name", game.message == "keep")
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
