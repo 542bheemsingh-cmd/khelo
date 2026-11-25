@@ -300,6 +300,11 @@ TOUCH_UI = False
 STICK = {"x": 0.0, "y": 0.0, "on": False}
 move_x = 0.0
 move_z = 0.0
+pvx = 0.0                 # the soldier has weight: it speeds up and slows down
+pvz = 0.0
+hitmark = 0.0             # a little cross on the crosshair when a shot lands
+hits = []                 # where bullets struck, for the sparks
+feed = []                 # the kill feed
 look_dx = 0.0
 look_dy = 0.0
 firing = False
@@ -405,6 +410,7 @@ def tap(x, y):
 def start_game(seed=None):
     global state, player, bots, shots, zone, message, elapsed, result
     global zone_timer, zone_phase, cam_yaw, cam_pitch, move_x, move_z, firing
+    global pvx, pvz, hitmark, hits, feed
 
     if not _READY:
         build_terrain()
@@ -423,7 +429,7 @@ def start_game(seed=None):
                 break
         bots.append({"x": bx, "z": bz, "yaw": _rng.uniform(0, 6.283),
                      "hp": 100.0, "alive": True, "cool": _rng.uniform(0.4, 1.6),
-                     "wander": 0.0, "wx": 0.0, "wz": 0.0})
+                     "wander": 0.0, "wx": 0.0, "wz": 0.0, "dying": 0.0})
 
     shots = []
     zone = {"cx": WORLD_W / 2, "cz": WORLD_H / 2, "r": 640.0,
@@ -438,6 +444,10 @@ def start_game(seed=None):
     cam_yaw = 0.0
     cam_pitch = 0.34
     move_x = move_z = 0.0
+    pvx = pvz = 0.0
+    hitmark = 0.0
+    hits[:] = []
+    feed[:] = []
     firing = False
     _sound("start")
 
@@ -481,6 +491,10 @@ def fire():
     if t is not None:
         yaw = math.atan2(t["x"] - player["x"], t["z"] - player["z"])
     _spawn_shot(player["x"], player["z"], yaw, "p")
+    try:
+        js.world3d.flash()
+    except Exception:
+        pass
     _sound("shot")
 
 
@@ -490,6 +504,7 @@ def fire():
 def update(dt):
     global elapsed, zone_timer, zone_phase, message, state, result
     global cam_yaw, cam_pitch, look_dx, look_dy
+    global hitmark, pvx, pvz
 
     dt = min(max(float(dt), 0.0), 0.06)
     if state != "play":
@@ -497,6 +512,18 @@ def update(dt):
         return
 
     elapsed += dt
+
+    if hitmark > 0:
+        hitmark = max(0.0, hitmark - dt)
+    for h in hits:
+        h["life"] -= dt
+    hits[:] = [h for h in hits if h["life"] > 0]
+    for f in feed:
+        f["life"] -= dt
+    feed[:] = [f for f in feed if f["life"] > 0]
+    for b in bots:
+        if not b["alive"] and b.get("dying", 0) > 0:
+            b["dying"] = max(0.0, b["dying"] - dt)
 
     cam_yaw += look_dx
     cam_pitch = max(0.06, min(0.95, cam_pitch + look_dy))
@@ -508,7 +535,9 @@ def update(dt):
     p["hurt"] = max(0.0, p["hurt"] - dt)
 
     if p["alive"]:
-        p["yaw"] = cam_yaw          # always face the way you are aiming
+        # turn toward the aim instead of snapping to it
+        diff = (cam_yaw - p["yaw"] + math.pi) % 6.283185 - math.pi
+        p["yaw"] += diff * min(1.0, dt * 15.0)
         mx, mz = move_x, move_z
         mag = math.hypot(mx, mz)
         if mag > 1.0:
@@ -516,14 +545,27 @@ def update(dt):
         if mag > 0.08:
             # move relative to where the camera is looking
             s, c = math.sin(cam_yaw), math.cos(cam_yaw)
-            wx = mx * c + mz * s
-            wz = -mx * s + mz * c
-            nx = p["x"] + wx * PLAYER_SPEED * dt
-            nz = p["z"] + wz * PLAYER_SPEED * dt
+            # screen-right is rotate(forward, -90), so D must go to (-c, +s)
+            wx = -mx * c + mz * s
+            wz = mx * s + mz * c
+            tvx, tvz = wx * PLAYER_SPEED, wz * PLAYER_SPEED
+        else:
+            tvx = tvz = 0.0
+        # ease toward the wanted speed, so starts and stops are not instant
+        k = min(1.0, dt * (11.0 if (tvx or tvz) else 16.0))
+        pvx += (tvx - pvx) * k
+        pvz += (tvz - pvz) * k
+        if abs(pvx) > 0.01 or abs(pvz) > 0.01:
+            nx = p["x"] + pvx * dt
+            nz = p["z"] + pvz * dt
             if land_at(nx, p["z"]):
                 p["x"] = max(2.0, min(WORLD_W - 2.0, nx))
+            else:
+                pvx = 0.0
             if land_at(p["x"], nz):
                 p["z"] = max(2.0, min(WORLD_H - 2.0, nz))
+            else:
+                pvz = 0.0
         if firing:
             fire()
 
@@ -580,13 +622,18 @@ def update(dt):
                 if b["alive"] and math.hypot(b["x"] - s["x"], b["z"] - s["z"]) < 6.0:
                     b["hp"] -= PLAYER_DAMAGE
                     hit = True
+                    hits.append({"x": s["x"], "z": s["z"], "life": 0.45})
+                    hitmark = 0.30
                     if b["hp"] <= 0:
                         b["alive"] = False
+                        b["dying"] = 1.1
                         p["kills"] += 1
+                        feed.insert(0, {"text": "You downed a bot", "life": 3.5})
                         _sound("hit")
                     break
         else:
             if p["alive"] and math.hypot(p["x"] - s["x"], p["z"] - s["z"]) < 6.0:
+                hits.append({"x": s["x"], "z": s["z"], "life": 0.45})
                 p["hp"] -= BOT_DAMAGE
                 p["hurt"] = 0.5
                 hit = True
@@ -623,6 +670,8 @@ def update(dt):
             b["hp"] -= 7.0 * dt
             if b["hp"] <= 0:
                 b["alive"] = False
+                b["dying"] = 1.1
+                feed.insert(0, {"text": "The zone took a bot", "life": 3.5})
 
     # --- who won ---
     if p["hp"] <= 0 and p["alive"]:
@@ -650,22 +699,27 @@ def _frame_json():
     p = player
     b = []
     for q in bots:
-        if q["alive"]:
+        if q["alive"] or q.get("dying", 0) > 0:
             b.append([round(q["x"], 2), round(height_at(q["x"], q["z"]), 2),
-                      round(q["z"], 2), round(q["yaw"], 3)])
+                      round(q["z"], 2), round(q["yaw"], 3),
+                      max(0.0, round(q["hp"], 0)),
+                      0 if q["alive"] else round(q.get("dying", 0), 2)])
     s = []
     for t in shots:
         s.append([round(t["x"], 2), round(height_at(t["x"], t["z"]) + 1.6, 2),
-                  round(t["z"], 2)])
+                  round(t["z"], 2), round(t["dx"], 1), round(t["dz"], 1)])
+    h = [[round(e["x"], 2), round(height_at(e["x"], e["z"]) + 1.4, 2), round(e["z"], 2),
+          round(e["life"], 2)] for e in hits]
     return json.dumps({
         "p": [round(p["x"], 2), round(height_at(p["x"], p["z"]), 2),
               round(p["z"], 2), round(p["yaw"], 3),
-              1 if p["alive"] else 0, round(p["hp"], 1)],
+              1 if p["alive"] else 0, round(p["hp"], 1),
+              round(math.hypot(pvx, pvz), 2)],
         "b": b,
         "s": s,
+        "h": h,
         "z": [round(zone["cx"], 2), round(zone["cz"], 2), round(zone["r"], 2)],
         "cam": [round(cam_yaw, 3), round(cam_pitch, 3)],
-        "moving": 1 if math.hypot(move_x, move_z) > 0.1 else 0,
     })
 
 
@@ -878,6 +932,15 @@ def _draw_play_hud():
 
     _minimap()
 
+    # the kill feed, under the minimap
+    fy = min(150, W * 0.26, H * 0.30) + 30
+    for i, f in enumerate(feed[:4]):
+        a = min(1.0, f["life"] / 1.2)
+        c.textAlign = "right"
+        c.fillStyle = "rgba(255, 255, 255, %.2f)" % a
+        c.font = "700 %dpx %s" % (_fs(12), FONT)
+        c.fillText(f["text"], W - 16, fy + i * 17)
+
     # the crosshair sits where the bullets go
     cxx, cyy = W / 2, H / 2
     c.strokeStyle = "rgba(255, 255, 255, 0.80)"
@@ -891,6 +954,16 @@ def _draw_play_hud():
     c.arc(cxx, cyy, 2.2, 0, 6.2832)
     c.fillStyle = "rgba(255, 255, 255, 0.9)"
     c.fill()
+
+    if hitmark > 0:
+        a = min(1.0, hitmark / 0.3)
+        c.strokeStyle = "rgba(255, 92, 122, %.2f)" % a
+        c.lineWidth = 3
+        for sx_, sy_ in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+            c.beginPath()
+            c.moveTo(cxx + sx_ * 9, cyy + sy_ * 9)
+            c.lineTo(cxx + sx_ * 17, cyy + sy_ * 17)
+            c.stroke()
 
     if TOUCH_UI:
         # the movement stick, drawn wherever the thumb is resting
