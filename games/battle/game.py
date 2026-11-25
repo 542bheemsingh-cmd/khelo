@@ -1630,7 +1630,7 @@ def _draw_menu():
     global _menu_hit
     _menu_hit = []
     c = hctx
-    c.fillStyle = "rgba(4, 10, 24, 0.40)"
+    c.fillStyle = "rgba(4, 10, 24, 0.28)"
     c.fillRect(0, 0, W, H)
     a = 0.55 + 0.35 * math.sin(_clock * 2.6)
     c.textAlign = "center"
@@ -1694,7 +1694,7 @@ def _draw_play_hud():
 
     if message and message_t > 0.0:
         a = min(1.0, message_t / 0.8)
-        _wrap(message, W / 2, 112, min(520, W - 60), 12,
+        _wrap(message, W / 2, 118, min(500, W - 60), 12,
               "rgba(207, 224, 255, %.2f)" % a)
 
     # ---- 24 25. health, stamina, weapon and magazine ----------------------
@@ -1768,13 +1768,16 @@ def _draw_play_hud():
     _minimap()
 
     # the kill feed, under the minimap
-    fy = minimap_size() + 54
+    fy = minimap_size() + 56
     for i, f in enumerate(feed[:4]):
         a = min(1.0, f["life"] / 1.2)
         c.textAlign = "right"
-        c.fillStyle = "rgba(255, 255, 255, %.2f)" % a
         c.font = "700 %dpx %s" % (_fs(12), FONT)
-        c.fillText(f["text"], W - 16, fy + i * 17)
+        tw = c.measureText(f["text"]).width
+        _panel(W - tw - 22, fy + i * 20 - 12, tw + 16, 19,
+               "rgba(8, 14, 30, %.2f)" % (0.55 * a), None, 6)
+        c.fillStyle = "rgba(255, 255, 255, %.2f)" % a
+        c.fillText(f["text"], W - 14, fy + i * 20)
 
     # the crosshair sits where the bullets go
     cxx, cyy = W / 2, H / 2
