@@ -9,6 +9,7 @@ Run with:  python3 test_battle.py
 
 import math
 import os
+import random
 import sys
 import types
 
@@ -90,6 +91,18 @@ import game  # noqa: E402
 
 import json  # noqa: E402
 
+
+def open_spot(clear=80.0, seed=99):
+    """Open ground on the bigger map, with room for a bot further along +z."""
+    r = random.Random(seed)
+    for _ in range(900):
+        x = r.uniform(240.0, game.WORLD_W - 240.0)
+        z = r.uniform(240.0, game.WORLD_H - 320.0)
+        if game.blocked(x, z) or game.blocked(x, z + clear) or game.blocked(x + 40, z):
+            continue
+        return x, z
+    return game.WORLD_W / 2, game.WORLD_H / 2
+
 # ---------------------------------------------------------------------------
 # The map
 # ---------------------------------------------------------------------------
@@ -125,7 +138,7 @@ print()
 print("--- starting a round ---")
 game.start_game(seed=1)
 check("the game is playing", game.state == "play")
-check("nine bots spawn", len(game.bots) == game.BOT_COUNT == 9)
+check("twelve bots spawn", len(game.bots) == game.BOT_COUNT == 12)
 check("every bot is alive to begin with", all(b["alive"] for b in game.bots))
 check("the player starts alive with full health",
       game.player["alive"] and game.player["hp"] == 100.0)
@@ -139,7 +152,7 @@ check("bots start away from the player",
 check("everybody starts inside the zone",
       all(math.hypot(b["x"] - game.zone["cx"], b["z"] - game.zone["cz"]) <= game.zone["r"]
           for b in game.bots))
-check("ten are alive", game.alive_count() == 10)
+check("thirteen are alive", game.alive_count() == 13)
 
 # ---------------------------------------------------------------------------
 # Moving
@@ -200,9 +213,10 @@ check("the cooldown stops a second shot straight away", len(game.shots) == m)
 # a bot in front takes the damage
 game.start_game(seed=5)
 b = game.bots[0]
-game.player["x"], game.player["z"] = 300.0, 500.0
+_ax, _az = open_spot(80.0, 5)
+game.player["x"], game.player["z"] = _ax, _az
 game.player["yaw"] = 0.0
-b["x"], b["z"] = 300.0, 560.0
+b["x"], b["z"] = _ax, _az + 60.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
 game.mag = 50
@@ -216,9 +230,10 @@ check("shooting a bot hurts it", b["hp"] < 100.0)
 game.start_game(seed=6)
 b = game.bots[0]
 b["hp"] = 1.0
-game.player["x"], game.player["z"] = 300.0, 500.0
+_ax, _az = open_spot(70.0, 6)
+game.player["x"], game.player["z"] = _ax, _az
 game.player["yaw"] = 0.0
-b["x"], b["z"] = 300.0, 545.0
+b["x"], b["z"] = _ax, _az + 45.0
 game.player["cool"] = 0.0
 game.mag = 10
 for _ in range(60):
@@ -229,7 +244,7 @@ for _ in range(60):
         break
 check("a bot can be killed", not b["alive"])
 check("the kill is counted", game.player["kills"] >= 1)
-check("the alive count drops", game.alive_count() == 9)
+check("the alive count drops", game.alive_count() == 12)
 
 # ---------------------------------------------------------------------------
 # Which way is which
@@ -241,7 +256,8 @@ print("--- which way is which ---")
 game.start_game(seed=30)
 game.cam_yaw = 0.0
 game.player["yaw"] = 0.0
-game.player["x"], game.player["z"] = 400.0, 500.0
+_dx, _dz = open_spot(90.0, 30)
+game.player["x"], game.player["z"] = _dx, _dz
 x0, z0 = game.player["x"], game.player["z"]
 game.set_move(1.0, 0.0)                 # D
 for _ in range(40):
@@ -252,7 +268,8 @@ check("D does not sneak forwards", abs(game.player["z"] - z0) < 1.0)
 game.start_game(seed=31)
 game.cam_yaw = 0.0
 game.player["yaw"] = 0.0
-game.player["x"], game.player["z"] = 400.0, 500.0
+_dx, _dz = open_spot(90.0, 30)
+game.player["x"], game.player["z"] = _dx, _dz
 x0, z0 = game.player["x"], game.player["z"]
 game.set_move(-1.0, 0.0)                # A
 for _ in range(40):
@@ -262,7 +279,8 @@ check("A moves to the left of the screen", game.player["x"] > x0 + 2.0)
 game.start_game(seed=32)
 game.cam_yaw = 0.0
 game.player["yaw"] = 0.0
-game.player["x"], game.player["z"] = 400.0, 500.0
+_dx, _dz = open_spot(90.0, 31)
+game.player["x"], game.player["z"] = _dx, _dz
 z0 = game.player["z"]
 game.set_move(0.0, 1.0)                 # W
 for _ in range(40):
@@ -292,9 +310,10 @@ print()
 print("--- shooting feedback ---")
 game.start_game(seed=34)
 game.cam_yaw = 0.0
-game.player["x"], game.player["z"] = 300.0, 500.0
+_ax, _az = open_spot(70.0, 34)
+game.player["x"], game.player["z"] = _ax, _az
 b = game.bots[0]
-b["x"], b["z"] = 304.0, 548.0
+b["x"], b["z"] = _ax + 4.0, _az + 48.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
 game.mag = 40
@@ -365,7 +384,7 @@ game.send_frame()
 check("a frame is sent", len(WORLD.frames) == 1)
 st = json.loads(WORLD.frames[-1])
 check("the frame has the player and its speed", len(st["p"]) == 7)
-check("the frame lists the living bots", len(st["b"]) == 9)
+check("the frame lists the living bots", len(st["b"]) == 12)
 check("each bot carries health, a dying timer, a grade and a flash",
       all(len(b) == 8 for b in st["b"]))
 check("the frame has the zone", len(st["z"]) == 3)
@@ -404,9 +423,10 @@ check("turning the camera turns the soldier",
 # a shot must follow the camera, not wherever the soldier last walked
 game.start_game(seed=21)
 game.cam_yaw = 1.2
-game.player["x"], game.player["z"] = 300.0, 500.0
+_ax, _az = open_spot(80.0, 21)
+game.player["x"], game.player["z"] = _ax, _az
 for b in game.bots:
-    b["x"], b["z"] = 120.0, 220.0          # all far outside the aim cone
+    b["x"], b["z"] = _ax - 900.0, _az - 900.0   # all far outside the aim cone
 game.player["cool"] = 0.0
 game.mag = 20
 game.shots = []
@@ -419,9 +439,10 @@ check("a shot follows the camera, not the last step",
 # the aim assist still lands hits on something in front of you
 game.start_game(seed=22)
 game.cam_yaw = 0.0
-game.player["x"], game.player["z"] = 300.0, 500.0
+_ax, _az = open_spot(70.0, 22)
+game.player["x"], game.player["z"] = _ax, _az
 b = game.bots[0]
-b["x"], b["z"] = 306.0, 550.0
+b["x"], b["z"] = _ax + 6.0, _az + 50.0
 b["hp"] = 100.0
 game.player["cool"] = 0.0
 game.mag = 40
@@ -515,18 +536,20 @@ def run(frames, setup=None):
 
 # sprint covers more ground and burns stamina
 game.start_game(seed=40)
-game.player["x"], game.player["z"] = 400.0, 500.0
+_dx, _dz = open_spot(90.0, 40)
+game.player["x"], game.player["z"] = _dx, _dz
 game.cam_yaw = 0.0
 game.set_move(0.0, 1.0)
 run(50)
-walked = abs(game.player["z"] - 500.0)
+walked = abs(game.player["z"] - _dz)
 game.start_game(seed=40)
-game.player["x"], game.player["z"] = 400.0, 500.0
+_dx, _dz = open_spot(90.0, 41)
+game.player["x"], game.player["z"] = _dx, _dz
 game.cam_yaw = 0.0
 game.set_move(0.0, 1.0)
 game.set_sprint(True)
 run(50)
-ran = abs(game.player["z"] - 500.0)
+ran = abs(game.player["z"] - _dz)
 check("sprinting covers more ground", ran > walked * 1.25)
 check("sprinting burns stamina", game.stamina < 100.0)
 game.set_sprint(False)
@@ -535,12 +558,13 @@ check("stamina comes back", game.stamina > 30.0)
 
 # crouching is slower
 game.start_game(seed=41)
-game.player["x"], game.player["z"] = 400.0, 500.0
+_dx, _dz = open_spot(90.0, 42)
+game.player["x"], game.player["z"] = _dx, _dz
 game.cam_yaw = 0.0
 game.set_move(0.0, 1.0)
 game.set_crouch(True)
 run(50)
-crept = abs(game.player["z"] - 500.0)
+crept = abs(game.player["z"] - _dz)
 check("crouching is slower than walking", crept < walked * 0.75)
 check("crouching is remembered", game.crouching is True)
 game.set_crouch(False)
