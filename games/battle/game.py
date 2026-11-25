@@ -297,6 +297,7 @@ zone_phase = 0
 _menu_hit = []
 
 TOUCH_UI = False
+STICK = {"x": 0.0, "y": 0.0, "on": False}
 move_x = 0.0
 move_z = 0.0
 look_dx = 0.0
@@ -306,6 +307,14 @@ cam_yaw = 0.0
 cam_pitch = 0.34
 
 _rng = random.Random()
+
+
+def _notify_playing(on):
+    """Tell the page whether a round is on, so it can lock or free the mouse."""
+    try:
+        js.set_playing(bool(on))
+    except Exception:
+        pass
 
 
 def _sound(name):
@@ -318,6 +327,13 @@ def _sound(name):
 # ---------------------------------------------------------------------------
 # Input
 # ---------------------------------------------------------------------------
+def set_stick(cx, cy, on):
+    """Where the thumb is resting, so the stick can be drawn there."""
+    STICK["x"] = float(cx)
+    STICK["y"] = float(cy)
+    STICK["on"] = bool(on)
+
+
 def set_touch_ui(on):
     global TOUCH_UI
     TOUCH_UI = bool(on)
@@ -378,6 +394,7 @@ def tap(x, y):
                     start_game()
                 else:
                     state = "menu"
+                    _notify_playing(False)
                 return
         return
 
@@ -417,6 +434,7 @@ def start_game(seed=None):
     result = ""
     message = "Land, loot and survive. The zone closes in 18 seconds."
     state = "play"
+    _notify_playing(True)
     cam_yaw = 0.0
     cam_pitch = 0.34
     move_x = move_z = 0.0
@@ -434,7 +452,7 @@ def _spawn_shot(x, z, yaw, owner):
                   "life": BULLET_LIFE, "owner": owner})
 
 
-def _nearest_target(x, z, yaw, max_dist=170.0, cone=0.42):
+def _nearest_target(x, z, yaw, max_dist=180.0, cone=0.34):
     """A little aim assist, so the game is playable with a thumb."""
     best, bestd = None, max_dist
     for b in bots:
@@ -458,7 +476,7 @@ def fire():
         return
     player["cool"] = FIRE_COOL
     player["ammo"] -= 1
-    yaw = player["yaw"]
+    yaw = cam_yaw
     t = _nearest_target(player["x"], player["z"], yaw)
     if t is not None:
         yaw = math.atan2(t["x"] - player["x"], t["z"] - player["z"])
@@ -480,8 +498,8 @@ def update(dt):
 
     elapsed += dt
 
-    cam_yaw -= look_dx
-    cam_pitch = max(0.06, min(0.95, cam_pitch - look_dy))
+    cam_yaw += look_dx
+    cam_pitch = max(0.06, min(0.95, cam_pitch + look_dy))
     look_dx = look_dy = 0.0
 
     # --- the player ---
@@ -490,6 +508,7 @@ def update(dt):
     p["hurt"] = max(0.0, p["hurt"] - dt)
 
     if p["alive"]:
+        p["yaw"] = cam_yaw          # always face the way you are aiming
         mx, mz = move_x, move_z
         mag = math.hypot(mx, mz)
         if mag > 1.0:
@@ -499,7 +518,6 @@ def update(dt):
             s, c = math.sin(cam_yaw), math.cos(cam_yaw)
             wx = mx * c + mz * s
             wz = -mx * s + mz * c
-            p["yaw"] = math.atan2(wx, wz)
             nx = p["x"] + wx * PLAYER_SPEED * dt
             nz = p["z"] + wz * PLAYER_SPEED * dt
             if land_at(nx, p["z"]):
@@ -612,10 +630,12 @@ def update(dt):
         p["hp"] = 0.0
         state = "over"
         result = "lose"
+        _notify_playing(False)
         _sound("lose")
     elif not any(b["alive"] for b in bots):
         state = "over"
         result = "win"
+        _notify_playing(False)
         _sound("win")
 
 
@@ -722,8 +742,18 @@ def _wrap(text, x, y, maxw, size=15, color="#9fb3d9"):
     return y
 
 
+FIRE_R = 64.0
+FIRE_X = 0.0
+FIRE_Y = 0.0
+
+
+def fire_button():
+    """The fire button's centre and radius, in HUD pixels."""
+    return (W - 104.0, H - 104.0, FIRE_R)
+
+
 def _minimap():
-    size = min(150, W * 0.26)
+    size = min(150, W * 0.26, H * 0.30)
     mx, my = W - size - 16, 16
     _panel(mx - 4, my - 4, size + 8, size + 8, "rgba(8, 14, 30, 0.82)",
            "rgba(150,180,240,0.22)", 10)
@@ -762,6 +792,8 @@ def _minimap():
 
 
 def draw():
+    global FIRE_X, FIRE_Y
+    FIRE_X, FIRE_Y, _r = fire_button()
     c = hctx
     c.clearRect(0, 0, W, H)
 
@@ -798,10 +830,12 @@ def _draw_menu():
     _button(W / 2 - bw / 2, H / 2 + 40, bw, bh, "DROP IN", True, "#ffb703", size=19)
     _menu_hit.append(("play", (W / 2 - bw / 2, H / 2 + 40, bw, bh)))
 
-    _wrap("Desktop: WASD to move, drag to look, click or Space to fire.",
-          W / 2, H / 2 + 128, min(600, W - 60), 12, "#7f93bb")
-    _wrap("Phone: left stick to move, drag the right side to look, FIRE to shoot.",
-          W / 2, H / 2 + 152, min(600, W - 60), 12, "#7f93bb")
+    _wrap("Laptop: WASD to move \u00b7 click once to grab the mouse, then move it to look",
+          W / 2, H / 2 + 126, min(640, W - 50), 12, "#7f93bb")
+    _wrap("Click or Space to fire \u00b7 Esc lets the mouse go",
+          W / 2, H / 2 + 148, min(640, W - 50), 12, "#7f93bb")
+    _wrap("Phone: a stick appears under your left thumb \u00b7 drag the right side to look \u00b7 FIRE",
+          W / 2, H / 2 + 174, min(640, W - 50), 12, "#7f93bb")
 
 
 def _draw_play_hud():
@@ -809,7 +843,7 @@ def _draw_play_hud():
     p = player
 
     # health
-    bx, by, bw = 18, H - 74, min(260, W * 0.42)
+    bx, by, bw = 18, (H - 190 if TOUCH_UI else H - 74), min(260, W * 0.42)
     _panel(bx - 6, by - 8, bw + 12, 34, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 9)
     frac = max(0.0, min(1.0, p["hp"] / 100.0))
     c.fillStyle = "rgba(60, 74, 108, 0.7)"
@@ -844,34 +878,53 @@ def _draw_play_hud():
 
     _minimap()
 
-    if TOUCH_UI:
-        # the movement stick
-        sx, sy = 96, H - 96
+    # the crosshair sits where the bullets go
+    cxx, cyy = W / 2, H / 2
+    c.strokeStyle = "rgba(255, 255, 255, 0.80)"
+    c.lineWidth = 2
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         c.beginPath()
-        c.arc(sx, sy, 62, 0, 6.2832)
-        c.fillStyle = "rgba(12, 20, 40, 0.42)"
+        c.moveTo(cxx + dx * 8, cyy + dy * 8)
+        c.lineTo(cxx + dx * 16, cyy + dy * 16)
+        c.stroke()
+    c.beginPath()
+    c.arc(cxx, cyy, 2.2, 0, 6.2832)
+    c.fillStyle = "rgba(255, 255, 255, 0.9)"
+    c.fill()
+
+    if TOUCH_UI:
+        # the movement stick, drawn wherever the thumb is resting
+        if STICK["on"]:
+            sx, sy = STICK["x"], STICK["y"]
+            base_a, knob_a = 0.40, 0.82
+        else:
+            sx, sy = 108, H - 108
+            base_a, knob_a = 0.18, 0.30
+        c.beginPath()
+        c.arc(sx, sy, 66, 0, 6.2832)
+        c.fillStyle = "rgba(12, 20, 40, %.2f)" % base_a
         c.fill()
         c.lineWidth = 2
-        c.strokeStyle = "rgba(150, 180, 240, 0.38)"
+        c.strokeStyle = "rgba(150, 180, 240, 0.42)"
         c.stroke()
         c.beginPath()
-        c.arc(sx + move_x * 40, sy - move_z * 40, 26, 0, 6.2832)
-        c.fillStyle = "rgba(126, 240, 192, 0.80)"
+        c.arc(sx + move_x * 46, sy - move_z * 46, 28, 0, 6.2832)
+        c.fillStyle = "rgba(126, 240, 192, %.2f)" % knob_a
         c.fill()
 
-        # the fire button
-        fx, fy = W - 96, H - 96
+        # the fire button - big, and always in the same corner
+        fx, fy = FIRE_X, FIRE_Y
         c.beginPath()
-        c.arc(fx, fy, 46, 0, 6.2832)
-        c.fillStyle = "rgba(255, 92, 122, 0.80)"
+        c.arc(fx, fy, FIRE_R, 0, 6.2832)
+        c.fillStyle = "rgba(255, 92, 122, 0.86)" if firing else "rgba(255, 92, 122, 0.62)"
         c.fill()
         c.lineWidth = 3
-        c.strokeStyle = "rgba(255, 255, 255, 0.55)"
+        c.strokeStyle = "rgba(255, 255, 255, 0.60)"
         c.stroke()
         c.textAlign = "center"
         c.textBaseline = "middle"
         c.fillStyle = "#ffffff"
-        c.font = "800 %dpx %s" % (_fs(14), FONT)
+        c.font = "800 %dpx %s" % (_fs(15), FONT)
         c.fillText("FIRE", fx, fy + 1)
         c.textBaseline = "alphabetic"
 
