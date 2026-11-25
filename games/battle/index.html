@@ -371,7 +371,7 @@
 
         // ---- roads, and bridges where a road meets water ----
         const roadMat = new THREE.MeshLambertMaterial({
-          color: 0x9a9384, side: THREE.DoubleSide
+          color: 0x7f7a6b, side: THREE.DoubleSide
         });
         const deckMat = new THREE.MeshLambertMaterial({ color: 0x8d8578 });
         const railMat = new THREE.MeshLambertMaterial({ color: 0x6d6659 });
@@ -490,8 +490,8 @@
       g.add(bootR);
 
       // a pack on the back
-      const pack = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.15, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0x4a5162 }));
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.95, 0.42),
+        new THREE.MeshLambertMaterial({ color: 0x6b7280 }));
       pack.position.set(0, 3.05, -0.72);
       g.add(pack);
 
@@ -641,6 +641,30 @@
         lastT = now;
 
         const st = JSON.parse(json);
+
+        if (st.menu) {
+          // a slow lap of the whole country, so the menu has a world behind it
+          const a = now * 0.09;
+          camera.position.set(WORLD.w / 2 + Math.cos(a) * 1250, 620,
+                              WORLD.h / 2 + Math.sin(a) * 1250);
+          camera.lookAt(WORLD.w / 2, 0, WORLD.h / 2);
+          if (playerRig) playerRig.visible = false;
+          for (let i = 0; i < botRigs.length; i++) botRigs[i].visible = false;
+          for (let i = 0; i < bulletPool.length; i++) bulletPool[i].visible = false;
+          for (let i = 0; i < sparkPool.length; i++) sparkPool[i].visible = false;
+          for (let i = 0; i < cratePool.length; i++) {
+            cratePool[i].health.visible = false;
+            cratePool[i].ammo.visible = false;
+          }
+          for (let i = 0; i < dmgPool.length; i++) dmgPool[i].sprite.visible = false;
+          zoneMesh.visible = false;
+          if (zoneRing) zoneRing.visible = false;
+          renderer.render(scene, camera);
+          return;
+        }
+        zoneMesh.visible = true;
+        if (zoneRing) zoneRing.visible = true;
+
         const p = st.p;
         const speed = p[6] || 0;
 
@@ -843,7 +867,7 @@
 
         // ---- camera: behind, eased, and bobbing as you run ----
         const yaw = st.cam[0], pitch = st.cam[1];
-        const height = 6.2 + pitch * 13;
+        const height = 7.4 + pitch * 14;
         let dist = 17;
         let cx = 0, cz = 0;
         for (let attempt = 0; attempt < 2; attempt++) {
