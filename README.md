@@ -327,3 +327,5 @@ gravity, speeds, gaps, spawn rates, fuel, and the difficulty curve.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- rebuild nudge -->
