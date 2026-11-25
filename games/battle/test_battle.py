@@ -91,6 +91,8 @@ import game  # noqa: E402
 
 import json  # noqa: E402
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 
 def open_spot(clear=80.0, seed=99):
     """Open ground on the bigger map, with room for a bot further along +z."""
@@ -348,10 +350,14 @@ game.update(1 / 60)
 check("the zone shrinks when its timer runs out", game.zone["tr"] < r0)
 check("the next timer is set", game.zone_timer > 0)
 
-# standing outside hurts
+# standing outside hurts - shrink the zone onto the middle first
 game.start_game(seed=8)
-game.player["x"] = 20.0
-game.player["z"] = 20.0
+check("the first zone covers the whole map",
+      game.zone["r"] >= math.hypot(game.WORLD_W / 2, game.WORLD_H / 2))
+game.zone["r"] = game.zone["tr"] = 200.0
+game.zone["cx"] = game.zone["tx"] = game.WORLD_W / 2
+game.zone["cz"] = game.zone["tz"] = game.WORLD_H / 2
+game.player["x"], game.player["z"] = 60.0, 60.0
 hp0 = game.player["hp"]
 for _ in range(60):
     game.update(1 / 60)
@@ -648,6 +654,92 @@ check("the frame carries screen shake", "sh" in st)
 check("the frame carries the crouch state", "crouch" in st)
 
 # ---------------------------------------------------------------------------
+# Regressions: bugs that were found by the audit and fixed
+# ---------------------------------------------------------------------------
+print()
+print("--- regressions ---")
+
+# the first zone has to cover the map, or people spawn outside and bleed out
+game.start_game(seed=70)
+check("the opening zone reaches every corner",
+      game.zone["r"] >= math.hypot(game.WORLD_W / 2, game.WORLD_H / 2))
+
+# swapping weapons must not be a free reload
+game.start_game(seed=71)
+game.mag = 3
+game.set_swap()
+game.set_swap()
+check("swapping weapons keeps what is left in the magazine", game.mag == 3)
+
+# the pause key must be able to let you out
+game.start_game(seed=72)
+game.set_pause(True)
+check("pause stops the game", game.paused is True)
+game.set_pause(True)
+check("pausing again lets you back out", game.paused is False)
+
+# the third button on the end screen needs a hit box
+game.state = "over"
+game.result = "win"
+game.set_size(900, 560)
+game.draw()
+check("the arcade button can be tapped",
+      "arcade" in [t for t, _ in game._menu_hit])
+
+# placement has to be on screen, not just in a variable
+_src = open(os.path.join(HERE, "game.py"), encoding="utf-8").read()
+_over = _src[_src.index("def _draw_over"):]
+_over = _over[:_over.index("def _draw_pause") if "def _draw_pause" in _over else len(_over)]
+check("the end screen shows where you finished", "placement" in _over)
+
+# a building has to stop a bullet, not just a person
+game.start_game(seed=73)
+_ax, _az = open_spot(80.0, 73)
+game.player["x"], game.player["z"] = _ax, _az
+game.cam_yaw = 0.0
+_b = game.bots[0]
+_b["x"], _b["z"] = _ax, _az + 60.0
+_b["hp"] = 100.0
+game.BUILDINGS.append([_ax, _az + 30.0, 44.0, 14.0, 12.0, 0.0])
+game._index_buildings()
+game.player["cool"] = 0.0
+game.reloading = 0.0
+game.mag = 30
+for _ in range(90):
+    game.player["cool"] = 0.0
+    game.fire()
+    game.update(1 / 60)
+check("a wall stops a bullet", _b["hp"] == 100.0)
+
+# and a building has to stop a person
+check("a wall stops the player", game.blocked(_ax, _az + 30.0) is True)
+check("the wall does not block the whole map",
+      game.blocked(_ax, _az) is False)
+
+game.BUILDINGS.pop()
+game._index_buildings()
+check("removing the wall reopens the ground",
+      game.blocked(_ax, _az + 30.0) is False)
+
+# the renderer needs a slot for every crate the game makes
+_html = open(os.path.join(HERE, "index.html"), encoding="utf-8").read()
+import re as _re
+_m = _re.search(r"for \(let i = 0; i < (\d+); i\+\+\) \{\s*const h = new THREE\.Mesh\(crateGeo", _html)
+check("the renderer has a slot for every crate",
+      bool(_m) and int(_m.group(1)) >= len(game.pickups))
+
+# a bot that died must not stay invisible next round
+check("a dead bot's materials are made opaque again",
+      "o.material.opacity = 1" in _html)
+
+# and the crouch key must not drift out of step between rounds
+check("the page clears its crouch flag between rounds",
+      "crouchOn = false" in _html)
+
+# the camera must not sit inside a building
+check("the camera knows about buildings", "blockPos" in _html)
+
+# ---------------------------------------------------------------------------
 # The HUD
 # ---------------------------------------------------------------------------
 print()
@@ -677,8 +769,8 @@ game.result = "win"
 CALLS.clear()
 game.draw()
 check("the end screen draws", len(CALLS) > 100)
-check("the end screen offers again and menu",
-      [t for t, _ in game._menu_hit] == ["again", "menu"])
+check("the end screen offers again, menu and the arcade",
+      [t for t, _ in game._menu_hit] == ["again", "menu", "arcade"])
 
 game.set_size(390, 844)
 CALLS.clear()
