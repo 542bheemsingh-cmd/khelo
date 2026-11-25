@@ -517,6 +517,7 @@ chute = False
 _clock = 0.0               # always ticking, so the menu can orbit
 hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
+pings = []                # gunfire marks on the minimap
 look_dx = 0.0
 look_dy = 0.0
 firing = False
@@ -878,6 +879,7 @@ def start_game(seed=None):
     hitmark = 0.0
     hits[:] = []
     feed[:] = []
+    pings[:] = []
     firing = False
 
     # start up in the plane, not on the ground
@@ -989,6 +991,9 @@ def update(dt):
     for f in feed:
         f["life"] -= dt
     feed[:] = [f for f in feed if f["life"] > 0]
+    for g in pings:
+        g["life"] -= dt
+    pings[:] = [g for g in pings if g["life"] > 0]
     for b in bots:
         if not b["alive"] and b.get("dying", 0) > 0:
             b["dying"] = max(0.0, b["dying"] - dt)
@@ -1121,6 +1126,7 @@ def update(dt):
                 _spawn_shot(b["x"], b["z"],
                             b["yaw"] + _rng.uniform(-tier["spread"], tier["spread"]),
                             "b", BOT_DAMAGE)
+                pings.append({"x": b["x"], "z": b["z"], "life": 2.2})
         else:
             # nobody in sight: drift about
             b["wander"] -= dt
@@ -1472,6 +1478,15 @@ def _minimap():
         c.strokeStyle = "rgba(255, 255, 255, 0.92)"
         c.stroke()
         c.setLineDash([])
+
+    # where shots are coming from
+    for g in pings:
+        a = min(1.0, g["life"] / 2.2)
+        c.beginPath()
+        c.arc(mx + g["x"] * sx, my + g["z"] * sz, 2.0 + (1 - a) * 5.0, 0, 6.2832)
+        c.lineWidth = 1.6
+        c.strokeStyle = "rgba(255, 92, 122, %.2f)" % (a * 0.95)
+        c.stroke()
 
     # the bots
     for b in bots:
