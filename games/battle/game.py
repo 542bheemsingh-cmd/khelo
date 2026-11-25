@@ -200,12 +200,15 @@ BUILDINGS = []      # [[x, z, w, d, h, rot]]
 ROADS = []          # [[(x, z), ...], ...]
 
 
-def _flat_spot(margin, lo, hi, sep, tries=900):
-    """A reasonably flat piece of land, away from the ones we already have."""
+def _flat_spot(r, margin, lo, hi, sep, tries=900):
+    """A reasonably flat piece of land, away from the ones we already have.
+
+    `r` is a seeded Random, so the map is the same on every load.
+    """
     best, bestd = None, -1.0
     for _ in range(tries):
-        x = _rng.uniform(margin, WORLD_W - margin)
-        z = _rng.uniform(margin, WORLD_H - margin)
+        x = r.uniform(margin, WORLD_W - margin)
+        z = r.uniform(margin, WORLD_H - margin)
         if not land_at(x, z):
             continue
         h = height_at(x, z)
@@ -234,7 +237,7 @@ def build_towns(seed=11):
     ROADS[:] = []
     r = random.Random(seed)
     for _ in range(10):
-        x, z = _flat_spot(150.0, WATER_Y + 6.0, 30.0, 340.0)
+        x, z = _flat_spot(r, 150.0, WATER_Y + 6.0, 30.0, 340.0)
         TOWNS.append({"x": x, "z": z, "r": 0.0})
 
     for t in TOWNS:
@@ -485,6 +488,7 @@ shake = 0.0               # screen shake, handed to the renderer
 hurt_dir = 0.0            # which way the last hit came from, for the arc
 placement = 0
 paused = False
+_clock = 0.0               # always ticking, so the menu can orbit
 hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
 look_dx = 0.0
@@ -810,7 +814,9 @@ def update(dt):
     global hitmark, pvx, pvz, stamina, mag, reloading, shake
     global dmg_numbers, hurt_dir, placement
 
+    global _clock
     dt = min(max(float(dt), 0.0), 0.06)
+    _clock += dt
     if state != "play" or paused:
         look_dx = look_dy = 0.0
         return
@@ -1059,6 +1065,15 @@ def alive_count():
 # Handing the frame to three.js
 # ---------------------------------------------------------------------------
 def _frame_json():
+    if state == "menu" or not player:
+        # the menu sits over a slow orbit of the whole map
+        a = _clock * 0.10
+        return json.dumps({
+            "p": [WORLD_W / 2, 0, WORLD_H / 2, 0, 0, 0, 0],
+            "b": [], "s": [], "h": [], "pk": [], "dn": [],
+            "z": [WORLD_W / 2, WORLD_H / 2, 60],
+            "cam": [a, 0.9], "sh": 0, "crouch": 0, "wp": 0, "menu": 1,
+        })
     p = player
     b = []
     for q in bots:
@@ -1211,6 +1226,13 @@ def _minimap():
     sz = size / WORLD_H
     c = hctx
 
+    # everything below is clipped, so a big zone circle cannot spill across
+    # the rest of the screen
+    c.save()
+    c.beginPath()
+    c.rect(mx, my, size, size)
+    c.clip()
+
     # the land
     c.beginPath()
     for i, (x, z) in enumerate(RING):
@@ -1279,11 +1301,42 @@ def _minimap():
     c.fillStyle = "#7ef0c0"
     c.fill()
 
-    # north
+    c.restore()
+
+    # north, drawn after the clip so it is never cut off
     c.textAlign = "center"
     c.fillStyle = "rgba(255,255,255,0.75)"
     c.font = "800 %dpx %s" % (_fs(9), FONT)
     c.fillText("N", mx + size / 2, my + 10)
+
+    # 15 16 17: when you are outside the zone, say how far and which way
+    d_zone = math.hypot(player["x"] - zone["cx"], player["z"] - zone["cz"])
+    if player.get("alive") and d_zone > zone["r"]:
+        away = math.atan2(zone["cx"] - player["x"], zone["cz"] - player["z"])
+        ax = mx + size / 2 + math.sin(away) * (size / 2 - 12)
+        ay = my + size / 2 + math.cos(away) * (size / 2 - 12)
+        c.save()
+        c.translate(ax, ay)
+        c.rotate(away)
+        c.beginPath()
+        c.moveTo(0, 9)
+        c.lineTo(-6, -4)
+        c.lineTo(6, -4)
+        c.closePath()
+        c.fillStyle = "#5aaaff"
+        c.fill()
+        c.restore()
+        c.textAlign = "center"
+        c.fillStyle = "#ff8a3d"
+        c.font = "800 %dpx %s" % (_fs(11), FONT)
+        c.fillText("%dm to the zone" % int(d_zone - zone["r"]), mx + size / 2,
+                   my + size - 8)
+        # a red border says the same thing at a glance
+        c.strokeStyle = "rgba(255, 92, 122, 0.85)"
+        c.lineWidth = 2.5
+        c.beginPath()
+        c.arc(mx + size / 2, my + size / 2, size / 2 + 3, 0, 6.2832)
+        c.stroke()
 
 
 def draw():
@@ -1316,7 +1369,7 @@ def _draw_menu():
     c.fillStyle = "#ffb703"
     c.fillText("BATTLEGROUND", W / 2, H / 2 - 56)
 
-    _wrap("Drop onto the map with nine bots. The blue zone closes in.",
+    _wrap("Drop onto the map with %d bots. The blue zone closes in." % BOT_COUNT,
           W / 2, H / 2 - 20, min(560, W - 80), 15)
     _wrap("Last one standing wins. Move, aim, fire.", W / 2, H / 2 + 6,
           min(560, W - 80), 14, "#8fa3c9")
@@ -1378,27 +1431,30 @@ def _draw_play_hud():
     c.fillText("ZONE %ds" % max(0, int(zone_timer)), W / 2, 75)
 
     if message:
-        _wrap(message, W / 2, 106, min(520, W - 60), 12, "#cfe0ff")
+        _wrap(message, W / 2, 112, min(520, W - 60), 12, "#cfe0ff")
 
     # ---- 24 25. health, stamina, weapon and magazine ----------------------
     bx = 18
     by = (H - 200) if TOUCH_UI else (H - 96)
     bw = min(260, W * 0.42)
 
-    _panel(bx - 6, by - 8, bw + 12, 34, "rgba(8, 14, 30, 0.8)", "rgba(150,180,240,0.2)", 9)
+    _panel(bx - 6, by - 8, bw + 12, 42, "rgba(8, 14, 30, 0.82)", "rgba(150,180,240,0.2)", 9)
     frac = max(0.0, min(1.0, p["hp"] / 100.0))
     c.fillStyle = "rgba(60, 74, 108, 0.7)"
-    c.fillRect(bx, by, bw, 18)
+    c.fillRect(bx, by, bw, 24)
     col = "#22c55e" if frac > 0.55 else ("#fbbf24" if frac > 0.25 else "#ff3b5c")
     c.fillStyle = col
-    c.fillRect(bx, by, bw * frac, 18)
+    c.fillRect(bx, by, bw * frac, 24)
     c.textAlign = "left"
-    c.fillStyle = "#eaf2ff"
-    c.font = "800 %dpx %s" % (_fs(12), FONT)
-    c.fillText("%d HP" % max(0, int(p["hp"])), bx + 8, by + 14)
+    c.fillStyle = "#06101f" if frac > 0.3 else "#ffffff"
+    c.font = "800 %dpx %s" % (_fs(14), FONT)
+    c.fillText("%d" % max(0, int(p["hp"])), bx + 9, by + 18)
+    c.fillStyle = "#cfe0ff"
+    c.font = "700 %dpx %s" % (_fs(9), FONT)
+    c.fillText("HP", bx + 9 + (34 if p["hp"] >= 100 else 24), by + 18)
 
     # stamina, right under the health
-    sy = by + 24
+    sy = by + 30
     c.fillStyle = "rgba(60, 74, 108, 0.55)"
     c.fillRect(bx, sy, bw, 6)
     c.fillStyle = "#5aaaff" if stamina > 20 else "#ff8a3d"
@@ -1406,7 +1462,7 @@ def _draw_play_hud():
 
     # the weapon and its magazine
     w = WEAPONS[weapon]
-    ty = sy + 22
+    ty = sy + 26
     _panel(bx - 6, ty - 15, bw + 12, 34, "rgba(8, 14, 30, 0.72)",
            "rgba(150,180,240,0.16)", 8)
     c.textAlign = "left"
@@ -1448,7 +1504,7 @@ def _draw_play_hud():
     _minimap()
 
     # the kill feed, under the minimap
-    fy = minimap_size() + 40
+    fy = minimap_size() + 54
     for i, f in enumerate(feed[:4]):
         a = min(1.0, f["life"] / 1.2)
         c.textAlign = "right"
@@ -1459,16 +1515,21 @@ def _draw_play_hud():
     # the crosshair sits where the bullets go
     cxx, cyy = W / 2, H / 2
     spread = 8 if crouching else (14 if sprinting else 10)
-    c.strokeStyle = "rgba(255, 255, 255, 0.80)"
-    c.lineWidth = 2
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        c.beginPath()
-        c.moveTo(cxx + dx * spread, cyy + dy * spread)
-        c.lineTo(cxx + dx * (spread + 7), cyy + dy * (spread + 7))
-        c.stroke()
+    for lw, col in ((5, "rgba(0, 0, 0, 0.55)"), (2, "rgba(255, 255, 255, 0.95)")):
+        c.strokeStyle = col
+        c.lineWidth = lw
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            c.beginPath()
+            c.moveTo(cxx + dx * spread, cyy + dy * spread)
+            c.lineTo(cxx + dx * (spread + 8), cyy + dy * (spread + 8))
+            c.stroke()
     c.beginPath()
-    c.arc(cxx, cyy, 2.2, 0, 6.2832)
-    c.fillStyle = "rgba(255, 255, 255, 0.9)"
+    c.arc(cxx, cyy, 2.4, 0, 6.2832)
+    c.fillStyle = "rgba(0, 0, 0, 0.55)"
+    c.fill()
+    c.beginPath()
+    c.arc(cxx, cyy, 1.5, 0, 6.2832)
+    c.fillStyle = "rgba(255, 255, 255, 0.95)"
     c.fill()
 
     if hitmark > 0:
@@ -1571,7 +1632,8 @@ def _draw_over():
     c.textAlign = "center"
     c.fillStyle = "#22c55e" if result == "win" else "#ff5c7a"
     c.font = "800 %dpx %s" % (_fs(30), FONT)
-    c.fillText("WINNER WINNER" if result == "win" else "YOU ARE DOWN", W / 2, cy + 60)
+    c.fillText("LAST ONE STANDING" if result == "win" else "YOU ARE DOWN",
+               W / 2, cy + 60)
 
     c.fillStyle = "#eaf2ff"
     c.font = "700 %dpx %s" % (_fs(15), FONT)
