@@ -133,6 +133,7 @@
     const screenBox = document.querySelector(".screen");
 
     let renderer, scene, camera, waterMesh, zoneMesh, zoneRing, playerRig,
+        planeMesh, chuteMesh,
         botRigs = [],
         bulletPool = [], sparkPool = [], sunLight;
     let WORLD = { w: 1000, h: 1000, water: -2 };
@@ -559,6 +560,37 @@
         sparkPool.push(m);
       }
 
+      // ---- the drop plane ----
+      planeMesh = new THREE.Group();
+      const fusMat = new THREE.MeshLambertMaterial({ color: 0xd8dde6 });
+      const finMat = new THREE.MeshLambertMaterial({ color: 0x9aa6b8 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 2.4, 30, 8), fusMat);
+      body.rotation.x = Math.PI / 2;
+      planeMesh.add(body);
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(3.2, 7, 8), fusMat);
+      nose.rotation.x = Math.PI / 2;
+      nose.position.z = 18;
+      planeMesh.add(nose);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(46, 1.2, 9), finMat);
+      wing.position.set(0, 1.0, 2);
+      planeMesh.add(wing);
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(16, 1.0, 5), finMat);
+      tail.position.set(0, 1.4, -13);
+      planeMesh.add(tail);
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(1.0, 8, 6), finMat);
+      fin.position.set(0, 5, -13);
+      planeMesh.add(fin);
+      planeMesh.visible = false;
+      scene.add(planeMesh);
+
+      // ---- the parachute ----
+      const canopyGeo = new THREE.SphereGeometry(4.0, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      chuteMesh = new THREE.Mesh(canopyGeo, new THREE.MeshLambertMaterial({
+        color: 0xff7a3d, side: THREE.DoubleSide
+      }));
+      chuteMesh.visible = false;
+      scene.add(chuteMesh);
+
       // crates: green for health, yellow for ammo
       const crateGeo = new THREE.BoxGeometry(2.4, 2.0, 2.4);
       for (let i = 0; i < 32; i++) {
@@ -670,6 +702,70 @@
 
         const p = st.p;
         const speed = p[6] || 0;
+
+        // ---- riding the plane ----
+        if (st.mode === "plane") {
+          const pl = st.pl;
+          planeMesh.visible = true;
+          planeMesh.position.set(pl[0], pl[1], pl[2]);
+          planeMesh.rotation.y = pl[3];
+          playerRig.visible = false;
+          chuteMesh.visible = false;
+          for (let i = 0; i < botRigs.length; i++) botRigs[i].visible = false;
+          for (let i = 0; i < cratePool.length; i++) {
+            cratePool[i].health.visible = false;
+            cratePool[i].ammo.visible = false;
+          }
+          for (let i = 0; i < bulletPool.length; i++) bulletPool[i].visible = false;
+          for (let i = 0; i < sparkPool.length; i++) sparkPool[i].visible = false;
+          for (let i = 0; i < dmgPool.length; i++) dmgPool[i].sprite.visible = false;
+          zoneMesh.visible = false;
+          if (zoneRing) zoneRing.visible = false;
+
+          camera.position.set(pl[0] - Math.sin(pl[3]) * 62, pl[1] + 22,
+                              pl[2] - Math.cos(pl[3]) * 62);
+          camera.lookAt(pl[0] + Math.sin(pl[3]) * 55, pl[1] - 10,
+                        pl[2] + Math.cos(pl[3]) * 55);
+          if (Math.abs(camera.fov - 62) > 0.5) {
+            camera.fov = 62; camera.updateProjectionMatrix();
+          }
+          renderer.render(scene, camera);
+          return;
+        }
+
+        // ---- falling, then under the canopy ----
+        if (st.mode === "fall") {
+          planeMesh.visible = false;
+          playerRig.visible = true;
+          playerRig.position.set(p[0], p[1], p[2]);
+          playerRig.rotation.set(0, p[3], 0);
+          playerRig.scale.set(1.3, 1.3, 1.3);
+          for (let i = 0; i < botRigs.length; i++) botRigs[i].visible = false;
+          for (let i = 0; i < cratePool.length; i++) {
+            cratePool[i].health.visible = false;
+            cratePool[i].ammo.visible = false;
+          }
+          for (let i = 0; i < bulletPool.length; i++) bulletPool[i].visible = false;
+          for (let i = 0; i < sparkPool.length; i++) sparkPool[i].visible = false;
+          for (let i = 0; i < dmgPool.length; i++) dmgPool[i].sprite.visible = false;
+          zoneMesh.visible = false;
+          if (zoneRing) zoneRing.visible = false;
+
+          chuteMesh.visible = !!st.chute;
+          if (st.chute) {
+            chuteMesh.position.set(p[0], p[1] + 7.0, p[2]);
+            chuteMesh.rotation.y = now * 0.4;
+          }
+
+          camera.position.set(p[0] - Math.sin(p[3]) * 26, p[1] + 9,
+                              p[2] - Math.cos(p[3]) * 26);
+          camera.lookAt(p[0] + Math.sin(p[3]) * 6, p[1] + 4,
+                        p[2] + Math.cos(p[3]) * 6);
+          renderer.render(scene, camera);
+          return;
+        }
+        planeMesh.visible = false;
+        chuteMesh.visible = false;
 
         // ---- the soldier ----
         playerRig.visible = p[4] > 0;
