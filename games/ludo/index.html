@@ -156,6 +156,18 @@
       } catch (e) {}
     };
 
+    /* an off-screen canvas for python to paint the board into once */
+    window.newCanvas = function (w, h) {
+      try {
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, w);
+        c.height = Math.max(1, h);
+        return c;
+      } catch (e) {
+        return null;
+      }
+    };
+
     window.playSound = function (name) {
       if (muted) return;
       try {
