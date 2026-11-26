@@ -368,6 +368,7 @@ _name_fields = []
 _confetti = []
 last_move = None          # {"x","y","c","t"} - a ring left where a token stopped
 turn_clock = 0.0          # seconds the current player has been thinking
+shake = 0.0               # brief camera kick on a capture
 
 # ---------------------------------------------------------------------------
 # Multiplayer
@@ -977,6 +978,9 @@ def _finish_move(a):
             back = list(range(h["pos"] - 1, -1, -1)) + [-1]
             _anim_to(h, back, "capture", speed=13.0)
             _sound("capture")
+            if not RULES.get("reduced_motion"):
+                _burst(h["x"], h["y"], PAL[h["c"]]["main"])
+                globals()["shake"] = 1.0
             captured_any[c] = captured_any.get(c, 0) + 1
             if RULES["capture_bonus"]:
                 extra = True
@@ -1205,7 +1209,7 @@ def _stack_offsets():
 
 def update(dt):
     global rolling, roll_t, _t, dice_show, message, can_roll, auto_move_t
-    global turn_clock
+    global turn_clock, shake
     dt = min(max(float(dt), 0.0), 0.05)
     _t += dt
 
@@ -1265,6 +1269,15 @@ def update(dt):
                 t["x"], t["y"] = gl["x1"], gl["y1"]
                 t.pop("glide", None)
 
+    # pieces flatten as they land, then spring back
+    for t in tokens:
+        sq = t.get("squash", 0.0)
+        if sq > 0:
+            t["squash"] = max(0.0, sq - dt * 5.0)
+
+    if shake > 0:
+        shake = max(0.0, shake - dt * 4.0)
+
     for a in anims[:]:
         a["p"] += dt * a["speed"]
         while a["p"] >= 1.0:
@@ -1272,6 +1285,7 @@ def update(dt):
             a["i"] += 1
             if a["i"] >= len(a["cells"]):
                 a["t"]["pos"] = a["cells"][-1][0]
+                a["t"]["squash"] = 1.0
                 anims.remove(a)
                 if a["kind"] == "move":
                     _finish_move(a)
@@ -1296,6 +1310,17 @@ def update(dt):
 # ---------------------------------------------------------------------------
 # Drawing helpers
 # ---------------------------------------------------------------------------
+def _rrect(x, y, w, h, r):
+    r = max(0.0, min(r, w / 2.0, h / 2.0))
+    ctx.beginPath()
+    ctx.moveTo(x + r, y)
+    ctx.arcTo(x + w, y, x + w, y + h, r)
+    ctx.arcTo(x + w, y + h, x, y + h, r)
+    ctx.arcTo(x, y + h, x, y, r)
+    ctx.arcTo(x, y, x + w, y, r)
+    ctx.closePath()
+
+
 def _panel(x, y, w, h, fill="rgba(14, 22, 46, 0.92)",
            stroke="rgba(150, 180, 240, 0.22)", r=14):
     ctx.beginPath()
@@ -1426,25 +1451,29 @@ def _draw_board():
             fill = "rgba(226, 236, 255, 0.95)"
         else:
             fill = "rgba(238, 244, 255, 0.90)"
+        g = CELL * 0.055                      # air around each tile
+        _rrect(px + g, py + g, CELL - 2 * g, CELL - 2 * g, CELL * 0.26)
         ctx.fillStyle = fill
-        ctx.fillRect(px, py, CELL, CELL)
-        ctx.lineWidth = 1
-        ctx.strokeStyle = "rgba(20, 30, 60, 0.45)"
-        ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1)
-        if idx in SAFE and owner is None:
-            _star(px + CELL / 2, py + CELL / 2, CELL * 0.30, "#8b98b5")
+        ctx.fill()
+        if owner is not None:
+            # a chevron showing which way this colour sets off
+            nx, ny = TRACK[(idx + 1) % len(TRACK)]
+            ang = math.atan2(ny - cy, nx - cx)
+            _chevron(px + CELL / 2, py + CELL / 2, CELL * 0.26, ang,
+                     "rgba(255,255,255,0.75)")
+        elif idx in SAFE:
+            _star(px + CELL / 2, py + CELL / 2, CELL * 0.31, "#8b98b5")
 
     for c in (RED, GREEN, YELLOW, BLUE):
         p = PAL[c]
         for k, (cx, cy) in enumerate(HOME_PATH[c]):
             px, py = BX + cx * CELL, BY + cy * CELL
+            g = CELL * 0.055
+            _rrect(px + g, py + g, CELL - 2 * g, CELL - 2 * g, CELL * 0.26)
             ctx.fillStyle = p["main"]
-            ctx.globalAlpha = 0.85 - k * 0.06
-            ctx.fillRect(px, py, CELL, CELL)
+            ctx.globalAlpha = 0.88 - k * 0.06
+            ctx.fill()
             ctx.globalAlpha = 1.0
-            ctx.lineWidth = 1
-            ctx.strokeStyle = "rgba(20, 30, 60, 0.35)"
-            ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1)
 
     # the centre, four coloured triangles
     cx0, cy0 = BX + 6 * CELL, BY + 6 * CELL
@@ -1790,7 +1819,16 @@ def _player_mark(x, y, s, c, col="#ffffff"):
 def _draw_token(t, highlight=False, movable=False, label=True, rad=None):
     x, y, c = t["x"], t["y"], t["c"]
     p = PAL[c]
-    r = CELL * 0.40 if rad is None else rad
+    r = CELL * 0.46 if rad is None else rad
+
+    # a piece flattens as it lands and springs back: squash and stretch
+    sq = t.get("squash", 0.0) if not RULES.get("reduced_motion") else 0.0
+    if sq > 0:
+        ctx.save()
+        base = y + r * 0.62
+        ctx.translate(x, base)
+        ctx.scale(1.0 + sq * 0.26, 1.0 - sq * 0.20)
+        ctx.translate(-x, -base)
 
     if highlight:
         glow = 0.5 if RULES.get("reduced_motion") else 0.5 + 0.5 * math.sin(_t * 4)
@@ -1831,6 +1869,9 @@ def _draw_token(t, highlight=False, movable=False, label=True, rad=None):
             raw.strokeText(nm, x, y - r - 3)
             raw.fillStyle = "#ffffff"
             raw.fillText(nm, x, y - r - 3)
+
+    if sq > 0:
+        ctx.restore()
 
 
 def _draw_tokens():
@@ -1922,6 +1963,23 @@ def _draw_die():
 # ---------------------------------------------------------------------------
 # HUD panel
 # ---------------------------------------------------------------------------
+def _chevron(x, y, s, ang, col):
+    """A small arrow, so the direction of travel is never a guess."""
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(ang)
+    ctx.beginPath()
+    ctx.moveTo(-s * 0.55, -s * 0.75)
+    ctx.lineTo(s * 0.65, 0)
+    ctx.lineTo(-s * 0.55, s * 0.75)
+    ctx.lineWidth = max(1.6, s * 0.42)
+    ctx.lineCap = "round"
+    ctx.lineJoin = "round"
+    ctx.strokeStyle = col
+    ctx.stroke()
+    ctx.restore()
+
+
 def _draw_last_move():
     """A short-lived ring where the last token came to rest."""
     if not last_move or state != "play":
@@ -2423,10 +2481,21 @@ def draw():
         return
 
     _bg()
+
+    kick = shake if not RULES.get("reduced_motion") else 0.0
+    if kick > 0:
+        amp = CELL * 0.30 * kick
+        ctx.save()
+        ctx.translate(_rng.uniform(-amp, amp), _rng.uniform(-amp, amp))
+
     _draw_board()
     _draw_move_hints()
     _draw_last_move()
     _draw_tokens()
+
+    if kick > 0:
+        ctx.restore()
+
     _draw_hud()
 
     for f in flash:
