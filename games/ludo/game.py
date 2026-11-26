@@ -260,6 +260,18 @@ _menu_hit = []
 _name_fields = []
 _confetti = []
 
+# ---------------------------------------------------------------------------
+# Multiplayer
+#
+# One device is the host and runs the whole game. The others are guests: they
+# draw whatever the host says is true, and ask the host to roll or move for
+# them. Turn based games do not need anything cleverer than that.
+# ---------------------------------------------------------------------------
+net_on = False
+net_host = True
+net_seat = 0
+net_seats = {}
+
 ROLL_DUR = 2.0          # the die takes its time
 
 # The die is not fair. A 6 is twice as likely as a plain number, 1 and 4 are a
@@ -364,6 +376,113 @@ def focus_name(c):
 # ---------------------------------------------------------------------------
 # Rules
 # ---------------------------------------------------------------------------
+def snapshot():
+    """Everything a guest needs to draw the board, and nothing more."""
+    return json.dumps({
+        "mode": mode,
+        "players": list(players),
+        "turn": turn,
+        "dice": dice,
+        "dice_show": dice_show,
+        "moves": [[t["c"], t["i"], target] for t, target in moves],
+        "can_roll": can_roll,
+        "message": message,
+        "winner": winner,
+        "state": state,
+        "names": {k: v for k, v in names.items()},
+        "tokens": [[t["c"], t["i"], t["pos"]] for t in tokens],
+    })
+
+
+def apply_net(js):
+    """A guest adopts the host's board."""
+    global mode, players, turn, dice, dice_show, moves, can_roll
+    global message, winner, state, tokens
+    try:
+        d = json.loads(js)
+    except Exception:
+        return
+    mode = d.get("mode", mode)
+    players = list(d.get("players", players))
+    turn = int(d.get("turn", turn))
+    dice = int(d.get("dice", dice))
+    dice_show = int(d.get("dice_show", dice_show))
+    can_roll = bool(d.get("can_roll", can_roll))
+    message = d.get("message", message)
+    winner = d.get("winner")
+    state = d.get("state", state)
+    if d.get("names"):
+        names.update(d["names"])
+
+    # rebuild the tokens where the host says they are
+    want = d.get("tokens") or []
+    have = {(t["c"], t["i"]): t for t in tokens}
+    fresh = []
+    for c, i, pos in want:
+        t = have.get((c, i))
+        if t is None:
+            t = {"c": c, "i": i, "pos": -1}
+        if t["pos"] != pos:
+            t["pos"] = pos
+            t["x"], t["y"] = token_xy(c, i, pos)
+        fresh.append(t)
+    if fresh:
+        tokens = fresh
+
+    # and which moves are on offer
+    by_key = {(t["c"], t["i"]): t for t in tokens}
+    moves = []
+    for c, i, target in (d.get("moves") or []):
+        t = by_key.get((c, i))
+        if t is not None:
+            moves.append((t, target))
+
+
+def net_apply_action(js):
+    """Host: a guest asked for a roll or a move. Only their own turn counts."""
+    if not (net_on and net_host):
+        return
+    try:
+        d = json.loads(js)
+    except Exception:
+        return
+    who = d.get("from")
+    seat = net_seats.get(who)
+    if seat is not None and players:
+        if seat != turn % len(players):
+            return                      # not your turn
+    a = d.get("a")
+    if a == "roll":
+        roll()
+    elif a == "move":
+        c, i = d.get("c"), int(d.get("i", -1))
+        for t, target in moves:
+            if t["c"] == c and t["i"] == i:
+                _choose(t, target)
+                break
+
+
+def set_net_ludo(on, host, seat):
+    global net_on, net_host, net_seat
+    net_on = bool(on)
+    net_host = bool(host)
+    net_seat = int(seat or 0)
+
+
+def set_seats(js, my_id=""):
+    """Who is playing which colour, decided by the host."""
+    global net_seats, net_seat
+    try:
+        d = json.loads(js)
+    except Exception:
+        return
+    if not isinstance(d, dict):
+        return
+    net_seats = {str(k): int(v) for k, v in d.items()}
+    if my_id in net_seats:
+        net_seat = net_seats[my_id]
+
+
 def cur():
     return players[turn % len(players)]
 
@@ -601,6 +720,27 @@ def tap(x, y):
         return
 
     # --- playing ---
+    if net_on and not net_host:
+        # a guest does not run the game: it asks the host
+        if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
+            _sound("click")
+            js.netAction(json.dumps({"a": "roll"}))
+            return
+        if anims or not moves:
+            return
+        best, bestd = None, 26
+        offs = _stack_offsets()
+        for t, target in moves:
+            tx, ty = token_xy(t["c"], t["i"], t["pos"])
+            ox, oy = offs.get(id(t), (0, 0))
+            dd = math.hypot(x - (tx + ox), y - (ty + oy))
+            if dd < bestd:
+                best, bestd = (t, target), dd
+        if best:
+            js.netAction(json.dumps({"a": "move", "c": best[0]["c"],
+                                     "i": best[0]["i"]}))
+        return
+
     if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
         roll()
         return
