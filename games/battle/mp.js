@@ -11,13 +11,13 @@
 // ---------------------------------------------------------------------------
 
 export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCnLlCK4v4E9-mqUVCguzIn2LaIfI_D7G8",
+  apiKey: "AIzaSyCnlICK4v4E9-mqUVcguzIn2LaIfI_D7G8",
   authDomain: "khelo-1bfaa.firebaseapp.com",
   databaseURL: "https://khelo-1bfaa-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "khelo-1bfaa",
   storageBucket: "khelo-1bfaa.firebasestorage.app",
   messagingSenderId: "606000164368",
-  appId: "1:606000164368:web:dbba92dc91d3e8466642495"
+  appId: "1:606000164368:web:dbba92dc91d3e846662495"
 };
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2";
@@ -77,11 +77,27 @@ export async function enter(code, name) {
   hitsRef = api.ref(db, `rooms/${room}/hits`);
   metaRef = api.ref(db, `rooms/${room}/meta`);
 
-  await api.set(stateRef, {
-    name: (name || "Player").slice(0, 12),
-    x: 0, z: 0, y: 0, yaw: 0, hp: 100, alive: 1, weapon: 0, kills: 0,
-    mode: "plane", t: Date.now()
-  });
+  try {
+    await api.set(stateRef, {
+      name: (name || "Player").slice(0, 12),
+      x: 0, z: 0, y: 0, yaw: 0, hp: 100, alive: 1, weapon: 0, kills: 0,
+      mode: "plane", t: Date.now()
+    });
+  } catch (err) {
+    // say plainly what went wrong, instead of a raw Firebase code
+    const msg = String((err && err.message) || err);
+    if (msg.indexOf("PERMISSION_DENIED") >= 0) {
+      throw new Error("Database rules are blocking writes. In Firebase, open "
+        + "Realtime Database -> Rules and set \".read\": true, \".write\": true "
+        + "(test mode).");
+    }
+    if (msg.indexOf("does not exist") >= 0 || msg.indexOf("not found") >= 0) {
+      throw new Error("No Realtime Database in this project yet. Open Firebase "
+        + "-> Realtime Database -> Create Database.");
+    }
+    throw new Error("Cannot reach the database. Check databaseURL in mp.js. ("
+      + msg + ")");
+  }
   // a player who closes the tab leaves the room
   api.onDisconnect(stateRef).remove();
 
