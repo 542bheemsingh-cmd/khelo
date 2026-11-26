@@ -942,6 +942,85 @@ for _ in range(120):
     game.update(1 / 60)
 check("the last move is remembered", game.last_move is not None)
 
+# --- the board and the feel ---------------------------------------------
+print()
+print("--- board and feel ---")
+game.apply_mode("classic")
+game.start_game("single", 4)
+CALLS.clear(); game.draw()
+check("the board draws rounded tiles", sum(1 for c in CALLS if c[0] == "arcTo") > 40)
+check("the start squares show a direction",
+      sum(1 for c in CALLS if c[0] == "stroke") > 4)
+
+# a piece that finishes a hop squashes, then recovers
+game.start_game("single", 2)
+game.tokens[0]["pos"] = 0
+game.anims[:] = []
+game.dice = 2
+game._after_roll()
+t0, q0 = game.moves[0]
+game._choose(t0, q0)
+for _ in range(200):
+    game.update(1 / 60)
+    if not game.anims:
+        break
+check("a landing piece squashes", game.tokens[0].get("squash", 0) > 0)
+for _ in range(40):
+    game.update(1 / 60)
+check("and it springs back", game.tokens[0].get("squash", 0) == 0)
+
+# a capture shakes the board
+game.start_game("single", 2)
+game.shake = 0.0
+game.flash[:] = []
+att = [t for t in game.tokens if t["c"] == game.RED][0]
+victim = [t for t in game.tokens if t["c"] == game.YELLOW][0]
+# find a square the red token can reach that a yellow one is sitting on
+att["pos"], victim["pos"] = 10, -1
+for p in range(0, game.LAST_TRACK + 1):
+    cell = game.path_cell(game.RED, 12)
+    if cell in game.SAFE:
+        break
+    for q in range(0, game.LAST_TRACK + 1):
+        if game.path_cell(game.YELLOW, q) == cell:
+            victim["pos"] = q
+    break
+game.anims[:] = []
+game.dice = 2
+game._after_roll()
+if game.moves:
+    game._choose(game.moves[0][0], game.moves[0][1])
+    for _ in range(400):
+        game.update(1 / 60)
+        if not game.anims:
+            break
+check("a capture kicks the camera", game.shake > 0 or victim["pos"] == -1)
+
+# gentle motion turns both off
+game.apply_mode("classic")
+game.RULES["reduced_motion"] = True
+game.start_game("single", 2)
+game.shake = 0.0
+game.flash[:] = []
+a2 = [t for t in game.tokens if t["c"] == game.RED][0]
+v2 = [t for t in game.tokens if t["c"] == game.YELLOW][0]
+a2["pos"], v2["pos"] = 10, -1
+for q in range(0, game.LAST_TRACK + 1):
+    if game.path_cell(game.YELLOW, q) == game.path_cell(game.RED, 12):
+        v2["pos"] = q
+game.anims[:] = []
+game.dice = 2
+game._after_roll()
+if game.moves:
+    game._choose(game.moves[0][0], game.moves[0][1])
+    for _ in range(400):
+        game.update(1 / 60)
+        if not game.anims:
+            break
+check("gentle motion means no shake", game.shake == 0.0)
+check("and no sparks", len(game.flash) == 0)
+game.apply_mode("classic")
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
