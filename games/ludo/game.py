@@ -322,7 +322,7 @@ _confetti = []
 # ---------------------------------------------------------------------------
 net_on = False
 net_host = True
-net_seat = 0
+net_seat = -1
 net_seats = {}
 
 ROLL_DUR = 2.0          # the die takes its time
@@ -535,7 +535,9 @@ def set_net_ludo(on, host, seat):
         n = int(seat)
     except Exception:
         n = -1
-    if n >= 0:
+    if host:
+        net_seat = 0                    # the host always plays the first colour
+    elif n >= 0:
         net_seat = n
 
 
@@ -562,8 +564,12 @@ def _net_id():
 
 
 def my_turn():
-    """True when it is the colour this device is playing."""
-    if not net_on or not players:
+    """True when it is the colour this device is playing.
+
+    While the room has not told us our colour yet we answer True, so the tap
+    still reaches the host, which is the one that actually decides.
+    """
+    if not net_on or not players or net_seat < 0:
         return True
     return net_seat == turn % len(players)
 
@@ -810,9 +816,8 @@ def tap(x, y):
 
     # --- playing ---
     if net_on and not net_host:
-        # a guest does not run the game: it asks the host
-        if not my_turn():
-            return
+        # a guest does not run the game: it asks the host, every time.
+        # the host is the one that knows whose turn it really is.
         if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
             _sound("click")
             js.netAction(json.dumps({"a": "roll", "from": _net_id()}))
@@ -1409,7 +1414,7 @@ def _draw_hud():
     _draw_die()
 
     if state == "play":
-        ready = can_roll and rolling <= 0 and not anims and mine
+        ready = can_roll and rolling <= 0 and not anims and (mine or not net_host)
         if ready:
             label = "ROLL"
         elif not mine:
@@ -1459,6 +1464,20 @@ def _draw_hud():
     if message:
         _wrap(message, mid, ry + 12 * k, hw * 0.88,
               max(9, int(12 * k)), "#cfe0ff")
+
+    # in a room, say plainly which side of it you are
+    if net_on:
+        role = "host" if net_host else "guest"
+        if net_seat < 0:
+            colour = "colour not set"
+        elif net_seat < len(players):
+            colour = "you are " + names[players[net_seat]]
+        else:
+            colour = "watching"
+        ctx.textAlign = "center"
+        ctx.fillStyle = "#5f7093"
+        ctx.font = "700 %dpx %s" % (max(8, int(9 * k)), FONT)
+        ctx.fillText("%s \u00b7 %s" % (role, colour), mid, y0 + hh - 8)
 
 
 # ---------------------------------------------------------------------------
