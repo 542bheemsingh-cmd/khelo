@@ -499,11 +499,12 @@ def net_apply_action(js):
         d = json.loads(js)
     except Exception:
         return
-    who = d.get("from")
+    who = str(d.get("from") or "")
     seat = net_seats.get(who)
-    if seat is not None and players:
-        if seat != turn % len(players):
-            return                      # not your turn
+    if seat is None:
+        return                          # we do not know who this is
+    if players and seat != turn % len(players):
+        return                          # not your turn
     a = d.get("a")
     if a == "roll":
         roll()
@@ -534,6 +535,21 @@ def set_seats(js, my_id=""):
     net_seats = {str(k): int(v) for k, v in d.items()}
     if my_id in net_seats:
         net_seat = net_seats[my_id]
+
+
+def _net_id():
+    """Our own id in the room, so the host knows who is asking."""
+    try:
+        return str(js.netMe())
+    except Exception:
+        return ""
+
+
+def my_turn():
+    """True when it is the colour this device is playing."""
+    if not net_on or not players:
+        return True
+    return net_seat == turn % len(players)
 
 
 def cur():
@@ -779,9 +795,11 @@ def tap(x, y):
     # --- playing ---
     if net_on and not net_host:
         # a guest does not run the game: it asks the host
+        if not my_turn():
+            return
         if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
             _sound("click")
-            js.netAction(json.dumps({"a": "roll"}))
+            js.netAction(json.dumps({"a": "roll", "from": _net_id()}))
             return
         if anims or not moves:
             return
@@ -795,10 +813,12 @@ def tap(x, y):
                 best, bestd = (t, target), dd
         if best:
             js.netAction(json.dumps({"a": "move", "c": best[0]["c"],
-                                     "i": best[0]["i"]}))
+                                     "i": best[0]["i"], "from": _net_id()}))
         return
 
     if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
+        if net_on and not my_turn():
+            return                      # not your colour, not your dice
         roll()
         return
     if _in(BACK_RECT, x, y):
@@ -808,6 +828,8 @@ def tap(x, y):
 
     if anims or not moves:
         return
+    if net_on and not my_turn():
+        return                          # only move your own tokens
     best, bestd = None, max(26.0, 30.0 * UI)
     offs = _stack_offsets()
     for t, target in moves:
