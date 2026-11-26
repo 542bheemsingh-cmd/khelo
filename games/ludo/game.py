@@ -832,6 +832,8 @@ def tap(x, y):
             if _in(r, x, y):
                 _sound("click")
                 if tag == "again":
+                    if net_on and not net_host:
+                        return          # the host deals the next round
                     restart()
                 elif tag == "menu":
                     state = "mode"
@@ -1746,7 +1748,11 @@ def _draw_over():
 
     bw = min(210.0, (cw - 3 * pad) / 2.0)
     by = cy + ch - 62
-    _button(cx + pad, by, bw, 46, "Play again", True)
+    if net_on and not net_host:
+        # only the host can deal a new round
+        _button(cx + pad, by, bw, 46, "Waiting for host", False, size=13)
+    else:
+        _button(cx + pad, by, bw, 46, "Play again", True)
     _button(cx + cw - pad - bw, by, bw, 46, "Main menu", False)
     _menu_hit = [("again", (cx + pad, by, bw, 46)),
                  ("menu", (cx + cw - pad - bw, by, bw, 46))]
