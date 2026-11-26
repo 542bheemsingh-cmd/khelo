@@ -260,3 +260,5 @@ html.fs-on #hud { border-radius: 0; }
   padding: 0 10px;
 }
 .mp-status { margin: 0; min-height: 18px; font-size: 12px; color: #ffd23f; }
+
+.ctrl-text { font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
