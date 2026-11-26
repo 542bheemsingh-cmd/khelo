@@ -323,8 +323,15 @@
               M.publishMeta({ seats: mpSeats });
               setSeatsFn(JSON.stringify(mpSeats), M.me());
             }
-            startBtn.disabled = !mpHost;
-            startBtn.textContent = mpHost ? "Start the game" : "Waiting for the host…";
+            const joined = Object.keys(mpSeats).length;
+            startBtn.disabled = !mpHost || joined < 2;
+            if (!mpHost) {
+              startBtn.textContent = "Waiting for the host…";
+            } else if (joined < 2) {
+              startBtn.textContent = "Need one more player…";
+            } else {
+              startBtn.textContent = "Start " + Math.min(4, joined) + " players";
+            }
           });
 
           M.watchMeta(function (m) {
