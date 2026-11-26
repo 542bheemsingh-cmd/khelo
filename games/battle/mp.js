@@ -11,13 +11,13 @@
 // ---------------------------------------------------------------------------
 
 export const FIREBASE_CONFIG = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "PASTE.firebaseapp.com",
-  databaseURL: "https://PASTE-default-rtdb.firebaseio.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIzaSyCnLlCK4v4E9-mqUVCguzIn2LaIfI_D7G8",
+  authDomain: "khelo-1bfaa.firebaseapp.com",
+  databaseURL: "https://khelo-1bfaa-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "khelo-1bfaa",
+  storageBucket: "khelo-1bfaa.firebasestorage.app",
+  messagingSenderId: "606000164368",
+  appId: "1:606000164368:web:dbba92dc91d3e8466642495"
 };
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2";
