@@ -478,6 +478,10 @@ state = "menu"          # menu | play | over
 result = ""             # win | lose
 player = {}
 bots = []
+# multiplayer: other real people, kept in step by the page over Firebase
+remotes = []
+mp_on = False
+mp_my_id = ""
 shots = []
 zone = {}
 message = ""
@@ -869,7 +873,7 @@ def start_game(seed=None):
               "cool": 0.0, "kills": 0, "ammo": 120, "hurt": 0.0}
 
     bots = []
-    for k in range(BOT_COUNT):
+    for k in range(0 if mp_on else BOT_COUNT):
         for _ in range(200):
             bx, bz = _random_land(80.0, lo=WATER_Y + 5.0, hi=28.0)
             if math.hypot(bx - px, bz - pz) > 220:
@@ -945,7 +949,8 @@ def _spawn_shot(x, z, yaw, owner, dmg=PLAYER_DAMAGE):
 def _nearest_target(x, z, yaw, max_dist=180.0, cone=0.34):
     """A little aim assist, so the game is playable with a thumb."""
     best, bestd = None, max_dist
-    for b in bots:
+    targets = bots + remotes if mp_on else bots
+    for b in targets:
         if not b["alive"]:
             continue
         dx, dz = b["x"] - x, b["z"] - z
@@ -1200,6 +1205,22 @@ def update(dt):
             continue
         hit = False
         if s["owner"] == "p":
+            if mp_on:
+                for r in remotes:
+                    if r["alive"] and math.hypot(r["x"] - s["x"],
+                                                 r["z"] - s["z"]) < 6.5:
+                        dmg_numbers.append({"x": s["x"], "z": s["z"],
+                                            "text": "%d" % int(s["dmg"]),
+                                            "life": 0.75})
+                        hits.append({"x": s["x"], "z": s["z"], "life": 0.45})
+                        hitmark = 0.30
+                        try:
+                            js.netHit(r["id"], float(s["dmg"]))
+                        except Exception:
+                            pass
+                        hit = True
+                        break
+        if s["owner"] == "p" and not hit:
             for b in bots:
                 if b["alive"] and math.hypot(b["x"] - s["x"], b["z"] - s["z"]) < 6.0:
                     b["hp"] -= s["dmg"]
@@ -1278,7 +1299,14 @@ def update(dt):
         result = "lose"
         _notify_playing(False)
         _sound("lose")
-    elif not any(b["alive"] for b in bots):
+    elif mp_on and len(remotes) > 0 and not any(r["alive"] for r in remotes):
+        state = "over"
+        result = "win"
+        placement = 1
+        record_result()
+        _notify_playing(False)
+        _sound("win")
+    elif not mp_on and not any(b["alive"] for b in bots):
         state = "over"
         result = "win"
         placement = 1
@@ -1288,7 +1316,58 @@ def update(dt):
 
 
 def alive_count():
-    return (1 if player.get("alive") else 0) + sum(1 for b in bots if b["alive"])
+    n = (1 if player.get("alive") else 0) + sum(1 for b in bots if b["alive"])
+    if mp_on:
+        n += sum(1 for r in remotes if r.get("alive"))
+    return n
+
+
+def set_net(people_json, my_id=""):
+    """The page tells us who else is in the room, every frame or so."""
+    global remotes, mp_my_id
+    mp_my_id = my_id or mp_my_id
+    try:
+        raw = json.loads(people_json)
+    except Exception:
+        return
+    seen = {}
+    for q in raw:
+        rid = str(q.get("id", ""))
+        if not rid or rid == mp_my_id:
+            continue
+        seen[rid] = {
+            "id": rid,
+            "name": str(q.get("name", "Player"))[:12],
+            "x": float(q.get("x", 0.0)),
+            "z": float(q.get("z", 0.0)),
+            "yaw": float(q.get("yaw", 0.0)),
+            "hp": float(q.get("hp", 100.0)),
+            "alive": bool(q.get("alive")),
+            "weapon": int(q.get("weapon", 0)),
+            "kills": int(q.get("kills", 0)),
+        }
+    remotes[:] = list(seen.values())
+
+
+def set_mp(on):
+    """Turn multiplayer on or off. In multiplayer there are no bots."""
+    global mp_on
+    mp_on = bool(on)
+    if mp_on:
+        bots[:] = []
+
+
+def net_damage(dmg):
+    """Damage somebody else reported hitting us."""
+    p = player
+    if not p.get("alive") or state != "play":
+        return
+    p["hp"] -= float(dmg)
+    p["hurt"] = 0.25
+    shake = max(shake, 0.5)
+    hurt_dir = 0.0
+    if p["hp"] <= 0:
+        p["hp"] = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -1333,6 +1412,10 @@ def _frame_json():
               1 if p["alive"] else 0, round(p["hp"], 1),
               round(math.hypot(pvx, pvz), 2)],
         "b": b,
+        "rp": ([[r["id"], round(r["x"], 2), round(height_at(r["x"], r["z"]), 2),
+                 round(r["z"], 2), round(r["yaw"], 3), round(r["hp"], 0),
+                 1 if r["alive"] else 0, r["weapon"], r["name"]]
+                for r in remotes] if mp_on else []),
         "s": s,
         "h": h,
         "pk": [[round(e["x"], 2), round(height_at(e["x"], e["z"]) + 1.2, 2),
