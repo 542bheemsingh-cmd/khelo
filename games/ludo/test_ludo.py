@@ -672,6 +672,26 @@ before_state = game.state
 game.apply_net("not json at all")
 check("a broken snapshot is ignored", game.state == before_state)
 
+# --- a guest keeps the seat the room gives it ----------------------------
+print()
+print("--- seats ---")
+game.start_game("single", 2)
+game.set_net_ludo(True, False, -1)      # a guest, seat not decided yet
+check("an undecided seat is left alone", game.net_seat == 0)
+game.set_seats(json.dumps({"GUEST": 1}), "GUEST")
+check("the room's seat is adopted", game.net_seat == 1)
+
+# a refresh must not wipe it back to zero
+game.set_net_ludo(True, False, -1)
+check("a later refresh keeps the seat", game.net_seat == 1)
+
+# and the host always sits in seat 0
+game.set_net_ludo(True, True, 0)
+check("the host is seat 0", game.net_seat == 0)
+
+game.set_net_ludo(False, True, -1)
+check("leaving the room clears the turn rule", game.my_turn())
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
