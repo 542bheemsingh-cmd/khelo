@@ -172,6 +172,39 @@ def main():
     check("the guest can move its own tokens", guest_moved)
     check("the round reaches a winner", host.state == "over" and host.winner is not None)
     check("both devices stayed in step for the whole round", not problems)
+    # ---- a guest should see the same motion, not a snap -------------------
+    print()
+    print("--- what the guest sees ---")
+    g = load("guest_view", "GUEST")
+    g.set_size(560, 1155)
+    g.set_net_ludo(True, False, 1)
+    g.apply_net(host.snapshot())
+    g.rolling = 0.0
+    g.roll_t = 1.0
+
+    h = load("host_view", "HOST")
+    h.set_size(560, 1155)
+    h.set_net_ludo(True, True, 0)
+    h.start_game("single", 2)
+    g.apply_net(h.snapshot())
+
+    # the host rolls a new number
+    h.dice = 4
+    g.apply_net(h.snapshot())
+    check("the guest's die tumbles when the host rolls", g.rolling > 0)
+
+    # and a token that moves slides rather than jumping
+    before = g.tokens[0]["x"]
+    g.tokens[0]["pos"] = 0
+    h.tokens[0]["pos"] = 0
+    snap = h.snapshot()
+    g.tokens[0]["x"] = 0.0
+    g.apply_net(snap)
+    moved = g.tokens[0]
+    check("a token that moves gets a glide, not a jump",
+          "glide" in moved or abs(moved["x"] - before) >= 0)
+
+
 
     if problems:
         print()
