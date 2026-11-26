@@ -26,10 +26,37 @@
       <button id="mute" class="ctrl" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
         <span id="mute-icon" aria-hidden="true">&#128266;</span>
       </button>
+      <button id="mp-open" class="ctrl ctrl-text" type="button" title="Play with friends" aria-label="Play with friends">MP</button>
       <button id="fs" class="ctrl" type="button" aria-pressed="false" title="Full screen" aria-label="Full screen">&#9974;</button>
     </div>
 
     <div class="screen">
+      <div id="mp-panel" class="mp-panel is-hidden">
+        <div class="mp-card">
+          <div id="mp-form">
+            <h2>Play with friends</h2>
+            <p class="mp-note">Everyone on the same code plays the same board.</p>
+            <button id="mp-create" class="mp-btn mp-primary" type="button">Create a room</button>
+            <div class="mp-row">
+              <input id="mp-code" class="mp-input" type="text" maxlength="5"
+                     placeholder="CODE" autocomplete="off" spellcheck="false">
+              <button id="mp-join" class="mp-btn" type="button">Join</button>
+            </div>
+            <p id="mp-status" class="mp-status"></p>
+            <button id="mp-back" class="mp-btn mp-ghost" type="button">Back</button>
+          </div>
+          <div id="mp-room" class="is-hidden">
+            <h2>Room code</h2>
+            <div id="mp-roomcode" class="mp-code">-----</div>
+            <p class="mp-note">Send this to your friends, then start.</p>
+            <div class="mp-sep"></div>
+            <p id="mp-roominfo" class="mp-status">Connecting…</p>
+            <button id="mp-start" class="mp-btn mp-primary" type="button">Start the game</button>
+            <button id="mp-leave" class="mp-btn mp-ghost" type="button">Leave room</button>
+          </div>
+        </div>
+      </div>
+
       <canvas id="game" width="900" height="560" aria-label="Khelo Ludo"></canvas>
 
       <!-- the real 3D die is drawn by three.js here, then blitted onto the board -->
@@ -205,6 +232,110 @@
       if (setUiFn) setUiFn(s);      // tell Python how small the canvas is
     }
 
+    // ---- multiplayer ------------------------------------------------------
+    var MP = null, mpLive = false, mpHost = true, mpSeats = {};
+    var snapshotFn = null, applyNetFn = null, netActionFn = null;
+    var setSeatsFn = null, setNetFn = null, startGameFn = null;
+
+    async function mpLoad() {
+      if (!MP) MP = await import("./mp.js");
+      return MP;
+    }
+    window.netMe = function () { return MP ? MP.me() : ""; };
+    // the host listens for guest actions
+    window.netAction = function (payload) {
+      if (netActionFn) netActionFn(payload);
+    };
+
+    function multiplayer() {
+      var panel = document.getElementById("mp-panel");
+      var status = document.getElementById("mp-status");
+      var code = document.getElementById("mp-code");
+      var formEl = document.getElementById("mp-form");
+      var roomEl = document.getElementById("mp-room");
+      var codeEl = document.getElementById("mp-roomcode");
+      var infoEl = document.getElementById("mp-roominfo");
+      var startBtn = document.getElementById("mp-start");
+      var say = function (t) { status.textContent = t || ""; };
+
+      document.getElementById("mp-open").addEventListener("click", async function () {
+        try {
+          var M = await mpLoad();
+          if (!M.configured()) say("Not set up yet - paste your Firebase config into mp.js");
+        } catch (e) { say("Could not load mp.js"); }
+        panel.classList.remove("is-hidden");
+      });
+      document.getElementById("mp-back").addEventListener("click",
+        function () { panel.classList.add("is-hidden"); });
+      codeEl.addEventListener("click", async function () {
+        try {
+          await navigator.clipboard.writeText(codeEl.textContent.trim());
+          infoEl.textContent = "Copied " + codeEl.textContent.trim();
+        } catch (e) {}
+      });
+
+      async function begin(want) {
+        try {
+          var M = await mpLoad();
+          say("Connecting…");
+          var room = await M.enter(want, "Player");
+          codeEl.textContent = room;
+          formEl.classList.add("is-hidden");
+          roomEl.classList.remove("is-hidden");
+          mpLive = true;
+          mpHost = M.hosting();
+
+          M.watchPlayers(function (list) {
+            infoEl.textContent = list.length
+              ? (list.length + 1) + " in the room"
+              : "Waiting for friends…";
+            if (mpHost) {
+              // the host seats everyone in the order they arrived
+              mpSeats = {};
+              mpSeats[M.me()] = 0;
+              list.forEach(function (p, i) { mpSeats[p.id] = i + 1; });
+              M.publishMeta({ seats: mpSeats });
+              setSeatsFn(JSON.stringify(mpSeats), M.me());
+            }
+            startBtn.disabled = !mpHost;
+            startBtn.textContent = mpHost ? "Start the game" : "Waiting for the host…";
+          });
+
+          M.watchMeta(function (m) {
+            if (!m) return;
+            if (m.seats) setSeatsFn(JSON.stringify(m.seats), M.me());
+            if (m.started && !mpHost && m.snap) applyNetFn(m.snap);
+            if (m.started && mpHost) setNetFn(true, true, 0);
+          });
+
+          setNetFn(true, mpHost, 0);
+        } catch (e) {
+          say(String((e && e.message) || e));
+        }
+      }
+
+      document.getElementById("mp-create").addEventListener("click",
+        function () { begin(""); });
+      document.getElementById("mp-join").addEventListener("click",
+        function () { begin(code.value); });
+
+      startBtn.addEventListener("click", async function () {
+        if (!mpHost) return;
+        panel.classList.add("is-hidden");
+        startGameFn("single", Math.min(4, Object.keys(mpSeats).length + 1));
+        var M = await mpLoad();
+        M.publishMeta({ started: true, snap: snapshotFn() });
+      });
+
+      document.getElementById("mp-leave").addEventListener("click", async function () {
+        try { var M = await mpLoad(); await M.leave(); } catch (e) {}
+        mpLive = false;
+        roomEl.classList.add("is-hidden");
+        formEl.classList.remove("is-hidden");
+        say("");
+      });
+    }
+
     async function boot() {
       var msg = document.getElementById("loader-msg");
       var bar = document.getElementById("loader-bar");
@@ -218,6 +349,12 @@
 
       var update = pyodide.globals.get("update");
       var draw = pyodide.globals.get("draw");
+      snapshotFn = pyodide.globals.get("snapshot");
+      applyNetFn = pyodide.globals.get("apply_net");
+      netActionFn = pyodide.globals.get("net_apply_action");
+      setSeatsFn = pyodide.globals.get("set_seats");
+      setNetFn = pyodide.globals.get("set_net_ludo");
+      startGameFn = pyodide.globals.get("start_game");
       tapFn = pyodide.globals.get("tap");
       setNameFn = pyodide.globals.get("set_name");
       setUiFn = pyodide.globals.get("set_ui");
@@ -227,12 +364,25 @@
       document.getElementById("loader").classList.add("is-hidden");
       fit();
 
+      multiplayer();
+
       var last = performance.now();
+      var lastPush = 0, lastSnap = "";
       function frame(now) {
         var dt = (now - last) / 1000;
         last = now;
         update(dt);
         draw();
+
+        // the host is the authority: it shares the board a few times a second
+        if (mpLive && mpHost && Date.now() - lastPush > 110) {
+          lastPush = Date.now();
+          var snap = snapshotFn();
+          if (snap !== lastSnap) {
+            lastSnap = snap;
+            MP.publishMeta({ snap: snap });
+          }
+        }
         requestAnimationFrame(frame);
       }
       requestAnimationFrame(frame);
