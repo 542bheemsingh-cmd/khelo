@@ -28,7 +28,8 @@ export function configured() {
 
 let db = null, api = null, uid = null, room = null;
 let stateRef = null, playersRef = null, hitsRef = null, metaRef = null;
-let unsubPlayers = null, unsubHits = null, unsubMeta = null;
+let actionsRef = null;
+let unsubPlayers = null, unsubHits = null, unsubMeta = null, unsubActions = null;
 let lastPush = 0;
 let isHost = false;
 
@@ -81,6 +82,7 @@ export async function enter(code, name) {
   playersRef = api.ref(db, `rooms/${room}/players`);
   stateRef = api.ref(db, `rooms/${room}/players/${uid}`);
   hitsRef = api.ref(db, `rooms/${room}/hits`);
+  actionsRef = api.ref(db, `rooms/${room}/actions`);
   metaRef = api.ref(db, `rooms/${room}/meta`);
 
   try {
@@ -191,6 +193,25 @@ export function watchMeta(cb) {
   });
 }
 
+// A guest cannot run the game, so it asks the host to roll or move for it.
+export function sendAction(payload) {
+  if (!actionsRef) return;
+  const r = api.push(actionsRef);
+  api.set(r, { payload: String(payload), from: uid, at: Date.now() });
+}
+
+// The host picks those up, applies them, and clears them away.
+export function watchActions(cb) {
+  if (!actionsRef) return;
+  unsubActions = api.onValue(actionsRef, (snap) => {
+    snap.forEach((child) => {
+      const v = child.val() || {};
+      if (v.payload) cb(String(v.payload));
+      api.remove(child.ref);
+    });
+  });
+}
+
 export function setRoomState(s) {
   if (metaRef && isHost) api.update(metaRef, { state: s });
 }
@@ -199,8 +220,9 @@ export async function leave() {
   if (unsubPlayers) { unsubPlayers(); unsubPlayers = null; }
   if (unsubHits) { unsubHits(); unsubHits = null; }
   if (unsubMeta) { unsubMeta(); unsubMeta = null; }
+  if (unsubActions) { unsubActions(); unsubActions = null; }
   if (stateRef) { try { await api.remove(stateRef); } catch (e) {} }
   db = null; api = null; room = null; stateRef = null;
-  playersRef = null; hitsRef = null; metaRef = null;
+  playersRef = null; hitsRef = null; metaRef = null; actionsRef = null;
   isHost = false;
 }
