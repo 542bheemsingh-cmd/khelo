@@ -875,6 +875,73 @@ check("the rules come back after a reload",
       game.RULES["tokens"] == 2 and game.rule_mode == "quick")
 game.set_rule_mode("classic")
 
+# --- the look and feel dials --------------------------------------------
+print()
+print("--- accessibility ---")
+game.apply_mode("classic")
+check("every colour has a shape of its own",
+      len(set(game.MARKS.values())) == 4
+      and set(game.MARKS) == {game.RED, game.GREEN, game.YELLOW, game.BLUE})
+check("marks are on by default", game.RULES["marks"])
+
+game.start_game("single", 4)
+CALLS.clear(); game.draw()
+with_marks = sum(1 for c in CALLS if c[0] == "rect") + \
+             sum(1 for c in CALLS if c[0] == "arc")
+game.RULES["marks"] = False
+CALLS.clear(); game.draw()
+without = sum(1 for c in CALLS if c[0] == "rect") + \
+          sum(1 for c in CALLS if c[0] == "arc")
+check("turning marks off changes what is drawn", with_marks != without)
+game.RULES["marks"] = True
+
+# themes
+game.RULES["theme"] = "classic"
+check("a theme is chosen", game._theme()["bg0"] == "#121d3e")
+game.RULES["theme"] = "mint"
+check("the theme changes the board", game._theme()["bg0"] != "#121d3e")
+game.RULES["theme"] = "classic"
+
+# reduced motion drops the confetti
+game.apply_mode("classic")
+game.RULES["reduced_motion"] = True
+game.start_game("single", 2)
+game.winner = game.RED
+game.state = "over"
+game._confetti[:] = []
+for _ in range(1):
+    pass
+check("gentle motion is a switch", game.RULES["reduced_motion"])
+
+# stats count a finished game
+before_games = game.STATS["games"]
+game._bump_stats(True)
+check("a win is counted", game.STATS["games"] == before_games + 1
+      and game.STATS["wins"] >= 1)
+
+# the turn timer rolls for somebody who has gone quiet
+game.apply_mode("classic")
+game.RULES["turn_timer"] = 1
+game.start_game("single", 2)
+game.anims[:] = []
+game.rolling = 0.0
+for _ in range(90):
+    game.update(1 / 60)
+check("the turn timer rolls for a quiet player",
+      game.rolling > 0 or not game.can_roll)
+game.apply_mode("classic")
+
+# the last move leaves a mark that fades
+game.start_game("single", 2)
+game.tokens[0]["pos"] = 0
+game.dice = 2
+game._after_roll()
+t0, q0 = game.moves[0]
+game._choose(t0, q0)
+for _ in range(120):
+    game.update(1 / 60)
+check("the last move is remembered", game.last_move is not None)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
