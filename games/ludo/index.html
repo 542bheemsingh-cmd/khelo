@@ -251,7 +251,7 @@
     }
 
     // ---- multiplayer ------------------------------------------------------
-    var MP = null, mpLive = false, mpHost = true, mpSeats = {};
+    var MP = null, mpLive = false, mpHost = true, mpSeats = {}, seatsLocked = false;
     var setSizeFn = null;
     var snapshotFn = null, applyNetFn = null, netActionFn = null;
     var setSeatsFn = null, setNetFn = null, startGameFn = null;
@@ -316,8 +316,9 @@
             const n = list.length + 1;
             infoEl.textContent = n + " in the room" +
               (n < 2 ? " - waiting for friends…" : " - " + n + " player game");
-            if (mpHost) {
-              // the host seats everyone in the order they arrived
+            if (mpHost && !seatsLocked) {
+              // the host seats everyone in the order they arrived, once.
+              // re-seating mid-game would shuffle whose turn it is.
               mpSeats = {};
               mpSeats[M.me()] = 0;
               list.forEach(function (p, i) { mpSeats[p.id] = i + 1; });
@@ -367,6 +368,7 @@
         if (!mpHost) return;
         panel.classList.add("is-hidden");
         const seats = Math.max(2, Math.min(4, Object.keys(mpSeats).length));
+        seatsLocked = true;                 // colours are fixed from here on
         startGameFn("single", seats);
         var M = await mpLoad();
         M.publishMeta({ started: true, snap: snapshotFn() });
@@ -375,6 +377,8 @@
       document.getElementById("mp-leave").addEventListener("click", async function () {
         try { var M = await mpLoad(); await M.leave(); } catch (e) {}
         mpLive = false;
+        seatsLocked = false;
+        mpSeats = {};
         roomEl.classList.add("is-hidden");
         formEl.classList.remove("is-hidden");
         say("");
