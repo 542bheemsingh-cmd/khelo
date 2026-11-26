@@ -60,6 +60,8 @@
         </div>
       </div>
 
+      <div id="mp-net" class="mp-net is-hidden">Reconnecting…</div>
+
       <canvas id="game" width="900" height="560" aria-label="Khelo Ludo"></canvas>
 
       <!-- the real 3D die is drawn by three.js here, then blitted onto the board -->
@@ -205,7 +207,7 @@
     var tapFn = null, setNameFn = null, ready = false;
     var canvas = document.getElementById("game");
     var screenBox = document.querySelector(".screen");
-    var setUiFn = null;
+    var setUiFn = null, setPresentFn = null;
     var namebox = document.getElementById("namebox");
 
     /* the canvas borrows this field so a player can type their name */
@@ -256,6 +258,7 @@
     // ---- multiplayer ------------------------------------------------------
     var MP = null, mpLive = false, mpHost = true, mpSeats = {}, seatsLocked = false;
     var mpNames = {}, hostGone = false, myName = "", sawHost = false;
+    var lastList = [], mySeat = -1;
 
     var SEAT_COLOUR = {
       Red: "#ff3b5c", Green: "#22c55e", Yellow: "#fbbf24", Blue: "#3b82f6"
@@ -269,6 +272,8 @@
 
     /* who is sitting in this room, and in which colour */
     function renderList(list) {
+      if (list) lastList = list;
+      list = lastList;
       var el = document.getElementById("mp-list");
       if (!el) return;
       var total = Math.max(2, Math.min(4, (list ? list.length : 0) + 1));
@@ -391,13 +396,21 @@
               if (stillThere) sawHost = true;
               if (sawHost && !stillThere && !hostGone) {
                 hostGone = true;
-                mpLive = false;
-                mpHost = true;              // stop asking the absent host
-                say("The host left the room.");
-                roomEl.classList.add("is-hidden");
-                formEl.classList.remove("is-hidden");
-                panel.classList.remove("is-hidden");
-                state = "mode";
+                var ids = [M.me()].concat(list.map(function (p) { return p.id; }));
+                ids.sort();
+                if (ids[0] === M.me()) {
+                  // the lowest id takes the room over, and keeps its own colour
+                  M.claimHost();
+                  mpHost = true;
+                  seatsLocked = true;
+                  roundStarted = true;
+                  lastSnap = "";
+                  setNetFn(true, true, mySeat >= 0 ? mySeat : 0);
+                  say("The host left - you are the host now.");
+                } else {
+                  say("The host left. Waiting for the new host…");
+                  setNetFn(true, false, mySeat >= 0 ? mySeat : -1);
+                }
               }
             }
 
@@ -414,6 +427,17 @@
               setSeatsFn(JSON.stringify(mpSeats), M.me());
             }
             renderList(list);
+
+            // tell the game which colours still have somebody behind them
+            if (setPresentFn && mpHost) {
+              var here = [];
+              if (mySeat >= 0) here.push(mySeat);
+              list.forEach(function (p) {
+                if (mpSeats[p.id] !== undefined) here.push(mpSeats[p.id]);
+              });
+              if (here.length) setPresentFn(JSON.stringify(here));
+            }
+
             const joined = Object.keys(mpSeats).length;
             startBtn.disabled = !mpHost || joined < 2;
             if (!mpHost) {
@@ -430,10 +454,18 @@
             M.watchActions(function (payload) { netActionFn(payload); });
           }
 
+          if (M.watchConnection) {
+            M.watchConnection(function (up) {
+              var el = document.getElementById("mp-net");
+              if (el) el.classList.toggle("is-hidden", up);
+            });
+          }
+
           M.watchMeta(function (m) {
             if (!m) return;
             if (m.seats) {
               if (!mpHost) mpSeats = m.seats;     // the host owns the seating
+              if (m.seats[M.me()] !== undefined) mySeat = m.seats[M.me()];
               setSeatsFn(JSON.stringify(m.seats), M.me());
               renderList(null);
             }
@@ -495,6 +527,7 @@
       await pyodide.runPythonAsync(source);
 
       setSizeFn = pyodide.globals.get("set_size");
+      setPresentFn = pyodide.globals.get("set_present");
       var update = pyodide.globals.get("update");
       var draw = pyodide.globals.get("draw");
       snapshotFn = pyodide.globals.get("snapshot");
