@@ -36,16 +36,27 @@
 
       <div id="mp-panel" class="mp-panel is-hidden">
         <div class="mp-card">
-          <h2>Play with friends</h2>
-          <p class="mp-note">Everyone on the same code drops into the same map.</p>
-          <button id="mp-create" class="mp-btn mp-primary" type="button">Create a room</button>
-          <div class="mp-row">
-            <input id="mp-code" class="mp-input" type="text" maxlength="5"
-                   placeholder="CODE" autocomplete="off" spellcheck="false">
-            <button id="mp-join" class="mp-btn" type="button">Join</button>
+          <div id="mp-form">
+            <h2>Play with friends</h2>
+            <p class="mp-note">Everyone on the same code drops into the same map.</p>
+            <button id="mp-create" class="mp-btn mp-primary" type="button">Create a room</button>
+            <div class="mp-row">
+              <input id="mp-code" class="mp-input" type="text" maxlength="5"
+                     placeholder="CODE" autocomplete="off" spellcheck="false">
+              <button id="mp-join" class="mp-btn" type="button">Join</button>
+            </div>
+            <p id="mp-status" class="mp-status"></p>
+            <button id="mp-back" class="mp-btn mp-ghost" type="button">Back</button>
           </div>
-          <p id="mp-status" class="mp-status"></p>
-          <button id="mp-back" class="mp-btn mp-ghost" type="button">Back</button>
+
+          <div id="mp-room" class="is-hidden">
+            <h2>Room code</h2>
+            <div id="mp-roomcode" class="mp-code">-----</div>
+            <p class="mp-note">Send this to your friends. The round starts when you say.</p>
+            <p id="mp-roominfo" class="mp-status">Connecting…</p>
+            <button id="mp-start" class="mp-btn mp-primary" type="button">Start the round</button>
+            <button id="mp-leave" class="mp-btn mp-ghost" type="button">Leave room</button>
+          </div>
         </div>
       </div>
 
@@ -1467,24 +1478,44 @@
         document.getElementById("mp-back").addEventListener("click",
           () => panel.classList.add("is-hidden"));
 
+        const formEl = document.getElementById("mp-form");
+        const roomEl = document.getElementById("mp-room");
+        const codeEl = document.getElementById("mp-roomcode");
+        const infoEl = document.getElementById("mp-roominfo");
+
         async function begin(want) {
           try {
             say("Connecting…");
             const room = await MP.enter(want, "Player");
+            codeEl.textContent = room;
+            formEl.classList.add("is-hidden");
+            roomEl.classList.remove("is-hidden");
+
             MP.watchPlayers((list) => {
               setNetFn(JSON.stringify(list), MP.me());
-              say(list.length ? (list.length + 1) + " in room " + room
-                              : "Room " + room + " - share the code");
+              infoEl.textContent = list.length
+                ? (list.length + 1) + " in the room"
+                : "Waiting for friends…";
             });
             MP.watchHits((h) => { if (h.dmg > 0) netDmgFn(h.dmg); });
             setMpFn(true);
-            panel.classList.add("is-hidden");
-            startFn();
             mpLive = true;
           } catch (e) {
             say(String((e && e.message) || e));
           }
         }
+
+        document.getElementById("mp-start").addEventListener("click", () => {
+          panel.classList.add("is-hidden");
+          startFn();
+        });
+        document.getElementById("mp-leave").addEventListener("click", async () => {
+          try { await MP.leave(); } catch (e) {}
+          mpLive = false;
+          roomEl.classList.add("is-hidden");
+          formEl.classList.remove("is-hidden");
+          say("");
+        });
         document.getElementById("mp-create").addEventListener("click",
           () => begin(""));
         document.getElementById("mp-join").addEventListener("click",
