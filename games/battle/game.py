@@ -523,6 +523,8 @@ _clock = 0.0               # always ticking, so the menu can orbit
 hits = []                 # where bullets struck, for the sparks
 feed = []                 # the kill feed
 pings = []                # gunfire marks on the minimap
+over_t = 0.0              # seconds spent on the end screen
+REMATCH_AFTER = 5.0
 
 message_t = 0.0           # how long the line under the compass still shows
 _last_message = ""
@@ -860,7 +862,7 @@ def plan_flight():
 def start_game(seed=None):
     global state, player, bots, shots, zone, message, elapsed, result
     global zone_timer, zone_phase, cam_yaw, cam_pitch, move_x, move_z, firing
-    global pvx, pvz, hitmark, hits, feed
+    global pvx, pvz, hitmark, hits, feed, over_t
     global drop_v, drop_hx, drop_hz, chute
 
     if not _READY:
@@ -925,6 +927,7 @@ def start_game(seed=None):
     feed[:] = []
     pings[:] = []
     firing = False
+    over_t = 0.0
 
     # start up in the plane, not on the ground
     plan_flight()
@@ -1009,6 +1012,9 @@ def update(dt):
     dt = min(max(float(dt), 0.0), 0.06)
     _clock += dt
 
+    if state == "over":
+        over_t += dt
+        return
     if state == "plane":
         cam_yaw = plane["yaw"]
         cam_pitch = 0.30
@@ -1349,6 +1355,24 @@ def set_net(people_json, my_id=""):
     remotes[:] = list(seen.values())
 
 
+def set_zone_net(zone_json):
+    """The host tells us where the circle is, so nobody dies to a different one."""
+    global zone_timer
+    try:
+        d = json.loads(zone_json)
+    except Exception:
+        return
+    if not isinstance(d, dict):
+        return
+    zone["cx"] = float(d.get("cx", zone["cx"]))
+    zone["cz"] = float(d.get("cz", zone["cz"]))
+    zone["r"] = float(d.get("r", zone["r"]))
+    zone["tx"] = float(d.get("tx", zone["tx"]))
+    zone["tz"] = float(d.get("tz", zone["tz"]))
+    zone["tr"] = float(d.get("tr", zone["tr"]))
+    zone_timer = float(d.get("t", zone_timer))
+
+
 def set_mp(on):
     """Turn multiplayer on or off. In multiplayer there are no bots."""
     global mp_on
@@ -1424,6 +1448,8 @@ def _frame_json():
         "dn": [[round(e["x"], 2), round(height_at(e["x"], e["z"]) + 5.0, 2),
                 round(e["z"], 2), e["text"]] for e in dmg_numbers],
         "z": [round(zone["cx"], 2), round(zone["cz"], 2), round(zone["r"], 2)],
+        "zt": [round(zone["tx"], 2), round(zone["tz"], 2), round(zone["tr"], 2),
+               round(zone_timer, 2)],
         "cam": [round(cam_yaw, 3), round(cam_pitch, 3)],
         "sh": round(shake, 3),
         "wp": 0 if weapon == "rifle" else 1,
@@ -2048,3 +2074,16 @@ def _draw_over():
     _menu_hit = [("again", (cx + 20, cy + ch - 140, bw, 52)),
                  ("menu", (cx + cw - bw - 20, cy + ch - 140, bw, 52)),
                  ("arcade", (cx + 20, cy + ch - 76, cw - 40, 44))]
+
+    # five seconds in, a rematch is offered as its own popup
+    if over_t >= REMATCH_AFTER:
+        rw, rh = min(240, W - 60), 58
+        rx, ry = (W - rw) / 2, cy - 78
+        pulse = 0.72 + 0.28 * math.sin(_clock * 4.5)
+        _panel(rx, ry, rw, rh, "rgba(34, 197, 94, %.2f)" % pulse,
+               "#7ef0c0", 16)
+        c.textAlign = "center"
+        c.fillStyle = "#06101f"
+        c.font = "900 %dpx %s" % (_fs(17), FONT)
+        c.fillText("REMATCH", W / 2, ry + 36)
+        _menu_hit.append(("again", (rx, ry, rw, rh)))
