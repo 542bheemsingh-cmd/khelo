@@ -458,10 +458,16 @@ def apply_net(js):
         d = json.loads(js)
     except Exception:
         return
+    global rolling, roll_t, dice_show
     mode = d.get("mode", mode)
     players = list(d.get("players", players))
     turn = int(d.get("turn", turn))
+    was_dice = dice
     dice = int(d.get("dice", dice))
+    if dice != was_dice and rolling <= 0 and state == "play":
+        rolling = ROLL_DUR          # a roll from the host tumbles here too
+        roll_t = 0.0
+        dice_show = dice
     dice_show = int(d.get("dice_show", dice_show))
     can_roll = bool(d.get("can_roll", can_roll))
     message = d.get("message", message)
@@ -486,8 +492,15 @@ def apply_net(js):
         # a token that has never been placed has no x/y yet, so check for that
         # too - otherwise anything still in the yard is never drawn
         if t["pos"] != pos or "x" not in t or "y" not in t:
+            tx, ty = token_xy(c, i, pos)
+            if "x" in t and t["pos"] != pos and abs(tx - t["x"]) < CELL * 12:
+                # slide from where it is drawn to where it now belongs
+                t["glide"] = {"x0": t["x"], "y0": t["y"], "x1": tx, "y1": ty,
+                              "p": 0.0}
+            else:
+                t.pop("glide", None)
+                t["x"], t["y"] = tx, ty
             t["pos"] = pos
-            t["x"], t["y"] = token_xy(c, i, pos)
         fresh.append(t)
     if fresh:
         tokens = fresh
@@ -919,6 +932,17 @@ def update(dt):
             roll_t = 1.0
             dice_show = dice
             _after_roll()
+
+    for t in tokens:
+        gl = t.get("glide")
+        if gl:
+            gl["p"] = min(1.0, gl["p"] + dt * 5.5)
+            e = 1 - (1 - gl["p"]) ** 3
+            t["x"] = gl["x0"] + (gl["x1"] - gl["x0"]) * e
+            t["y"] = gl["y0"] + (gl["y1"] - gl["y0"]) * e
+            if gl["p"] >= 1.0:
+                t["x"], t["y"] = gl["x1"], gl["y1"]
+                t.pop("glide", None)
 
     for a in anims[:]:
         a["p"] += dt * a["speed"]
