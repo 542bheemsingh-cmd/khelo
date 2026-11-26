@@ -281,15 +281,63 @@ def token_xy(c, idx, pos):
 # ---------------------------------------------------------------------------
 # Token designs
 # ---------------------------------------------------------------------------
-DESIGNS = ["ball", "gem", "ring", "star", "hex"]
-DESIGN_LABEL = {"ball": "Ball", "gem": "Gem", "ring": "Ring",
-                "star": "Star", "hex": "Hex"}
-design = "ball"
+DESIGNS = ["pawn", "ball", "crown", "rocket", "plane", "car",
+           "gem", "ring", "star", "hex"]
+DESIGN_LABEL = {"pawn": "Pawn", "ball": "Ball", "crown": "Crown",
+                "rocket": "Rocket", "plane": "Plane", "car": "Car",
+                "gem": "Gem", "ring": "Ring", "star": "Star", "hex": "Hex"}
+design = "pawn"
 
 # ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
 state = "mode"            # mode | count | setup | play | over
+# ---------------------------------------------------------------------------
+# House rules
+#
+# Ludo is not one game, it is a board with a dozen dials. Every one of these is
+# a real difference between tables - the presets below are just starting points.
+# ---------------------------------------------------------------------------
+RULES = {
+    "exit": "six",          # six | any       - what brings a token out
+    "six_bonus": True,      # roll again on a six
+    "six_limit": 3,         # a third six in a row voids the turn (0 = off)
+    "capture_bonus": True,  # roll again after sending somebody home
+    "home_bonus": True,     # roll again after bringing a token home
+    "exact_home": True,     # False lets a token bounce back off the centre
+    "safe_squares": True,   # the stars and the start squares are shelter
+    "blocks": False,        # a pair of one colour is a wall nobody passes
+    "kill_to_enter": False, # you must capture once before you may go home
+    "capture_forced": False,# capture whenever you can
+    "tokens": 4,            # 2 to 4 tokens each
+    "first_home_wins": False,
+}
+
+MODES = {
+    "classic": {},
+    "quick": {"tokens": 2, "exit": "any", "first_home_wins": True},
+    "master": {"kill_to_enter": True},
+    "onekill": {"first_home_wins": True},
+    "plain": {"safe_squares": False, "capture_bonus": False,
+              "home_bonus": False},
+    "wild": {"safe_squares": False, "capture_forced": True, "blocks": True},
+}
+MODE_LABEL = {
+    "classic": "Classic", "quick": "Quick", "master": "Master",
+    "onekill": "One Kill", "plain": "Plain", "wild": "Wild",
+}
+MODE_NOTE = {
+    "classic": "The full game, four tokens each",
+    "quick": "Two tokens, any roll opens, first home wins",
+    "master": "Capture once before any token may go home",
+    "onekill": "The first token home takes it",
+    "plain": "No shelter, no bonuses - just the race",
+    "wild": "No shelter, blocks, and captures are compulsory",
+}
+sixes_in_a_row = 0        # a third six voids the turn
+rule_mode = "classic"     # which preset the mode screen has chosen
+_rules_loaded = False
+captured_any = {}         # colour -> how many it has captured
 mode = "single"           # single | team
 player_count = 4
 players = []
@@ -356,7 +404,7 @@ def _sound(name):
 def start_game(m=None, count=None):
     global state, mode, player_count, players, teams, turn, tokens
     global dice, dice_show, moves, can_roll, message, winner, rolling, roll_t
-    global auto_move_t
+    global auto_move_t, sixes_in_a_row
     if m is not None:
         mode = m
     if count is not None:
@@ -371,8 +419,10 @@ def start_game(m=None, count=None):
         teams = {}
 
     tokens = []
+    captured_any.clear()
+    sixes_in_a_row = 0
     for c in players:
-        for i in range(4):
+        for i in range(max(1, min(4, int(RULES.get("tokens") or 4)))):
             x, y = token_xy(c, i, -1)
             tokens.append({"c": c, "i": i, "pos": -1, "x": x, "y": y})
 
@@ -403,6 +453,89 @@ def to_count():
 def to_setup():
     global state
     state = "setup"
+
+
+def set_rules(js):
+    """Adopt a whole rule set from the settings screen."""
+    global RULES
+    try:
+        d = json.loads(js)
+    except Exception:
+        return
+    if not isinstance(d, dict):
+        return
+    for k, v in d.items():
+        if k in RULES:
+            RULES[k] = v
+
+
+def rules_json():
+    return json.dumps(RULES)
+
+
+def _save_rules():
+    try:
+        js.localStorage.setItem("khelo_ludo_rules", json.dumps(RULES))
+        js.localStorage.setItem("khelo_ludo_rule_mode", rule_mode)
+    except Exception:
+        pass
+
+
+def load_rules():
+    """Bring back whatever was set last time."""
+    global RULES, rule_mode, _rules_loaded
+    _rules_loaded = True
+    try:
+        v = js.localStorage.getItem("khelo_ludo_rules")
+        if v:
+            d = json.loads(v)
+            for k in list(RULES):
+                if k in d:
+                    RULES[k] = d[k]
+        m = js.localStorage.getItem("khelo_ludo_rule_mode")
+        if m:
+            rule_mode = m
+    except Exception:
+        pass
+
+
+def set_rule_mode(m):
+    global rule_mode
+    if m in MODES:
+        rule_mode = m
+        apply_mode(m)
+        _save_rules()
+
+
+def toggle_rule(key):
+    """Flip one dial from the custom rules screen."""
+    global _rules_loaded
+    if key in RULES:
+        v = RULES[key]
+        if isinstance(v, bool):
+            RULES[key] = not v
+        elif key == "exit":
+            RULES[key] = "any" if v == "six" else "six"
+        elif key == "six_limit":
+            RULES[key] = 0 if v else 3
+        elif key == "tokens":
+            RULES[key] = 2 if v >= 4 else v + 1
+        rule_mode = "custom"
+        _save_rules()
+
+
+def apply_mode(m):
+    """Reset every dial, then apply the preset."""
+    global RULES
+    if m not in MODES:
+        return
+    RULES = {
+        "exit": "six", "six_bonus": True, "six_limit": 3,
+        "capture_bonus": True, "home_bonus": True, "exact_home": True,
+        "safe_squares": True, "blocks": False, "kill_to_enter": False,
+        "capture_forced": False, "tokens": 4, "first_home_wins": False,
+    }
+    RULES.update(MODES[m])
 
 
 def restart():
@@ -635,10 +768,39 @@ def legal_moves(c, d):
         if p >= HOME_POS:
             continue
         if p < 0:
-            if d == 6:
+            if d == 6 or RULES["exit"] == "any":
                 out.append((t, 0))
-        elif p + d <= HOME_POS:
+            continue
+        if RULES["kill_to_enter"] and not captured_any.get(c):
+            # you cannot start up the home column without a scalp
+            if p + d > LAST_TRACK:
+                continue
+        if p + d <= HOME_POS:
             out.append((t, p + d))
+        elif not RULES["exact_home"]:
+            back = (p + d) - HOME_POS          # bounce off the centre
+            if HOME_POS - back >= 0:
+                out.append((t, HOME_POS - back))
+
+    # a pair of one colour is a wall you may not land on
+    if RULES["blocks"]:
+        blocked = set()
+        for a in tokens:
+            for b in tokens:
+                if a is b or a["c"] != b["c"]:
+                    continue
+                if 0 <= a["pos"] <= LAST_TRACK and 0 <= b["pos"] <= LAST_TRACK:
+                    blocked.add(path_cell(a["c"], a["pos"]))
+        if blocked:
+            out = [(t, q) for t, q in out
+                   if q > LAST_TRACK or path_cell(c, q) not in blocked]
+
+    # some tables insist you take a capture when one is on offer
+    if RULES["capture_forced"] and out:
+        takes = [(t, q) for t, q in out
+                 if q <= LAST_TRACK and _captures_at(path_cell(c, q), c)]
+        if takes:
+            out = takes
     return out
 
 
@@ -649,19 +811,37 @@ def _roll_face():
 
 
 def roll():
-    global rolling, roll_t, dice, can_roll
+    global rolling, roll_t, dice, can_roll, sixes_in_a_row
     if state != "play" or anims or rolling > 0 or not can_roll:
         return
     dice = _roll_face()
+    sixes_in_a_row = sixes_in_a_row + 1 if dice == 6 else 0
     rolling = ROLL_DUR
     roll_t = 0.0
     can_roll = False
     _sound("dice")
 
 
+def _void_turn():
+    """The third six in a row: the turn ends with nothing moved."""
+    global dice
+    saved = dice
+    dice = 0                     # so _pass_turn does not hand out another go
+    _pass_turn()
+    dice = saved
+
+
 def _after_roll():
-    global moves, can_roll, message
+    global moves, can_roll, message, sixes_in_a_row
     c = cur()
+    lim = int(RULES.get("six_limit") or 0)
+    if lim and dice == 6 and sixes_in_a_row >= lim:
+        sixes_in_a_row = 0
+        moves = []
+        message = "%s rolled %d sixes - turn void." % (names[c], lim)
+        _sound("deny")
+        _void_turn()
+        return
     moves = legal_moves(c, dice)
     if not moves:
         message = "%s rolled %d - no move." % (names[c], dice)
@@ -680,7 +860,8 @@ def _after_roll():
 
 
 def _pass_turn():
-    global turn, can_roll, moves, message
+    global turn, can_roll, moves, message, sixes_in_a_row
+    sixes_in_a_row = 0
     if dice == 6:
         can_roll = True          # a 6 always earns another go
         moves = []
@@ -704,7 +885,7 @@ def _captures_at(cell, moving_color):
         idx = TRACK.index(cell)
     except ValueError:
         return []
-    if idx in SAFE:
+    if RULES["safe_squares"] and idx in SAFE:
         return []
     hits = []
     for t in tokens:
@@ -744,7 +925,7 @@ def _finish_move(a):
     global turn, can_roll, moves, message, winner, state
     t = a["t"]
     c = t["c"]
-    extra = (a["dice"] == 6)
+    extra = (a["dice"] == 6) and RULES["six_bonus"]
 
     if t["pos"] <= LAST_TRACK:
         hits = _captures_at(path_cell(c, t["pos"]), c)
@@ -753,13 +934,16 @@ def _finish_move(a):
             back = list(range(h["pos"] - 1, -1, -1)) + [-1]
             _anim_to(h, back, "capture", speed=13.0)
             _sound("capture")
-            extra = True
+            captured_any[c] = captured_any.get(c, 0) + 1
+            if RULES["capture_bonus"]:
+                extra = True
         if hits:
             message = "%s captured %s!" % (
                 names[c], ", ".join(names[h["c"]] for h in hits))
 
     if t["pos"] >= HOME_POS:
-        extra = True
+        if RULES["home_bonus"]:
+            extra = True
         _sound("home")
         _burst(*token_xy(c, t["i"], HOME_POS), PAL[c]["lite"])
         message = "%s got a token home!" % names[c]
@@ -786,7 +970,12 @@ def _finish_move(a):
 
 
 def _won(c):
-    if all(t["pos"] >= HOME_POS for t in my_tokens(c)):
+    mine = my_tokens(c)
+    if not mine:
+        return False
+    done = (any(t["pos"] >= HOME_POS for t in mine) if RULES["first_home_wins"]
+            else all(t["pos"] >= HOME_POS for t in mine))
+    if done:
         if mode == "team":
             mate = [k for k, v in teams.items() if v == teams[c] and k != c][0]
             return all(t["pos"] >= HOME_POS for t in my_tokens(mate))
@@ -820,15 +1009,31 @@ def tap(x, y):
         for tag, r in _menu_hit:
             if _in(r, x, y):
                 _sound("click")
-                if tag == "single":
-                    state = "count"
+                if tag == "games":
+                    _leave_game()
+                elif tag.startswith("m:"):
+                    set_rule_mode(tag[2:])
+                elif tag.startswith("n:"):
+                    globals()["player_count"] = int(tag[2:])
+                    globals()["mode"] = "single"
                 elif tag == "team":
                     globals()["mode"] = "team"
-                    state = "setup"
-                elif tag == "design":
-                    state = "setup"
-                elif tag == "games":
-                    _leave_game()
+                    globals()["player_count"] = 4
+                elif tag == "play":
+                    start_game()
+                elif tag == "custom":
+                    state = "rules"
+                return
+        return
+
+    if state == "rules":
+        for tag, r in _menu_hit:
+            if _in(r, x, y):
+                _sound("click")
+                if tag == "back":
+                    state = "mode"
+                elif tag.startswith("r:"):
+                    toggle_rule(tag[2:])
                 return
         return
 
@@ -1298,14 +1503,188 @@ def _shape_hex(x, y, r, p):
     ctx.fill()
 
 
-SHAPES = {"ball": _shape_ball, "gem": _shape_gem, "ring": _shape_ring,
-          "star": _shape_star, "hex": _shape_hex}
+# --- the pieces people actually know ---------------------------------------
+def _piece_fill(p):
+    g = ctx.createLinearGradient(0, -1, 0, 1)
+    return g
 
 
-def _draw_token(t, highlight=False, movable=False, label=True):
+def _shape_pawn(x, y, r, p):
+    """The classic Ludo pawn: round head, tapered body, wide base."""
+    body = ctx.createLinearGradient(x - r, y - r, x + r, y + r)
+    body.addColorStop(0, p["lite"])
+    body.addColorStop(0.55, p["main"])
+    body.addColorStop(1, p["dark"])
+    # base
+    ctx.beginPath()
+    ctx.ellipse(x, y + r * 0.78, r * 0.86, r * 0.30, 0, 0, 6.2832)
+    ctx.fillStyle = body
+    ctx.fill()
+    # body: a skirt flaring out
+    ctx.beginPath()
+    ctx.moveTo(x - r * 0.30, y + r * 0.10)
+    ctx.quadraticCurveTo(x - r * 0.78, y + r * 0.52, x - r * 0.70, y + r * 0.70)
+    ctx.lineTo(x + r * 0.70, y + r * 0.70)
+    ctx.quadraticCurveTo(x + r * 0.78, y + r * 0.52, x + r * 0.30, y + r * 0.10)
+    ctx.closePath()
+    ctx.fillStyle = body
+    ctx.fill()
+    # neck + head
+    ctx.beginPath()
+    ctx.arc(x, y - r * 0.42, r * 0.46, 0, 6.2832)
+    ctx.fillStyle = body
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(x - r * 0.16, y - r * 0.56, r * 0.16, 0, 6.2832)
+    ctx.fillStyle = "rgba(255,255,255,0.72)"
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(x, y - r * 0.42, r * 0.46, 0, 6.2832)
+    ctx.lineWidth = 1.6
+    ctx.strokeStyle = "rgba(255,255,255,0.45)"
+    ctx.stroke()
+
+
+def _shape_crown(x, y, r, p):
+    """A crown: five points over a band."""
+    g = ctx.createLinearGradient(x, y - r, x, y + r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(0.6, p["main"])
+    g.addColorStop(1, p["dark"])
+    ctx.beginPath()
+    ctx.moveTo(x - r * 0.86, y + r * 0.52)
+    ctx.lineTo(x - r * 0.74, y - r * 0.52)
+    ctx.lineTo(x - r * 0.30, y - r * 0.02)
+    ctx.lineTo(x, y - r * 0.74)
+    ctx.lineTo(x + r * 0.30, y - r * 0.02)
+    ctx.lineTo(x + r * 0.74, y - r * 0.52)
+    ctx.lineTo(x + r * 0.86, y + r * 0.52)
+    ctx.closePath()
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.6
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.ellipse(x, y + r * 0.58, r * 0.86, r * 0.16, 0, 0, 6.2832)
+    ctx.fillStyle = p["dark"]
+    ctx.fill()
+
+
+def _shape_rocket(x, y, r, p):
+    """A rocket: pointed nose, fins, a warm exhaust."""
+    g = ctx.createLinearGradient(x - r, y - r, x + r, y + r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(1, p["dark"])
+    ctx.beginPath()
+    ctx.moveTo(x, y - r * 1.02)
+    ctx.quadraticCurveTo(x + r * 0.56, y - r * 0.20, x + r * 0.40, y + r * 0.62)
+    ctx.lineTo(x - r * 0.40, y + r * 0.62)
+    ctx.quadraticCurveTo(x - r * 0.56, y - r * 0.20, x, y - r * 1.02)
+    ctx.closePath()
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"
+    ctx.stroke()
+    # fins
+    ctx.beginPath()
+    ctx.moveTo(x - r * 0.40, y + r * 0.10)
+    ctx.lineTo(x - r * 0.88, y + r * 0.66)
+    ctx.lineTo(x - r * 0.40, y + r * 0.62)
+    ctx.closePath()
+    ctx.moveTo(x + r * 0.40, y + r * 0.10)
+    ctx.lineTo(x + r * 0.88, y + r * 0.66)
+    ctx.lineTo(x + r * 0.40, y + r * 0.62)
+    ctx.closePath()
+    ctx.fillStyle = p["dark"]
+    ctx.fill()
+    # porthole
+    ctx.beginPath()
+    ctx.arc(x, y - r * 0.20, r * 0.20, 0, 6.2832)
+    ctx.fillStyle = "rgba(255,255,255,0.80)"
+    ctx.fill()
+
+
+def _shape_plane(x, y, r, p):
+    """A little plane, seen from above."""
+    g = ctx.createLinearGradient(x, y - r, x, y + r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(1, p["dark"])
+    ctx.beginPath()
+    ctx.moveTo(x, y - r * 0.98)
+    ctx.lineTo(x + r * 0.24, y - r * 0.30)
+    ctx.lineTo(x + r * 0.96, y + r * 0.10)
+    ctx.lineTo(x + r * 0.96, y + r * 0.34)
+    ctx.lineTo(x + r * 0.22, y + r * 0.20)
+    ctx.lineTo(x + r * 0.16, y + r * 0.66)
+    ctx.lineTo(x + r * 0.46, y + r * 0.86)
+    ctx.lineTo(x + r * 0.44, y + r * 1.0)
+    ctx.lineTo(x, y + r * 0.82)
+    ctx.lineTo(x - r * 0.44, y + r * 1.0)
+    ctx.lineTo(x - r * 0.46, y + r * 0.86)
+    ctx.lineTo(x - r * 0.16, y + r * 0.66)
+    ctx.lineTo(x - r * 0.22, y + r * 0.20)
+    ctx.lineTo(x - r * 0.96, y + r * 0.34)
+    ctx.lineTo(x - r * 0.96, y + r * 0.10)
+    ctx.lineTo(x - r * 0.24, y - r * 0.30)
+    ctx.closePath()
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.4
+    ctx.strokeStyle = "rgba(255,255,255,0.50)"
+    ctx.stroke()
+
+
+def _shape_car(x, y, r, p):
+    """A racing car: low body, a cabin, two wheels."""
+    g = ctx.createLinearGradient(x, y - r, x, y + r)
+    g.addColorStop(0, p["lite"])
+    g.addColorStop(0.6, p["main"])
+    g.addColorStop(1, p["dark"])
+    ctx.beginPath()
+    ctx.moveTo(x - r * 0.96, y + r * 0.18)
+    ctx.quadraticCurveTo(x - r * 0.92, y - r * 0.16, x - r * 0.52, y - r * 0.20)
+    ctx.lineTo(x - r * 0.26, y - r * 0.62)
+    ctx.lineTo(x + r * 0.34, y - r * 0.62)
+    ctx.lineTo(x + r * 0.62, y - r * 0.18)
+    ctx.quadraticCurveTo(x + r * 0.94, y - r * 0.10, x + r * 0.96, y + r * 0.18)
+    ctx.closePath()
+    ctx.fillStyle = g
+    ctx.fill()
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = "rgba(255,255,255,0.50)"
+    ctx.stroke()
+    # windscreen
+    ctx.beginPath()
+    ctx.moveTo(x - r * 0.20, y - r * 0.52)
+    ctx.lineTo(x + r * 0.26, y - r * 0.52)
+    ctx.lineTo(x + r * 0.42, y - r * 0.22)
+    ctx.lineTo(x - r * 0.34, y - r * 0.22)
+    ctx.closePath()
+    ctx.fillStyle = "rgba(255,255,255,0.55)"
+    ctx.fill()
+    # wheels
+    for wx in (x - r * 0.52, x + r * 0.54):
+        ctx.beginPath()
+        ctx.arc(wx, y + r * 0.34, r * 0.26, 0, 6.2832)
+        ctx.fillStyle = "#12182a"
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(wx, y + r * 0.34, r * 0.11, 0, 6.2832)
+        ctx.fillStyle = "rgba(255,255,255,0.55)"
+        ctx.fill()
+
+SHAPES = {"pawn": _shape_pawn, "ball": _shape_ball, "crown": _shape_crown,
+          "rocket": _shape_rocket, "plane": _shape_plane, "car": _shape_car,
+          "gem": _shape_gem, "ring": _shape_ring, "star": _shape_star,
+          "hex": _shape_hex}
+
+
+def _draw_token(t, highlight=False, movable=False, label=True, rad=None):
     x, y, c = t["x"], t["y"], t["c"]
     p = PAL[c]
-    r = CELL * 0.40
+    r = CELL * 0.40 if rad is None else rad
 
     if highlight:
         glow = 0.5 + 0.5 * math.sin(_t * 4)
@@ -1565,67 +1944,154 @@ def _draw_hud():
 # ---------------------------------------------------------------------------
 def _draw_mode():
     global _menu_hit
+    if not _rules_loaded:
+        load_rules()
     _menu_hit = []
     _bg()
     pad = 14.0
     narrow = W < 520
 
-    # the back chip first, so the title never lands on top of it
     _button(pad, pad, 96, 36, "\u2190 Games", size=13)
     _menu_hit.append(("games", (pad, pad, 96, 36)))
 
-    _title("KHELO LUDO", 84 if narrow else 78, 30 if narrow else 42)
-    _wrap("The classic race home - pick how you want to play.",
-          W / 2, (110 if narrow else 108), min(640, W - 30), 14)
+    _title("KHELO LUDO", 78 if narrow else 74, 28 if narrow else 40)
+    _wrap("Pick a way to play - every card is a different rule set.",
+          W / 2, (100 if narrow else 100), min(640, W - 30), 13)
 
-    cards = [
-        ("single", "Single-Single", "Everyone for themselves", "#4aa8ff",
-         "Choose 2, 3 or 4 players"),
-        ("team", "Team-Team", "2 players against 2", "#fbbf24",
-         "Red + Yellow vs Green + Blue"),
-    ]
-    gap = max(12.0, W * 0.03)
-    if narrow:
-        cw = W - 2 * pad
-        ch = 132.0
-        oy = 112.0
-    else:
-        cw = min(340.0, (W - 2 * pad - gap) / 2.0)
-        ch = 196.0
-        oy = max(150.0, H * 0.24)
-    k = min(1.0, cw / 330.0)
-
-    for i, (tag, name, sub, accent, note) in enumerate(cards):
-        if narrow:
-            x, y = pad, oy + i * (ch + 12)
-        else:
-            x = (W - (2 * cw + gap)) / 2.0 + i * (cw + gap)
-            y = oy
-        _panel(x, y, cw, ch, "rgba(20, 30, 56, 0.94)", accent, 18)
-        ctx.textAlign = "center"
-        ctx.fillStyle = accent
-        ctx.font = "800 %dpx %s" % (max(17, int(26 * k)), FONT)
-        ctx.fillText(name, x + cw / 2, y + ch * 0.28)
-        ctx.fillStyle = "#eaf2ff"
-        ctx.font = "700 %dpx %s" % (max(12, int(15 * k)), FONT)
-        ctx.fillText(sub, x + cw / 2, y + ch * 0.45)
+    # the six rule presets, laid out as a grid
+    names_ = ["classic", "quick", "master", "onekill", "plain", "wild"]
+    tint = {"classic": "#4aa8ff", "quick": "#22c55e", "master": "#fbbf24",
+            "onekill": "#ff3b5c", "plain": "#9fb3d9", "wild": "#a855f7"}
+    gap = max(10.0, W * 0.022)
+    cols = 2 if narrow else 3
+    cw = (W - 2 * pad - (cols - 1) * gap) / cols
+    ch = min(96.0, cw * 0.52)
+    oy = 126.0
+    k = min(1.0, cw / 250.0)
+    for i, m in enumerate(names_):
+        x = pad + (i % cols) * (cw + gap)
+        y = oy + (i // cols) * (ch + gap)
+        sel = (rule_mode == m)
+        _panel(x, y, cw, ch, "rgba(20, 30, 56, 0.94)" if not sel else
+               "rgba(40, 56, 96, 0.98)", tint[m], 14)
+        ctx.textAlign = "left"
+        ctx.fillStyle = tint[m]
+        ctx.font = "800 %dpx %s" % (max(13, int(17 * k)), FONT)
+        ctx.fillText(MODE_LABEL[m], x + 13, y + ch * 0.38)
         ctx.fillStyle = "#93a4c8"
-        ctx.font = "600 %dpx %s" % (max(10, int(13 * k)), FONT)
-        ctx.fillText(note, x + cw / 2, y + ch * 0.58)
-        bw = min(cw - 60, 220.0)
-        _button(x + (cw - bw) / 2, y + ch * 0.70, bw, max(38.0, ch * 0.22),
-                "Play", True, accent, size=max(13, int(16 * k)))
-        _menu_hit.append((tag, (x, y, cw, ch)))
+        ctx.font = "600 %dpx %s" % (max(9, int(11 * k)), FONT)
+        _wrap(MODE_NOTE[m], x + 13, y + ch * 0.58, cw - 26,
+              max(9, int(11 * k)), "#93a4c8", center=False)
+        if sel:
+            ctx.textAlign = "right"
+            ctx.fillStyle = tint[m]
+            ctx.font = "800 %dpx %s" % (max(9, int(11 * k)), FONT)
+            ctx.fillText("CHOSEN", x + cw - 12, y + ch * 0.38)
+        _menu_hit.append(("m:" + m, (x, y, cw, ch)))
 
-    base = oy + (2 * ch + 12) if narrow else oy + ch
-    ly = base + 26
-    _wrap("Roll a 6 to bring a token out. Land on an opponent to send it home.",
-          W / 2, ly, min(700, W - 30), 13)
-    _wrap("First to get all four tokens to the centre wins.",
-          W / 2, ly + 36, min(700, W - 30), 13)
-    dw = min(240.0, W - 2 * pad)
-    _button(W / 2 - dw / 2, ly + 62, dw, 42, "Token design & names", False)
-    _menu_hit.append(("design", (W / 2 - dw / 2, ly + 62, dw, 42)))
+    rows = 3 if narrow else 2
+    by = oy + rows * (ch + gap) + 6
+
+    # how many are playing, and are they in teams
+    _wrap("Players", W / 2, by + 12, 200, 12, "#8fa3c9")
+    cwid = min(84.0, (W - 2 * pad - 2 * gap) / 4)
+    total = 3 * cwid + 2 * gap
+    ox = (W - total) / 2.0
+    for i, n in enumerate((2, 3, 4)):
+        x = ox + i * (cwid + gap)
+        sel = (player_count == n and mode != "team")
+        _panel(x, by + 20, cwid, 38, "rgba(20, 30, 56, 0.94)" if not sel else
+               "rgba(74, 168, 255, 0.22)", "#4aa8ff" if sel else
+               "rgba(150,180,240,0.18)", 11)
+        ctx.textAlign = "center"
+        ctx.fillStyle = "#eaf2ff" if sel else "#9fb3d9"
+        ctx.font = "800 15px %s" % FONT
+        ctx.fillText(str(n), x + cwid / 2, by + 45)
+        _menu_hit.append(("n:%d" % n, (x, by + 20, cwid, 38)))
+
+    tw = cwid + 26
+    tx = ox + total + gap
+    sel_t = (mode == "team")
+    _panel(tx, by + 20, tw, 38, "rgba(20, 30, 56, 0.94)" if not sel_t else
+           "rgba(251, 191, 36, 0.22)", "#fbbf24" if sel_t else
+           "rgba(150,180,240,0.18)", 11)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#eaf2ff" if sel_t else "#9fb3d9"
+    ctx.font = "800 13px %s" % FONT
+    ctx.fillText("Team", tx + tw / 2, by + 45)
+    _menu_hit.append(("team", (tx, by + 20, tw, 38)))
+
+    py = by + 72
+    _button(W / 2 - min(120.0, W * 0.32), py, min(240.0, W * 0.64), 50,
+            "Play", True, tint[rule_mode], size=18)
+    _menu_hit.append(("play", (W / 2 - min(120.0, W * 0.32), py,
+                               min(240.0, W * 0.64), 50)))
+    dw = min(220.0, W - 2 * pad)
+    _button(W / 2 - dw / 2, py + 58, dw, 40, "Custom rules", False, size=13)
+    _menu_hit.append(("custom", (W / 2 - dw / 2, py + 58, dw, 40)))
+
+
+DIALS = [
+    ("exit", "Bring a token out", "On a six", "Any roll"),
+    ("six_bonus", "Roll again on a six", "Yes", "No"),
+    ("six_limit", "Three sixes in a row", "Turn void", "Just sixes"),
+    ("capture_bonus", "Roll again on a capture", "Yes", "No"),
+    ("home_bonus", "Roll again reaching home", "Yes", "No"),
+    ("exact_home", "Getting a token home", "Exact roll", "Bounce back"),
+    ("safe_squares", "Star squares", "Safe", "Open"),
+    ("blocks", "Two of a colour together", "No wall", "A wall"),
+    ("kill_to_enter", "Entering the home column", "Any time", "After a kill"),
+    ("capture_forced", "Capturing", "Optional", "Compulsory"),
+    ("tokens", "Tokens each", None, None),
+    ("first_home_wins", "The game ends when", "All home", "One home"),
+]
+
+
+def _dial_value(key):
+    v = RULES[key]
+    for k, _label, a_, b_ in DIALS:
+        if k == key:
+            if k == "tokens":
+                return "%d" % v
+            return a_ if v else b_
+    return str(v)
+
+
+def _draw_rules():
+    global _menu_hit
+    _menu_hit = []
+    _bg()
+    pad = 14.0
+    narrow = W < 520
+    _button(pad, pad, 96, 36, "\u2190 Back", size=13)
+    _menu_hit.append(("back", (pad, pad, 96, 36)))
+    _title("HOUSE RULES", 76 if narrow else 72, 24 if narrow else 32)
+    _wrap("Every table plays it differently. Tap a row to change it.",
+          W / 2, 98, min(640, W - 30), 12)
+
+    top = 118.0
+    bottom = H - 62
+    row_h = max(30.0, min(52.0, (bottom - top) / len(DIALS)))
+    for i, (key, label, a_, b_) in enumerate(DIALS):
+        y = top + i * row_h
+        hit = (pad, y + 2, W - 2 * pad, row_h - 4)
+        _panel(hit[0], hit[1], hit[2], hit[3],
+               "rgba(20, 30, 56, 0.82)", "rgba(150,180,240,0.12)", 10)
+        ctx.textAlign = "left"
+        ctx.fillStyle = "#dbe6fb"
+        ctx.font = "700 %dpx %s" % (max(10, int(min(13, row_h * 0.40))), FONT)
+        ctx.fillText(label, pad + 12, y + row_h * 0.60)
+        val = _dial_value(key)
+        ctx.textAlign = "right"
+        ctx.fillStyle = "#ffd23f"
+        ctx.font = "800 %dpx %s" % (max(9, int(min(12, row_h * 0.38))), FONT)
+        ctx.fillText(val, W - pad - 12, y + row_h * 0.60)
+        _menu_hit.append(("r:" + key, hit))
+
+    _button(W / 2 - min(110.0, W * 0.3), H - 50, min(220.0, W * 0.6), 40,
+            "Done", True, size=14)
+    _menu_hit.append(("back", (W / 2 - min(110.0, W * 0.3), H - 50,
+                               min(220.0, W * 0.6), 40)))
 
 
 def _draw_count():
@@ -1693,7 +2159,8 @@ def _draw_setup():
         sel = (d == design)
         _panel(x, y, sw, sh, "rgba(20, 30, 56, 0.94)",
                "#ffb703" if sel else "rgba(150,180,240,0.20)", 14)
-        _draw_token({"x": x + sw / 2, "y": y + sh * 0.42, "c": RED}, label=False)
+        _draw_token({"x": x + sw / 2, "y": y + sh * 0.40, "c": RED},
+                    label=False, rad=min(sw, sh) * 0.27)
         ctx.textAlign = "center"
         ctx.fillStyle = "#ffd23f" if sel else "#9fb3d9"
         ctx.font = "700 %dpx %s" % (max(9, int(12 * min(1.0, sw / 116.0))), FONT)
@@ -1807,6 +2274,9 @@ def draw():
         return
     if state == "setup":
         _draw_setup()
+        return
+    if state == "rules":
+        _draw_rules()
         return
 
     _bg()
