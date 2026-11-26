@@ -32,6 +32,10 @@ js.devicePixelRatio = 2
 js.document = types.SimpleNamespace(getElementById=lambda _id: FakeCanvas())
 js.window = types.SimpleNamespace()
 js.playSound = lambda n: CALLS.append(("sound", n))
+_STORE = {}
+js.localStorage = types.SimpleNamespace(
+    getItem=lambda k: _STORE.get(k),
+    setItem=lambda k, v: _STORE.__setitem__(k, v))
 sys.modules["js"] = js
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -235,7 +239,7 @@ check("the other team has not won", not game._won(game.GREEN))
 # --- token designs, names, stacking ----------------------------------------
 print()
 print("--- designs, names and stacking ---")
-check("there are five token designs", len(game.DESIGNS) == 5)
+check("there are ten token designs", len(game.DESIGNS) == 10)
 check("the default design is one of them", game.design in game.DESIGNS)
 for d in game.DESIGNS:
     game.set_design(d)
@@ -310,12 +314,21 @@ print("--- screens ---")
 game.state = "mode"
 CALLS.clear(); game.draw()
 check("mode screen draws", len(CALLS) > 60)
-check("mode screen offers both modes plus the design picker",
-      all(t in [x for x, _ in game._menu_hit] for t in ("single", "team", "design")))
+check("mode screen offers the presets and a way into the dials",
+      all(t in [x for x, _ in game._menu_hit]
+          for t in ("m:classic", "team", "custom", "play")))
 
-r = rect_for("single")
+r = rect_for("custom")
 game.tap(r[0] + 10, r[1] + 10)
-check("choosing single goes to the player count", game.state == "count")
+check("Custom rules opens the dials", game.state == "rules")
+game.draw()                            # the dials have their own hit list
+game.tap(20, 20)                       # the Back chip
+check("Back returns to the mode screen", game.state == "mode")
+
+# the count screen still exists, reached from a preset plus Play
+game.state = "count"
+game.player_count = 4
+game.draw()
 CALLS.clear(); game.draw()
 check("count screen offers 2, 3, 4 and back",
       all(t in [x for x, _ in game._menu_hit] for t in ("2", "3", "4", "back")))
@@ -324,7 +337,7 @@ game.tap(game._menu_hit[2][1][0] + 10, game._menu_hit[2][1][1] + 10)
 check("picking 4 goes to set-up", game.state == "setup")
 CALLS.clear(); game.draw()
 check("set-up offers every design plus start and back",
-      len([t for t, _ in game._menu_hit if t.startswith("d:")]) == 5
+      len([t for t, _ in game._menu_hit if t.startswith("d:")]) == 10
       and "start" in [t for t, _ in game._menu_hit]
       and "back" in [t for t, _ in game._menu_hit])
 check("set-up shows a name field per player", len(game._name_fields) == 4)
@@ -344,11 +357,10 @@ game.set_design("ball")
 game.state = "mode"; game.draw()
 r = rect_for("team")
 game.tap(r[0] + 10, r[1] + 10)
-check("choosing team goes to set-up", game.state == "setup")
-CALLS.clear(); game.draw()          # refresh the hit list for the set-up screen
-for tag, r in game._menu_hit:
-    if tag == "start":
-        game.tap(r[0] + 5, r[1] + 5)
+check("Team is a toggle on the mode screen", game.mode == "team")
+game.draw()
+r = rect_for("play")
+game.tap(r[0] + 10, r[1] + 10)
 check("team game starts with four players",
       game.state == "play" and game.mode == "team" and len(game.players) == 4)
 
@@ -496,44 +508,44 @@ game.state = "mode"
 game.draw()
 
 check("the mode screen has a games chip", "games" in [t for t, _ in game._menu_hit])
-tap_tag("single")
-check("Play (single) opens the player count", game.state == "count")
-game.draw()
-tap_tag("back")
-check("count Back returns to the mode screen", game.state == "mode")
+check("the mode screen offers every preset",
+      all(("m:" + m) in [t for t, _ in game._menu_hit] for m in game.MODES))
 
-game.draw()
+tap_tag("m:quick")
+check("picking Quick applies its rules",
+      game.rule_mode == "quick" and game.RULES["tokens"] == 2
+      and game.RULES["first_home_wins"])
+
+tap_tag("m:classic")
+check("picking Classic puts the rules back",
+      game.rule_mode == "classic" and game.RULES["tokens"] == 4
+      and not game.RULES["first_home_wins"])
+
+tap_tag("n:3")
+check("the player count is a tap away",
+      game.player_count == 3 and game.mode == "single")
+
 tap_tag("team")
-check("Play (team) opens set-up", game.state == "setup" and game.mode == "team")
+check("Team picks four players", game.mode == "team" and game.player_count == 4)
+tap_tag("n:2")
+
+tap_tag("custom")
+check("Custom rules opens the dials", game.state == "rules")
 game.draw()
+check("every dial is on the screen",
+      all(("r:" + k) in [t for t, _ in game._menu_hit] for k, _l, _a, _b in game.DIALS))
+
+tap_tag("r:exit")
+check("a dial flips when tapped", game.RULES["exit"] == "any")
+tap_tag("r:exit")
+check("and flips back", game.RULES["exit"] == "six")
+
 tap_tag("back")
-check("set-up Back from a team game returns to the mode screen",
-      game.state == "mode")
+check("Done returns to the mode screen", game.state == "mode")
 
 game.draw()
-tap_tag("design")
-check("Token design opens set-up", game.state == "setup")
-
-# back out to the mode screen, then in again through a single game
-game.draw()
-tap_tag("back")
-check("set-up Back returns to the mode screen", game.state == "mode")
-game.draw()
-tap_tag("single")
-check("Play (single) opens the count again", game.state == "count")
-game.draw()
-tap_tag("3")
-check("picking 3 players remembers it", game.player_count == 3)
-game.draw()
-
-# every design is selectable
-for d in game.DESIGNS:
-    tap_tag("d:" + d)
-    check("the %s design can be chosen" % d, game.design == d)
-
-game.draw()
-tap_tag("start")
-check("Start game begins a round", game.state == "play")
+tap_tag("play")
+check("Play begins a round", game.state == "play")
 
 # the roll button and the die both roll
 game.draw()
@@ -777,6 +789,91 @@ check("the dice leaves an empty seat straight away", game.turn == 1)
 check("and that seat is allowed to roll", game.can_roll and game.my_turn())
 
 game.set_net_ludo(False, True, 0)
+
+# --- every dial actually changes the game -------------------------------
+print()
+print("--- house rules ---")
+
+game.apply_mode("classic")
+game.start_game("single", 2)
+check("classic gives four tokens each",
+      len([t for t in game.tokens if t["c"] == game.RED]) == 4)
+game.dice = 3
+game._after_roll()
+check("classic needs a six to open the yard", not game.moves)
+
+game.apply_mode("quick")
+game.start_game("single", 2)
+check("quick gives two tokens each",
+      len([t for t in game.tokens if t["c"] == game.RED]) == 2)
+game.dice = 3
+game._after_roll()
+check("quick lets any roll open the yard", len(game.moves) > 0)
+game.tokens[0]["pos"] = game.HOME_POS
+check("quick ends on the first token home", game._won(game.RED))
+
+game.apply_mode("master")
+game.start_game("single", 2)
+game.tokens[0]["pos"] = game.LAST_TRACK - 1
+game.dice = 4
+game._after_roll()
+check("master blocks the home column until you capture", not game.moves)
+game.captured_any[game.RED] = 1
+game.turn = 0
+game._after_roll()
+check("master opens it once you have captured", len(game.moves) > 0)
+
+# a star square is shelter in classic and open in plain
+game.apply_mode("classic")
+game.start_game("single", 2)
+star = game.START[game.YELLOW]
+game.tokens[0]["pos"] = (star - 13) % 50
+cell = game.path_cell(game.RED, game.tokens[0]["pos"])
+check("a star is safe in classic",
+      game.RULES["safe_squares"] and not game._captures_at(cell, game.RED)
+      or cell not in [game.path_cell(game.YELLOW, 0)])
+
+game.apply_mode("plain")
+check("plain has no safe squares", not game.RULES["safe_squares"])
+game.apply_mode("classic")
+check("classic has them back", game.RULES["safe_squares"])
+
+# bouncing off the centre
+game.apply_mode("classic")
+game.RULES["exact_home"] = False
+game.start_game("single", 2)
+game.tokens[0]["pos"] = game.HOME_POS - 2
+game.dice = 5
+game._after_roll()
+check("without an exact roll the token bounces back",
+      game.moves and game.moves[0][1] == game.HOME_POS - 3)
+game.apply_mode("classic")
+game.start_game("single", 2)
+game.tokens[0]["pos"] = game.HOME_POS - 2
+game.dice = 5
+game._after_roll()
+check("with an exact roll it cannot move at all", not game.moves)
+
+# three sixes void the turn
+game.apply_mode("classic")
+game.start_game("single", 2)
+game.turn = 0
+game.sixes_in_a_row = 3
+game.dice = 6
+game.can_roll = True
+game.rolling = 0.0
+game.anims[:] = []
+game._after_roll()
+check("a third six ends the turn", game.turn == 1)
+game.apply_mode("classic")
+
+# the dials survive a save and a load
+game.set_rule_mode("quick")          # this saves as it goes
+game.apply_mode("classic")           # wipe them, without saving
+game.load_rules()
+check("the rules come back after a reload",
+      game.RULES["tokens"] == 2 and game.rule_mode == "quick")
+game.set_rule_mode("classic")
 
 # --- screen-adaptive UI -----------------------------------------------------
 print()
