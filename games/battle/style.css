@@ -201,3 +201,62 @@ html.fs-on #hud { border-radius: 0; }
   height: 256px;
   pointer-events: none;
 }
+
+
+/* ---------------- multiplayer lobby ---------------- */
+.mp-panel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 10, 24, 0.82);
+  z-index: 6;
+  padding: 16px;
+}
+.mp-panel.is-hidden { display: none; }
+
+.mp-card {
+  width: min(360px, 100%);
+  background: rgba(12, 20, 42, 0.98);
+  border: 1px solid rgba(150, 180, 240, 0.22);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #eaf2ff;
+}
+.mp-card h2 { margin: 0 0 2px; font-size: 19px; }
+.mp-note { margin: 0 0 6px; font-size: 12px; color: #8fa3c9; }
+
+.mp-btn {
+  min-height: 46px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 180, 240, 0.28);
+  background: rgba(30, 42, 70, 0.9);
+  color: #eaf2ff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mp-btn:active { transform: translateY(1px); }
+.mp-primary { background: #22c55e; border-color: #22c55e; color: #06101f; }
+.mp-ghost { background: transparent; }
+
+.mp-row { display: flex; gap: 8px; }
+.mp-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 180, 240, 0.28);
+  background: rgba(6, 12, 26, 0.9);
+  color: #eaf2ff;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0 10px;
+}
+.mp-status { margin: 0; min-height: 18px; font-size: 12px; color: #ffd23f; }
