@@ -323,6 +323,7 @@ _confetti = []
 net_on = False
 net_host = True
 net_seat = -1
+net_present = []        # seat indices that still have somebody behind them
 net_seats = {}
 
 ROLL_DUR = 2.0          # the die takes its time
@@ -543,6 +544,34 @@ def net_apply_action(js):
                 break
 
 
+def set_present(js):
+    """Which seats still have a player.
+
+    If the dice is sitting with somebody who has left, hand it on straight
+    away - otherwise the room waits for a roll that can never come.
+    """
+    global net_present, turn, can_roll, moves, message
+    try:
+        v = json.loads(js)
+        net_present = [int(x) for x in v]
+    except Exception:
+        net_present = []
+        return
+    if not (net_on and players and net_present):
+        return
+    if rolling > 0 or anims:
+        return
+    if turn % len(players) in net_present:
+        return
+    for _ in range(len(players)):
+        turn = (turn + 1) % len(players)
+        if turn in net_present:
+            break
+    moves = []
+    can_roll = True
+    message = "%s to roll." % names[cur()]
+
+
 def set_net_ludo(on, host, seat):
     """A seat of -1 means "not decided yet", so the room's seat list wins."""
     global net_on, net_host, net_seat
@@ -552,10 +581,10 @@ def set_net_ludo(on, host, seat):
         n = int(seat)
     except Exception:
         n = -1
-    if host:
-        net_seat = 0                    # the host always plays the first colour
-    elif n >= 0:
+    if n >= 0:
         net_seat = n
+    elif host:
+        net_seat = 0                    # a fresh host plays the first colour
 
 
 def set_seats(js, my_id=""):
@@ -657,6 +686,12 @@ def _pass_turn():
         moves = []
         return
     turn = (turn + 1) % len(players)
+    # somebody may have left; do not hand the dice to an empty seat
+    if net_on and net_present:
+        for _ in range(len(players)):
+            if turn in net_present:
+                break
+            turn = (turn + 1) % len(players)
     moves = []
     can_roll = True
     message = "%s to roll." % names[cur()]
