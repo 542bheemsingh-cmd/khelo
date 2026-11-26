@@ -1021,6 +1021,46 @@ check("gentle motion means no shake", game.shake == 0.0)
 check("and no sparks", len(game.flash) == 0)
 game.apply_mode("classic")
 
+# --- teaching a first timer, and the extra channels ----------------------
+print()
+print("--- first time and feedback ---")
+game.apply_mode("classic")
+game.state = "mode"
+game.draw()
+check("the mode screen offers a how-to-play",
+      "help" in [t for t, _ in game._menu_hit])
+tap_tag("help")
+check("it opens the guide", game.state == "help")
+CALLS.clear(); game.draw()
+check("the guide draws an icon for every line",
+      len(CALLS) > 60 and len(game.HELP_ROWS) == 6)
+tap_tag("back")
+check("Got it returns to the mode screen", game.state == "mode")
+
+# a first timer gets a pointer on the roll button
+game.seen_roll = False
+game.start_game("single", 2)
+game.anims[:] = []
+game.rolling = 0.0
+game.can_roll = True
+CALLS.clear(); game.draw()
+check("a first timer is pointed at the dice", len(CALLS) > 100)
+
+game.seen_roll = True
+CALLS.clear(); game.draw()
+check("once they have rolled the pointer goes", len(CALLS) > 100)
+check("rolling is remembered", game.seen_roll)
+
+# haptics are their own switch
+game.apply_mode("classic")
+check("haptics are on by default", game.RULES["haptics"])
+CALLS.clear()
+game._sound("capture")
+check("a cue plays its sound", any(c[0] == "sound" for c in CALLS))
+game.RULES["haptics"] = False
+check("and can be switched off", not game.RULES["haptics"])
+game.RULES["haptics"] = True
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
