@@ -26,12 +26,28 @@
       <button id="mute" class="ctrl" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
         <span id="mute-icon" aria-hidden="true">&#128266;</span>
       </button>
+      <button id="mp-open" class="ctrl" type="button" title="Play with friends" aria-label="Play with friends">&#128101;</button>
       <button id="fs" class="ctrl" type="button" aria-pressed="false" title="Full screen" aria-label="Full screen">&#9974;</button>
     </div>
 
     <div class="screen">
       <canvas id="game" aria-label="Khelo Battleground 3D view"></canvas>
       <canvas id="hud" aria-hidden="true"></canvas>
+
+      <div id="mp-panel" class="mp-panel is-hidden">
+        <div class="mp-card">
+          <h2>Play with friends</h2>
+          <p class="mp-note">Everyone on the same code drops into the same map.</p>
+          <button id="mp-create" class="mp-btn mp-primary" type="button">Create a room</button>
+          <div class="mp-row">
+            <input id="mp-code" class="mp-input" type="text" maxlength="5"
+                   placeholder="CODE" autocomplete="off" spellcheck="false">
+            <button id="mp-join" class="mp-btn" type="button">Join</button>
+          </div>
+          <p id="mp-status" class="mp-status"></p>
+          <button id="mp-back" class="mp-btn mp-ghost" type="button">Back</button>
+        </div>
+      </div>
 
       <div id="loader" class="loader">
         <div class="loader-card">
@@ -47,6 +63,7 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
   <script type="module">
     import * as THREE from 'three';
+    import * as MP from './mp.js';
 
     /* ==================================================================
        Sound - all synthesised, no audio files
@@ -132,6 +149,8 @@
     const hudCanvas = document.getElementById("hud");
     const screenBox = document.querySelector(".screen");
 
+    const remoteRigs = {};
+    let lastFrame = null, mpLive = false;
     let renderer, scene, camera, waterMesh, zoneMesh, zoneRing, playerRig,
         planeMesh, chuteMesh,
         botRigs = [],
@@ -622,6 +641,26 @@
       playerRig = makeSoldier(0x3f7a4a, 0xd9a86c);
       playerRig.scale.setScalar(1.3);
       scene.add(playerRig);
+      window.__makeRemote = function (id) {
+        if (remoteRigs[id]) return remoteRigs[id];
+        const rig = makeSoldier(0x2f6fa8, 0xd9a86c);   // blue: another person
+        rig.scale.setScalar(1.3);
+        const bg = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 0.62),
+          new THREE.MeshBasicMaterial({ color: 0x1a1f2e, transparent: true,
+                                        opacity: 0.8, depthWrite: false }));
+        bg.position.y = 6.4;
+        const fill = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.42),
+          new THREE.MeshBasicMaterial({ color: 0x5ad1ff, transparent: true,
+                                        opacity: 0.95, depthWrite: false }));
+        fill.position.set(0, 6.4, 0.01);
+        bg.visible = false; fill.visible = false;
+        rig.add(bg); rig.add(fill);
+        rig.userData.barBg = bg;
+        rig.userData.barFill = fill;
+        scene.add(rig);
+        remoteRigs[id] = rig;
+        return rig;
+      };
       for (let i = 0; i < 12; i++) {
         const rig = makeSoldier(0x8a3b3b, 0xd9a86c);
         rig.scale.setScalar(1.3);
@@ -749,6 +788,10 @@
       }
     }
 
+    window.netHit = function (id, dmg) {
+      MP.reportHit(id, dmg);
+    };
+
     window.world3d = {
       ready: false,
       build(json) {
@@ -764,6 +807,7 @@
         lastT = now;
 
         const st = JSON.parse(json);
+        lastFrame = st;
 
         if (st.menu) {
           // a slow lap of the whole country, so the menu has a world behind it
@@ -882,6 +926,33 @@
             flashMesh.material.opacity = 0.95 * (1 - t);
           } else {
             flashMesh.visible = false;
+          }
+        }
+
+        // ---- the other real players ----
+        const seenRemote = {};
+        for (const r of (st.rp || [])) {
+          seenRemote[r[0]] = 1;
+          const rig = window.__makeRemote(r[0]);
+          const on = r[6] > 0;
+          rig.visible = on;
+          rig.position.set(r[1], r[2], r[3]);
+          rig.rotation.y = r[4];
+          const u = rig.userData;
+          u.barBg.visible = on;
+          u.barFill.visible = on;
+          if (on) {
+            u.barBg.quaternion.copy(camera.quaternion);
+            u.barFill.quaternion.copy(camera.quaternion);
+            const frac = Math.max(0, Math.min(1, r[5] / 100));
+            u.barFill.scale.x = frac;
+            u.barFill.position.x = -2.1 * (1 - frac);
+          }
+        }
+        for (const id in remoteRigs) {
+          if (!seenRemote[id]) {
+            scene.remove(remoteRigs[id]);
+            delete remoteRigs[id];
           }
         }
 
@@ -1354,6 +1425,10 @@
       drawFn = pyodide.globals.get("draw");
       updateFn = pyodide.globals.get("update");
       sendFn = pyodide.globals.get("send_frame");
+      startFn = pyodide.globals.get("start_game");
+      setNetFn = pyodide.globals.get("set_net");
+      setMpFn = pyodide.globals.get("set_mp");
+      netDmgFn = pyodide.globals.get("net_damage");
       sizeFn = pyodide.globals.get("set_size");
       stickFn = pyodide.globals.get("set_stick");
       sprintFn = pyodide.globals.get("set_sprint");
@@ -1376,6 +1451,45 @@
       bar.style.width = "100%";
       document.getElementById("loader").classList.add("is-hidden");
 
+      // ---- multiplayer lobby ----
+      (function multiplayer() {
+        const panel = document.getElementById("mp-panel");
+        const status = document.getElementById("mp-status");
+        const code = document.getElementById("mp-code");
+        const say = (t) => { status.textContent = t || ""; };
+
+        document.getElementById("mp-open").addEventListener("click", () => {
+          say(MP.configured() ? "" :
+              "Not set up yet - paste your Firebase config into mp.js");
+          panel.classList.remove("is-hidden");
+        });
+        document.getElementById("mp-back").addEventListener("click",
+          () => panel.classList.add("is-hidden"));
+
+        async function begin(want) {
+          try {
+            say("Connecting…");
+            const room = await MP.enter(want, "Player");
+            MP.watchPlayers((list) => {
+              setNetFn(JSON.stringify(list), MP.me());
+              say(list.length ? (list.length + 1) + " in room " + room
+                              : "Room " + room + " - share the code");
+            });
+            MP.watchHits((h) => { if (h.dmg > 0) netDmgFn(h.dmg); });
+            setMpFn(true);
+            panel.classList.add("is-hidden");
+            startFn();
+            mpLive = true;
+          } catch (e) {
+            say(String((e && e.message) || e));
+          }
+        }
+        document.getElementById("mp-create").addEventListener("click",
+          () => begin(""));
+        document.getElementById("mp-join").addEventListener("click",
+          () => begin(code.value));
+      })();
+
       let last = performance.now();
       function loop(now) {
         const dt = (now - last) / 1000;
@@ -1384,6 +1498,14 @@
           updateFn(dt);
           sendFn();
           drawFn();
+          if (mpLive && lastFrame && lastFrame.p) {
+            MP.pushState({
+              x: lastFrame.p[0], y: lastFrame.p[1], z: lastFrame.p[2],
+              yaw: lastFrame.p[3], alive: lastFrame.p[4] > 0,
+              hp: lastFrame.p[5], weapon: lastFrame.wp || 0,
+              kills: lastFrame.kills || 0, mode: lastFrame.mode
+            });
+          }
         }
         requestAnimationFrame(loop);
       }
