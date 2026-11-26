@@ -342,9 +342,11 @@
               panel.classList.add("is-hidden");   // get out of the way
             }
             if (m.started && mpHost) setNetFn(true, true, 0);
+            if (m.seats) setSeatsFn(JSON.stringify(m.seats), M.me());
           });
 
-          setNetFn(true, mpHost, 0);
+          // the host is always seat 0; a guest waits for the room to say
+          setNetFn(true, mpHost, mpHost ? 0 : -1);
         } catch (e) {
           say(String((e && e.message) || e));
         }
