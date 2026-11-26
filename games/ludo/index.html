@@ -149,6 +149,13 @@
       o.stop(t + dur + 0.03);
     }
 
+    /* a short buzz, on its own switch, so a silent phone still has a channel */
+    window.vibrate = function (ms) {
+      try {
+        if (navigator.vibrate && !muted) navigator.vibrate(ms);
+      } catch (e) {}
+    };
+
     window.playSound = function (name) {
       if (muted) return;
       try {
