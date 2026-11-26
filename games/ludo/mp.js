@@ -53,7 +53,37 @@ async function load() {
   const app = appMod.initializeApp(FIREBASE_CONFIG);
   db = dbMod.getDatabase(app);
   api = dbMod;
-  uid = randomId(6);
+  uid = await signIn(app) || randomId(6);
+}
+
+// Anonymous sign-in gives a uid that survives a reload, which is what lets
+// someone rejoin their own seat. It can be switched off in the console, so a
+// failure just means we fall back to a throwaway id.
+async function signIn(app) {
+  try {
+    const authMod = await import(`${SDK}/firebase-auth.js`);
+    const auth = authMod.getAuth(app);
+    if (auth.currentUser) return auth.currentUser.uid;
+    const cred = await authMod.signInAnonymously(auth);
+    return (cred && cred.user && cred.user.uid) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// true/false as the socket comes and goes
+export function watchConnection(cb) {
+  if (!db) return;
+  api.onValue(api.ref(db, ".info/connected"), (snap) => cb(!!snap.val()));
+}
+
+// Take the room over when the old host disappears. The new host already has
+// the board, because it was rendering the host's snapshots all along.
+export function claimHost() {
+  if (!metaRef) return;
+  isHost = true;
+  hostId = uid;
+  try { api.update(metaRef, { host: uid, migratedAt: Date.now() }); } catch (e) {}
 }
 
 function explain(err) {
