@@ -1384,52 +1384,81 @@ def _draw_mode():
     global _menu_hit
     _menu_hit = []
     _bg()
-    _title("KHELO LUDO", 76, 40)
-    _wrap("The classic race home - pick how you want to play.", W / 2, 112, 640, 16)
+    pad = 14.0
+    narrow = W < 520
 
-    cw, ch, gap = 330, 200, 40
-    ox = W / 2 - cw - gap / 2
-    oy = 158
+    # the back chip first, so the title never lands on top of it
+    _button(pad, pad, 96, 36, "\u2190 Games", size=13)
+    _menu_hit.append(("games", (pad, pad, 96, 36)))
+
+    _title("KHELO LUDO", 84 if narrow else 78, 30 if narrow else 42)
+    _wrap("The classic race home - pick how you want to play.",
+          W / 2, (110 if narrow else 108), min(640, W - 30), 14)
+
     cards = [
         ("single", "Single-Single", "Everyone for themselves", "#4aa8ff",
          "Choose 2, 3 or 4 players"),
         ("team", "Team-Team", "2 players against 2", "#fbbf24",
          "Red + Yellow vs Green + Blue"),
     ]
+    gap = max(12.0, W * 0.03)
+    if narrow:
+        cw = W - 2 * pad
+        ch = 132.0
+        oy = 112.0
+    else:
+        cw = min(340.0, (W - 2 * pad - gap) / 2.0)
+        ch = 196.0
+        oy = max(150.0, H * 0.24)
+    k = min(1.0, cw / 330.0)
+
     for i, (tag, name, sub, accent, note) in enumerate(cards):
-        x = ox + i * (cw + gap)
-        _panel(x, oy, cw, ch, "rgba(20, 30, 56, 0.94)", accent, 18)
+        if narrow:
+            x, y = pad, oy + i * (ch + 12)
+        else:
+            x = (W - (2 * cw + gap)) / 2.0 + i * (cw + gap)
+            y = oy
+        _panel(x, y, cw, ch, "rgba(20, 30, 56, 0.94)", accent, 18)
         ctx.textAlign = "center"
         ctx.fillStyle = accent
-        ctx.font = "800 26px %s" % FONT
-        ctx.fillText(name, x + cw / 2, oy + 56)
+        ctx.font = "800 %dpx %s" % (max(17, int(26 * k)), FONT)
+        ctx.fillText(name, x + cw / 2, y + ch * 0.28)
         ctx.fillStyle = "#eaf2ff"
-        ctx.font = "700 15px %s" % FONT
-        ctx.fillText(sub, x + cw / 2, oy + 88)
+        ctx.font = "700 %dpx %s" % (max(12, int(15 * k)), FONT)
+        ctx.fillText(sub, x + cw / 2, y + ch * 0.45)
         ctx.fillStyle = "#93a4c8"
-        ctx.font = "600 13px %s" % FONT
-        ctx.fillText(note, x + cw / 2, oy + 112)
-        _button(x + 55, oy + 140, cw - 110, 44, "Play", True, accent)
-        _menu_hit.append((tag, (x, oy, cw, ch)))
+        ctx.font = "600 %dpx %s" % (max(10, int(13 * k)), FONT)
+        ctx.fillText(note, x + cw / 2, y + ch * 0.58)
+        bw = min(cw - 60, 220.0)
+        _button(x + (cw - bw) / 2, y + ch * 0.70, bw, max(38.0, ch * 0.22),
+                "Play", True, accent, size=max(13, int(16 * k)))
+        _menu_hit.append((tag, (x, y, cw, ch)))
 
+    base = oy + (2 * ch + 12) if narrow else oy + ch
+    ly = base + 26
     _wrap("Roll a 6 to bring a token out. Land on an opponent to send it home.",
-          W / 2, 408, 720, 14)
-    _wrap("First to get all four tokens to the centre wins.", W / 2, 432, 720, 14)
-    _button(W / 2 - 110, 462, 220, 44, "Token design & names", False)
-    _menu_hit.append(("design", (W / 2 - 110, 462, 220, 44)))
-    _button(16, 16, 110, 38, "\u2190 Games")
+          W / 2, ly, min(700, W - 30), 13)
+    _wrap("First to get all four tokens to the centre wins.",
+          W / 2, ly + 36, min(700, W - 30), 13)
+    dw = min(240.0, W - 2 * pad)
+    _button(W / 2 - dw / 2, ly + 62, dw, 42, "Token design & names", False)
+    _menu_hit.append(("design", (W / 2 - dw / 2, ly + 62, dw, 42)))
 
 
 def _draw_count():
     global _menu_hit
     _menu_hit = []
     _bg()
-    _title("SINGLE-SINGLE", 76, 34)
-    _wrap("How many players?", W / 2, 116, 640, 17)
+    _title("SINGLE-SINGLE", 70, 34)
+    _wrap("How many players?", W / 2, 110, min(640, W - 40), 16)
 
-    cw, ch, gap = 190, 190, 24
-    ox = W / 2 - (3 * cw + 2 * gap) / 2
-    oy = 172
+    pad = 16.0
+    gap = max(10.0, W * 0.028)
+    cw = min(210.0, (W - 2 * pad - 2 * gap) / 3.0)
+    ch = cw * 0.96
+    k = cw / 190.0                      # the card's contents scale with it
+    ox = (W - (3 * cw + 2 * gap)) / 2.0
+    oy = max(140.0, H * 0.16)
     info = [
         ("2", "2 Players", "Red vs Yellow", "#ff3b5c"),
         ("3", "3 Players", "Red, Green, Yellow", "#22c55e"),
@@ -1440,19 +1469,22 @@ def _draw_count():
         _panel(x, oy, cw, ch, "rgba(20, 30, 56, 0.94)", accent, 18)
         ctx.textAlign = "center"
         ctx.fillStyle = accent
-        ctx.font = "800 52px %s" % FONT
-        ctx.fillText(tag, x + cw / 2, oy + 74)
+        ctx.font = "800 %dpx %s" % (max(28, int(52 * k)), FONT)
+        ctx.fillText(tag, x + cw / 2, oy + ch * 0.39)
         ctx.fillStyle = "#eaf2ff"
-        ctx.font = "800 17px %s" % FONT
-        ctx.fillText(name, x + cw / 2, oy + 108)
+        ctx.font = "800 %dpx %s" % (max(13, int(17 * k)), FONT)
+        ctx.fillText(name, x + cw / 2, oy + ch * 0.57)
         ctx.fillStyle = "#93a4c8"
-        ctx.font = "600 12px %s" % FONT
-        ctx.fillText(sub, x + cw / 2, oy + 130)
-        _button(x + 30, oy + 146, cw - 60, 36, "Next", True, accent, size=14)
+        ctx.font = "600 %dpx %s" % (max(9, int(12 * k)), FONT)
+        ctx.fillText(sub, x + cw / 2, oy + ch * 0.68)
+        _button(x + cw * 0.15, oy + ch * 0.77, cw * 0.7, max(32, 36 * k),
+                "Next", True, accent, size=max(11, int(14 * k)))
         _menu_hit.append((tag, (x, oy, cw, ch)))
 
-    _button(W / 2 - 90, 430, 180, 44, "\u2190 Back")
-    _menu_hit.append(("back", (W / 2 - 90, 430, 180, 44)))
+    bw = min(200.0, W * 0.6)
+    by = oy + ch + max(28.0, H * 0.05)
+    _button(W / 2 - bw / 2, by, bw, 46, "\u2190 Back")
+    _menu_hit.append(("back", (W / 2 - bw / 2, by, bw, 46)))
 
 
 def _draw_setup():
@@ -1460,55 +1492,73 @@ def _draw_setup():
     _menu_hit = []
     _name_fields = []
     _bg()
-    _title("SET UP", 60, 32)
+    _title("SET UP", 54, 30)
     _wrap("Pick a token design, then tap a name to type your own.",
-          W / 2, 90, 720, 14)
+          W / 2, 84, min(720, W - 40), 13)
 
-    # token designs
+    pad = 14.0
     n = len(DESIGNS)
-    sw, sh, gap = 116, 96, 18
-    ox = W / 2 - (n * sw + (n - 1) * gap) / 2
-    oy = 112
+    cols = max(3, min(n, int((W - 2 * pad) // 104)))
+    gap = max(8.0, W * 0.018)
+    sw = (W - 2 * pad - (cols - 1) * gap) / cols
+    sh = max(70.0, sw * 0.84)
+    oy = 104.0
+    rows = int(math.ceil(n / float(cols)))
     for i, d in enumerate(DESIGNS):
-        x = ox + i * (sw + gap)
+        x = pad + (i % cols) * (sw + gap)
+        y = oy + (i // cols) * (sh + gap)
         sel = (d == design)
-        _panel(x, oy, sw, sh, "rgba(20, 30, 56, 0.94)",
+        _panel(x, y, sw, sh, "rgba(20, 30, 56, 0.94)",
                "#ffb703" if sel else "rgba(150,180,240,0.20)", 14)
-        _draw_token({"x": x + sw / 2, "y": oy + 40, "c": RED}, label=False)
+        _draw_token({"x": x + sw / 2, "y": y + sh * 0.42, "c": RED}, label=False)
         ctx.textAlign = "center"
         ctx.fillStyle = "#ffd23f" if sel else "#9fb3d9"
-        ctx.font = "700 12px %s" % FONT
-        ctx.fillText(DESIGN_LABEL[d], x + sw / 2, oy + sh - 12)
-        _menu_hit.append(("d:" + d, (x, oy, sw, sh)))
+        ctx.font = "700 %dpx %s" % (max(9, int(12 * min(1.0, sw / 116.0))), FONT)
+        ctx.fillText(DESIGN_LABEL[d], x + sw / 2, y + sh - 10)
+        _menu_hit.append(("d:" + d, (x, y, sw, sh)))
 
-    # names
-    _wrap("Player names", W / 2, 246, 400, 14, "#8fa3c9")
-    cols = 2
-    fw, fh, fgap = 300, 46, 20
-    fx0 = W / 2 - (cols * fw + (cols - 1) * fgap) / 2
-    fy0 = 262
-    for k, col in enumerate(players):
-        cx = fx0 + (k % cols) * (fw + fgap)
-        cy = fy0 + (k // cols) * (fh + 14)
+    # names, in one column on a narrow screen and two when there is room
+    ny = oy + rows * (sh + gap) + 22
+    _wrap("Player names", W / 2, ny, min(400, W - 40), 13, "#8fa3c9")
+    cols2 = 1 if W < 520 else 2
+    fgap = gap
+    fw = (W - 2 * pad - (cols2 - 1) * fgap) / cols2
+    fh = 44.0
+    fy0 = ny + 14
+    # the names to edit: the round's colours, or the default set before one starts
+    if players:
+        seated = list(players)
+    elif mode == "team":
+        seated = [RED, GREEN, YELLOW, BLUE]
+    else:
+        seated = {2: [RED, YELLOW], 3: [RED, GREEN, YELLOW],
+                  4: [RED, GREEN, YELLOW, BLUE]}.get(player_count, [RED, YELLOW])
+    for kk, col in enumerate(seated):
+        cx = pad + (kk % cols2) * (fw + fgap)
+        cy = fy0 + (kk // cols2) * (fh + 10)
         _panel(cx, cy, fw, fh, "rgba(20, 30, 56, 0.9)", PAL[col]["main"], 11)
         ctx.beginPath()
-        ctx.arc(cx + 26, cy + fh / 2, 10, 0, 6.2832)
+        ctx.arc(cx + 24, cy + fh / 2, 9, 0, 6.2832)
         ctx.fillStyle = PAL[col]["main"]
         ctx.fill()
         ctx.textAlign = "left"
         ctx.fillStyle = "#eaf2ff"
-        ctx.font = "700 16px %s" % FONT
-        ctx.fillText(names[col], cx + 46, cy + fh / 2 + 6)
+        ctx.font = "700 %dpx %s" % (max(12, int(15 * min(1.0, fw / 300.0))), FONT)
+        ctx.fillText(names[col], cx + 42, cy + fh / 2 + 5)
         ctx.textAlign = "right"
         ctx.fillStyle = "#7f8fb3"
-        ctx.font = "600 11px %s" % FONT
-        ctx.fillText("tap to edit", cx + fw - 12, cy + fh / 2 + 4)
+        ctx.font = "600 10px %s" % FONT
+        if fw > 220:
+            ctx.fillText("tap to edit", cx + fw - 12, cy + fh / 2 + 4)
         _name_fields.append((col, (cx, cy, fw, fh)))
 
-    _button(W / 2 - 260, H - 76, 220, 46, "\u2190 Back")
-    _button(W / 2 + 40, H - 76, 220, 46, "Start game", True)
-    _menu_hit = [("back", (W / 2 - 260, H - 76, 220, 46)),
-                 ("start", (W / 2 + 40, H - 76, 220, 46))] + _menu_hit
+    # the buttons sit at the bottom, clear of everything above
+    bw = min(220.0, (W - 3 * pad) / 2.0)
+    by = H - 62
+    _button(pad, by, bw, 46, "\u2190 Back")
+    _button(W - pad - bw, by, bw, 46, "Start game", True)
+    _menu_hit = [("back", (pad, by, bw, 46)),
+                 ("start", (W - pad - bw, by, bw, 46))] + _menu_hit
 
 
 def _draw_over():
@@ -1521,23 +1571,41 @@ def _draw_over():
         ctx.globalAlpha = 0.85
         ctx.fill()
         ctx.globalAlpha = 1.0
-    ctx.fillStyle = "rgba(4, 10, 24, 0.78)"
+    ctx.fillStyle = "rgba(4, 10, 24, 0.80)"
     ctx.fillRect(0, 0, W, H)
-    _panel(W / 2 - 300, 130, 600, 300, "rgba(12, 20, 42, 0.96)",
-           PAL[winner]["main"], 22)
-    _title("WINNER!", 196, 34, PAL[winner]["main"])
+
+    pad = 16.0
+    cw = min(560.0, W - 2 * pad)
+    ch = min(300.0, H * 0.44)
+    cx = (W - cw) / 2.0
+    cy = (H - ch) / 2.0
+    _panel(cx, cy, cw, ch, "rgba(12, 20, 42, 0.97)", PAL[winner]["main"], 22)
+
+    ctx.textAlign = "center"
+    ctx.fillStyle = PAL[winner]["main"]
+    ctx.font = "800 %dpx %s" % (max(24, int(34 * min(1.0, cw / 600.0))), FONT)
+    ctx.fillText("WINNER!", W / 2, cy + ch * 0.24)
+
     if mode == "team" and teams:
         tname = "Team A" if teams.get(winner, 0) == 0 else "Team B"
         mate = [k for k, v in teams.items() if v == teams.get(winner) and k != winner]
         sub_ = "  (%s + %s)" % (names[winner], names[mate[0]]) if mate else ""
-        _title(tname + sub_, 244, 24)
+        label = tname + sub_
     else:
-        _title(names[winner], 244, 26)
-    _wrap("All four tokens are home.", W / 2, 288, 520, 16, "#cfe0ff")
-    _button(W / 2 - 250, H - 150, 230, 52, "Play again", True)
-    _button(W / 2 + 20, H - 150, 230, 52, "Main menu", False)
-    _menu_hit = [("again", (W / 2 - 250, H - 150, 230, 52)),
-                 ("menu", (W / 2 + 20, H - 150, 230, 52))]
+        label = names[winner]
+    ctx.fillStyle = "#eaf2ff"
+    ctx.font = "800 %dpx %s" % (max(17, int(26 * min(1.0, cw / 600.0))), FONT)
+    ctx.fillText(label, W / 2, cy + ch * 0.45)
+
+    _wrap("All four tokens are home.", W / 2, cy + ch * 0.60, cw - 40, 15,
+          "#cfe0ff")
+
+    bw = min(210.0, (cw - 3 * pad) / 2.0)
+    by = cy + ch - 62
+    _button(cx + pad, by, bw, 46, "Play again", True)
+    _button(cx + cw - pad - bw, by, bw, 46, "Main menu", False)
+    _menu_hit = [("again", (cx + pad, by, bw, 46)),
+                 ("menu", (cx + cw - pad - bw, by, bw, 46))]
 
 
 # ---------------------------------------------------------------------------
