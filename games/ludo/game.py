@@ -54,6 +54,36 @@ UI = 1.0          # type scale, 1.0 on a big screen and larger on a phone
 MIN_TOUCH = 0.0   # logical pixels that land on 48 CSS pixels
 
 
+def set_size(w, h):
+    """The page tells us how much room there is; the board takes as much as it can."""
+    global W, H, CELL, BX, BY, BOARD, HUD_X, DIE_RECT, ROLL_RECT
+    try:
+        nw, nh = float(w), float(h)
+    except Exception:
+        return
+    if nw < 200 or nh < 200:
+        return
+    W, H = nw, nh
+    pad = max(8.0, H * 0.018)
+    # the side panel is drawn 322 wide, so leave exactly that much room
+    hud_w = 338.0
+    board = min(H - 2 * pad, W - hud_w - 3 * pad)
+    board = max(180.0, board)
+    CELL = board / 15.0
+    BOARD = board
+    BX = pad
+    BY = (H - board) / 2.0
+    HUD_X = BX + board + pad
+
+    die = min(hud_w - 28.0, H * 0.30)
+    die = max(70.0, die)
+    dx = HUD_X + (hud_w - die) / 2.0
+    dy = BY + H * 0.11
+    DIE_RECT = (dx, dy, die, die)
+    ROLL_RECT = (HUD_X + 14.0, dy + die + max(14.0, H * 0.035),
+                 hud_w - 28.0, max(40.0, H * 0.085))
+
+
 def set_ui(scale):
     """Called by the page with canvasHeightOnScreen / logicalHeight."""
     global UI, MIN_TOUCH
