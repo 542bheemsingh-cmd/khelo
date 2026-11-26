@@ -312,9 +312,9 @@
           mpHost = M.hosting();
 
           M.watchPlayers(function (list) {
-            infoEl.textContent = list.length
-              ? (list.length + 1) + " in the room"
-              : "Waiting for friends…";
+            const n = list.length + 1;
+            infoEl.textContent = n + " in the room" +
+              (n < 2 ? " - waiting for friends…" : " - " + n + " player game");
             if (mpHost) {
               // the host seats everyone in the order they arrived
               mpSeats = {};
@@ -330,7 +330,10 @@
           M.watchMeta(function (m) {
             if (!m) return;
             if (m.seats) setSeatsFn(JSON.stringify(m.seats), M.me());
-            if (m.started && !mpHost && m.snap) applyNetFn(m.snap);
+            if (m.started && !mpHost && m.snap) {
+              applyNetFn(m.snap);
+              panel.classList.add("is-hidden");   // get out of the way
+            }
             if (m.started && mpHost) setNetFn(true, true, 0);
           });
 
@@ -348,7 +351,8 @@
       startBtn.addEventListener("click", async function () {
         if (!mpHost) return;
         panel.classList.add("is-hidden");
-        startGameFn("single", Math.min(4, Object.keys(mpSeats).length + 1));
+        const seats = Math.max(2, Math.min(4, Object.keys(mpSeats).length));
+        startGameFn("single", seats);
         var M = await mpLoad();
         M.publishMeta({ started: true, snap: snapshotFn() });
       });
