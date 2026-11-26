@@ -161,7 +161,7 @@
     const screenBox = document.querySelector(".screen");
 
     const remoteRigs = {};
-    let lastFrame = null, mpLive = false;
+    let lastFrame = null, mpLive = false, lastZonePush = 0;
     let renderer, scene, camera, waterMesh, zoneMesh, zoneRing, playerRig,
         planeMesh, chuteMesh,
         botRigs = [],
@@ -1209,6 +1209,7 @@
     let tapFn = null, primaryFn = null, moveFn = null, lookFn = null, fireFn = null,
         stickFn = null, drawFn = null, updateFn = null, sendFn = null, sizeFn = null,
         startFn = null, setNetFn = null, setMpFn = null, netDmgFn = null,
+        setZoneFn = null,
         sprintFn = null, crouchFn = null, reloadFn = null, swapFn = null, pauseFn = null,
         pyodide = null, running = false, playing = false, crouchOn = false;
 
@@ -1441,6 +1442,7 @@
       setNetFn = pyodide.globals.get("set_net");
       setMpFn = pyodide.globals.get("set_mp");
       netDmgFn = pyodide.globals.get("net_damage");
+      setZoneFn = pyodide.globals.get("set_zone_net");
       sizeFn = pyodide.globals.get("set_size");
       stickFn = pyodide.globals.get("set_stick");
       sprintFn = pyodide.globals.get("set_sprint");
@@ -1498,6 +1500,9 @@
                 : "Waiting for friends…";
             });
             MP.watchHits((h) => { if (h.dmg > 0) netDmgFn(h.dmg); });
+            MP.watchMeta((m) => {
+              if (m && m.zone && !MP.hosting()) setZoneFn(JSON.stringify(m.zone));
+            });
             setMpFn(true);
             mpLive = true;
           } catch (e) {
@@ -1531,6 +1536,13 @@
           sendFn();
           drawFn();
           if (mpLive && lastFrame && lastFrame.p) {
+            if (MP.hosting() && lastFrame.zt && Date.now() - lastZonePush > 480) {
+              lastZonePush = Date.now();
+              MP.publishMeta({ zone: { cx: lastFrame.z[0], cz: lastFrame.z[1],
+                                       r: lastFrame.z[2],
+                                       tx: lastFrame.zt[0], tz: lastFrame.zt[1],
+                                       tr: lastFrame.zt[2], t: lastFrame.zt[3] } });
+            }
             MP.pushState({
               x: lastFrame.p[0], y: lastFrame.p[1], z: lastFrame.p[2],
               yaw: lastFrame.p[3], alive: lastFrame.p[4] > 0,
