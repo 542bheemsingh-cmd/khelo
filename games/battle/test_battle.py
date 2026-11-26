@@ -1024,6 +1024,45 @@ check("every feed line gets its own backing",
       CALLS.count("arcTo") >= 4 * 4)
 check("the feed measures its own text", "measureText" in CALLS)
 
+# --- the circle is shared, and a rematch is offered ----------------------
+print()
+print("--- shared circle and rematch ---")
+begin(seed=90)
+game.set_zone_net(json.dumps({"cx": 700.0, "cz": 900.0, "r": 300.0,
+                              "tx": 720.0, "tz": 910.0, "tr": 260.0, "t": 12.5}))
+check("the host's circle is adopted",
+      abs(game.zone["cx"] - 700.0) < 0.01 and abs(game.zone["r"] - 300.0) < 0.01)
+check("so is its next target and timer",
+      abs(game.zone["tr"] - 260.0) < 0.01 and abs(game.zone_timer - 12.5) < 0.01)
+
+# a broken message must not break the game
+game.set_zone_net("not json")
+check("a bad circle message is ignored", abs(game.zone["r"] - 300.0) < 0.01)
+
+# the end screen waits five seconds, then offers a rematch
+game.state = "over"
+game.result = "lose"
+game.placement = 3
+game.over_t = 0.0
+game.set_size(900, 560)
+game.draw()
+before = [t for t, _ in game._menu_hit]
+check("no rematch straight away", "again" in before and len(before) == 3)
+
+game.over_t = 4.0
+game.draw()
+check("still no rematch at four seconds", len(game._menu_hit) == 3)
+
+game.over_t = 5.2
+game.draw()
+tags = [t for t, _ in game._menu_hit]
+check("a rematch pops up after five seconds", len(tags) == 4)
+check("the rematch restarts the round", tags.count("again") == 2)
+
+# and a new round puts the clock back
+game.start_game(seed=91)
+check("a fresh round resets the rematch clock", game.over_t == 0.0)
+
 print()
 if fails:
     print("FAILURES:", fails)
