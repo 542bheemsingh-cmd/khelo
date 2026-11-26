@@ -311,6 +311,12 @@ RULES = {
     "capture_forced": False,# capture whenever you can
     "tokens": 4,            # 2 to 4 tokens each
     "first_home_wins": False,
+    # --- how it looks and feels (accessibility) ---
+    "marks": True,          # every colour also carries its own shape
+    "reduced_motion": False,# no confetti, shorter hops, no pulsing
+    "high_contrast": False, # heavier outlines, brighter text
+    "theme": "classic",     # classic | night | mint
+    "turn_timer": 0,        # 0 = off, otherwise seconds before it rolls for you
 }
 
 MODES = {
@@ -360,6 +366,8 @@ _t = 0.0
 _menu_hit = []
 _name_fields = []
 _confetti = []
+last_move = None          # {"x","y","c","t"} - a ring left where a token stopped
+turn_clock = 0.0          # seconds the current player has been thinking
 
 # ---------------------------------------------------------------------------
 # Multiplayer
@@ -431,6 +439,7 @@ def start_game(m=None, count=None):
     rolling = 0.0
     roll_t = 1.0
     auto_move_t = -1.0
+    turn_clock = 0.0
     moves = []
     anims[:] = []
     can_roll = True
@@ -471,6 +480,32 @@ def set_rules(js):
 
 def rules_json():
     return json.dumps(RULES)
+
+
+STATS = {"games": 0, "wins": 0, "by_mode": {}}
+
+
+def _load_stats():
+    try:
+        v = js.localStorage.getItem("khelo_ludo_stats")
+        if v:
+            d = json.loads(v)
+            STATS["games"] = int(d.get("games", 0))
+            STATS["wins"] = int(d.get("wins", 0))
+            STATS["by_mode"] = dict(d.get("by_mode", {}))
+    except Exception:
+        pass
+
+
+def _bump_stats(won):
+    STATS["games"] += 1
+    if won:
+        STATS["wins"] += 1
+        STATS["by_mode"][rule_mode] = STATS["by_mode"].get(rule_mode, 0) + 1
+    try:
+        js.localStorage.setItem("khelo_ludo_stats", json.dumps(STATS))
+    except Exception:
+        pass
 
 
 def _save_rules():
@@ -520,6 +555,11 @@ def toggle_rule(key):
             RULES[key] = 0 if v else 3
         elif key == "tokens":
             RULES[key] = 2 if v >= 4 else v + 1
+        elif key == "turn_timer":
+            RULES[key] = 0 if v else 30
+        elif key == "theme":
+            i = THEME_ORDER.index(v) if v in THEME_ORDER else 0
+            RULES[key] = THEME_ORDER[(i + 1) % len(THEME_ORDER)]
         rule_mode = "custom"
         _save_rules()
 
@@ -534,6 +574,8 @@ def apply_mode(m):
         "capture_bonus": True, "home_bonus": True, "exact_home": True,
         "safe_squares": True, "blocks": False, "kill_to_enter": False,
         "capture_forced": False, "tokens": 4, "first_home_wins": False,
+        "marks": True, "reduced_motion": False, "high_contrast": False,
+        "theme": "classic", "turn_timer": 0,
     }
     RULES.update(MODES[m])
 
@@ -860,8 +902,9 @@ def _after_roll():
 
 
 def _pass_turn():
-    global turn, can_roll, moves, message, sixes_in_a_row
+    global turn, can_roll, moves, message, sixes_in_a_row, turn_clock
     sixes_in_a_row = 0
+    turn_clock = 0.0
     if dice == 6:
         can_roll = True          # a 6 always earns another go
         moves = []
@@ -941,6 +984,9 @@ def _finish_move(a):
             message = "%s captured %s!" % (
                 names[c], ", ".join(names[h["c"]] for h in hits))
 
+    if t["pos"] >= 0:
+        globals()["last_move"] = {"x": t["x"], "y": t["y"], "c": c, "t": _t}
+
     if t["pos"] >= HOME_POS:
         if RULES["home_bonus"]:
             extra = True
@@ -952,11 +998,14 @@ def _finish_move(a):
         winner = c
         state = "over"
         _sound("win")
-        _confetti[:] = [{"x": _rng.uniform(0, W), "y": _rng.uniform(-H, 0),
-                         "vy": _rng.uniform(60, 160), "vx": _rng.uniform(-30, 30),
-                         "r": _rng.uniform(3, 7),
-                         "col": _rng.choice([PAL[k]["main"] for k in PAL])}
-                        for _ in range(90)]
+        _bump_stats(True)
+        # confetti is lovely and it is also motion; let people turn it off
+        _confetti[:] = [] if RULES.get("reduced_motion") else [
+            {"x": _rng.uniform(0, W), "y": _rng.uniform(-H, 0),
+             "vy": _rng.uniform(60, 160), "vx": _rng.uniform(-30, 30),
+             "r": _rng.uniform(3, 7),
+             "col": _rng.choice([PAL[k]["main"] for k in PAL])}
+            for _ in range(90)]
         return
 
     if extra:
@@ -1156,6 +1205,7 @@ def _stack_offsets():
 
 def update(dt):
     global rolling, roll_t, _t, dice_show, message, can_roll, auto_move_t
+    global turn_clock
     dt = min(max(float(dt), 0.0), 0.05)
     _t += dt
 
@@ -1172,6 +1222,16 @@ def update(dt):
         if p["y"] > H + 20:
             p["y"] = -20
             p["x"] = _rng.uniform(0, W)
+
+    if (state == "play" and RULES.get("turn_timer") and can_roll
+            and rolling <= 0 and not anims and (not net_on or net_host)):
+        turn_clock += dt
+        if turn_clock >= float(RULES["turn_timer"]):
+            turn_clock = 0.0
+            message = "%s ran out of time." % names[cur()]
+            roll()
+    else:
+        turn_clock = 0.0
 
     if auto_move_t >= 0.0:
         auto_move_t -= dt
@@ -1293,10 +1353,28 @@ def _wrap(text, x, y, maxw, size=15, color="#9fb3d9", center=True):
     return y
 
 
+THEMES = {
+    "classic": {"bg0": "#121d3e", "bg1": "#05080f",
+                "tile": "rgba(255,255,255,0.07)", "grid": "rgba(255,255,255,0.16)",
+                "star": "#8fa3c9"},
+    "night":   {"bg0": "#0b0b16", "bg1": "#000000",
+                "tile": "rgba(150,170,255,0.06)", "grid": "rgba(140,160,230,0.22)",
+                "star": "#7f8fc4"},
+    "mint":    {"bg0": "#0d2b24", "bg1": "#04120f",
+                "tile": "rgba(200,255,235,0.09)", "grid": "rgba(160,255,220,0.22)",
+                "star": "#8fd8c0"},
+}
+
+
+def _theme():
+    return THEMES.get(RULES.get("theme", "classic"), THEMES["classic"])
+
+
 def _bg():
+    th = _theme()
     g = ctx.createLinearGradient(0, 0, 0, H)
-    g.addColorStop(0, "#121d3e")
-    g.addColorStop(1, "#05080f")
+    g.addColorStop(0, th["bg0"])
+    g.addColorStop(1, th["bg1"])
     ctx.fillStyle = g
     ctx.fillRect(0, 0, W, H)
 
@@ -1328,10 +1406,12 @@ def _draw_board():
             cx, cy = cell_px(ox + sx - 0.5, oy + sy - 0.5)
             ctx.beginPath()
             ctx.arc(cx, cy, CELL * 0.52, 0, 6.2832)
-            ctx.fillStyle = "rgba(255,255,255,0.07)"
+            ctx.fillStyle = _theme()["tile"]
             ctx.fill()
             ctx.lineWidth = 2
-            ctx.strokeStyle = "rgba(255,255,255,0.16)"
+            ctx.strokeStyle = ("rgba(255,255,255,0.42)"
+                               if RULES.get("high_contrast")
+                               else _theme()["grid"])
             ctx.stroke()
 
     for idx, (cx, cy) in enumerate(TRACK):
@@ -1681,13 +1761,39 @@ SHAPES = {"pawn": _shape_pawn, "ball": _shape_ball, "crown": _shape_crown,
           "hex": _shape_hex}
 
 
+MARKS = {RED: "circle", GREEN: "triangle", YELLOW: "square", BLUE: "diamond"}
+
+
+def _player_mark(x, y, s, c, col="#ffffff"):
+    """A small white shape, one per colour: circle, triangle, square, diamond."""
+    m = MARKS.get(c, "circle")
+    ctx.beginPath()
+    if m == "circle":
+        ctx.arc(x, y, s, 0, 6.2832)
+    elif m == "triangle":
+        ctx.moveTo(x, y - s * 1.15)
+        ctx.lineTo(x + s, y + s * 0.75)
+        ctx.lineTo(x - s, y + s * 0.75)
+        ctx.closePath()
+    elif m == "square":
+        ctx.rect(x - s * 0.82, y - s * 0.82, s * 1.64, s * 1.64)
+    else:
+        ctx.moveTo(x, y - s * 1.15)
+        ctx.lineTo(x + s * 1.15, y)
+        ctx.lineTo(x, y + s * 1.15)
+        ctx.lineTo(x - s * 1.15, y)
+        ctx.closePath()
+    ctx.fillStyle = col
+    ctx.fill()
+
+
 def _draw_token(t, highlight=False, movable=False, label=True, rad=None):
     x, y, c = t["x"], t["y"], t["c"]
     p = PAL[c]
     r = CELL * 0.40 if rad is None else rad
 
     if highlight:
-        glow = 0.5 + 0.5 * math.sin(_t * 4)
+        glow = 0.5 if RULES.get("reduced_motion") else 0.5 + 0.5 * math.sin(_t * 4)
         ctx.beginPath()
         ctx.arc(x, y, r + 6 + glow * 3, 0, 6.2832)
         ctx.fillStyle = p["main"]
@@ -1701,6 +1807,14 @@ def _draw_token(t, highlight=False, movable=False, label=True, rad=None):
     ctx.fill()
 
     SHAPES[design](x, y, r, p)
+    if RULES.get("marks"):
+        # a dark disc first, so the white mark reads on any colour
+        my = y + r * 0.04
+        ctx.beginPath()
+        ctx.arc(x, my, r * 0.46, 0, 6.2832)
+        ctx.fillStyle = "rgba(8, 12, 24, 0.55)"
+        ctx.fill()
+        _player_mark(x, my, r * 0.32, c, "#ffffff")
 
     if movable:
         ctx.beginPath()
@@ -1816,13 +1930,30 @@ def _draw_die():
 # ---------------------------------------------------------------------------
 # HUD panel
 # ---------------------------------------------------------------------------
+def _draw_last_move():
+    """A short-lived ring where the last token came to rest."""
+    if not last_move or state != "play":
+        return
+    age = _t - last_move["t"]
+    if age < 0 or age > 1.8:
+        return
+    fade = 1.0 - age / 1.8
+    ctx.beginPath()
+    ctx.arc(last_move["x"], last_move["y"], CELL * (0.40 + age * 0.30), 0, 6.2832)
+    ctx.lineWidth = max(2.0, CELL * 0.09)
+    ctx.strokeStyle = PAL[last_move["c"]]["main"]
+    ctx.globalAlpha = fade * 0.8
+    ctx.stroke()
+    ctx.globalAlpha = 1.0
+
+
 def _draw_move_hints():
     """A pulsing ring on every square you could move to, so the choice is obvious."""
     if state != "play" or anims or not moves:
         return
     if net_on and not net_host:
         pass                                  # guests see the host's board anyway
-    pulse = 0.5 + 0.5 * math.sin(_t * 4.5)
+    pulse = 0.5 if RULES.get("reduced_motion") else 0.5 + 0.5 * math.sin(_t * 4.5)
     for t, target in moves:
         x, y = token_xy(t["c"], t["i"], target)
         a = 0.45 + 0.45 * pulse
@@ -1900,6 +2031,9 @@ def _draw_hud():
         ctx.arc(x + hw * 0.115, ry + row_h / 2, row_h * 0.27, 0, 6.2832)
         ctx.fillStyle = PAL[col]["main"]
         ctx.fill()
+        if RULES.get("marks"):
+            _player_mark(x + hw * 0.115, ry + row_h / 2, row_h * 0.13, col,
+                         "rgba(10,16,30,0.85)")
         ctx.textAlign = "left"
         ctx.fillStyle = "#eaf2ff"
         ctx.font = "700 %dpx %s" % (max(9, int(12 * k)), FONT)
@@ -1946,6 +2080,7 @@ def _draw_mode():
     global _menu_hit
     if not _rules_loaded:
         load_rules()
+        _load_stats()
     _menu_hit = []
     _bg()
     pad = 14.0
@@ -2030,6 +2165,11 @@ def _draw_mode():
     _button(W / 2 - dw / 2, py + 58, dw, 40, "Custom rules", False, size=13)
     _menu_hit.append(("custom", (W / 2 - dw / 2, py + 58, dw, 40)))
 
+    if STATS["games"]:
+        won = STATS["wins"]
+        _wrap("%d games played \u00b7 %d won" % (STATS["games"], won),
+              W / 2, py + 116, min(400, W - 30), 11, "#6f82a8")
+
 
 DIALS = [
     ("exit", "Bring a token out", "On a six", "Any roll"),
@@ -2044,7 +2184,16 @@ DIALS = [
     ("capture_forced", "Capturing", "Optional", "Compulsory"),
     ("tokens", "Tokens each", None, None),
     ("first_home_wins", "The game ends when", "All home", "One home"),
+    ("marks", "Colour-blind marks", "Shapes on", "Colour only"),
+    ("reduced_motion", "Gentle motion", "Calm", "Full"),
+    ("high_contrast", "High contrast", "On", "Off"),
+    ("theme", "Board style", None, None),
+    ("turn_timer", "Turn timer", "Off", "30 seconds"),
 ]
+
+
+THEME_LABEL = {"classic": "Classic", "night": "Night", "mint": "Mint"}
+THEME_ORDER = ["classic", "night", "mint"]
 
 
 def _dial_value(key):
@@ -2053,6 +2202,8 @@ def _dial_value(key):
         if k == key:
             if k == "tokens":
                 return "%d" % v
+            if k == "theme":
+                return THEME_LABEL.get(v, v)
             return a_ if v else b_
     return str(v)
 
@@ -2282,6 +2433,7 @@ def draw():
     _bg()
     _draw_board()
     _draw_move_hints()
+    _draw_last_move()
     _draw_tokens()
     _draw_hud()
 
