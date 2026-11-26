@@ -36,6 +36,8 @@
           <div id="mp-form">
             <h2>Play with friends</h2>
             <p class="mp-note">Everyone on the same code plays the same board.</p>
+            <input id="mp-name" class="mp-input" type="text" maxlength="12"
+                   placeholder="Your name" autocomplete="off" spellcheck="false">
             <button id="mp-create" class="mp-btn mp-primary" type="button">Create a room</button>
             <div class="mp-row">
               <input id="mp-code" class="mp-input" type="text" maxlength="5"
@@ -51,6 +53,7 @@
             <p class="mp-note">Send this to your friends, then start.</p>
             <div class="mp-sep"></div>
             <p id="mp-roominfo" class="mp-status">Connecting…</p>
+            <div id="mp-list" class="mp-list"></div>
             <button id="mp-start" class="mp-btn mp-primary" type="button">Start the game</button>
             <button id="mp-leave" class="mp-btn mp-ghost" type="button">Leave room</button>
           </div>
@@ -252,6 +255,65 @@
 
     // ---- multiplayer ------------------------------------------------------
     var MP = null, mpLive = false, mpHost = true, mpSeats = {}, seatsLocked = false;
+    var mpNames = {}, hostGone = false, myName = "";
+
+    var SEAT_COLOUR = {
+      Red: "#ff3b5c", Green: "#22c55e", Yellow: "#fbbf24", Blue: "#3b82f6"
+    };
+    function seatColourName(n) {
+      var set = n === 2 ? ["Red", "Yellow"]
+              : n === 3 ? ["Red", "Green", "Yellow"]
+              : ["Red", "Green", "Yellow", "Blue"];
+      return set;
+    }
+
+    /* who is sitting in this room, and in which colour */
+    function renderList(list) {
+      var el = document.getElementById("mp-list");
+      if (!el) return;
+      var total = Math.max(2, Math.min(4, (list ? list.length : 0) + 1));
+      var cols = seatColourName(total);
+      var rows = [];
+      var myId = MP ? MP.me() : "me";
+      var people = [{ id: myId, name: myName || mpNames[myId] || "You", mine: true }];
+      (list || []).forEach(function (p) { people.push(p); });
+
+      people.sort(function (a, b) {
+        var sa = mpSeats[a.id], sb = mpSeats[b.id];
+        sa = (sa === undefined) ? 99 : sa;
+        sb = (sb === undefined) ? 99 : sb;
+        return sa - sb;
+      });
+
+      people.forEach(function (p) {
+        var seat = mpSeats[p.id];
+        var colour = (seat !== undefined && seat < cols.length) ? cols[seat] : null;
+        var row = document.createElement("div");
+        row.className = "mp-who" + (p.mine ? " is-me" : "") +
+                        (p.id === MP.host() ? " is-host" : "");
+        var dot = document.createElement("span");
+        dot.className = "dot";
+        dot.style.background = colour ? SEAT_COLOUR[colour] : "#3a4767";
+        var nm = document.createElement("span");
+        nm.className = "who-name";
+        nm.textContent = (p.name || "Player") + (p.mine ? " (you)" : "");
+        var tag = document.createElement("span");
+        tag.className = "who-tag";
+        tag.textContent = colour ? colour : "waiting";
+        row.appendChild(dot);
+        row.appendChild(nm);
+        if (p.id === MP.host()) {
+          var h = document.createElement("span");
+          h.className = "who-tag";
+          h.textContent = "host";
+          row.appendChild(h);
+        }
+        row.appendChild(tag);
+        rows.push(row);
+      });
+      el.textContent = "";
+      rows.forEach(function (r) { el.appendChild(r); });
+    }
     var setSizeFn = null;
     var snapshotFn = null, applyNetFn = null, netActionFn = null;
     var setSeatsFn = null, setNetFn = null, startGameFn = null;
@@ -305,7 +367,10 @@
         try {
           var M = await mpLoad();
           say("Connecting…");
-          var room = await M.enter(want, "Player");
+          myName = (document.getElementById("mp-name").value || "").trim()
+                   || ("Player " + Math.floor(Math.random() * 90 + 10));
+          mpNames[M.me()] = myName;
+          var room = await M.enter(want, myName);
           codeEl.textContent = room;
           formEl.classList.add("is-hidden");
           roomEl.classList.remove("is-hidden");
@@ -313,6 +378,25 @@
           mpHost = M.hosting();
 
           M.watchPlayers(function (list) {
+            mpNames = {};
+            list.forEach(function (p) { mpNames[p.id] = p.name; });
+
+            // if the host's seat disappears the round can never move again
+            if (!mpHost && MP.host() && list.length) {
+              var stillThere = false;
+              for (var i = 0; i < list.length; i++) {
+                if (list[i].id === MP.host()) stillThere = true;
+              }
+              if (!stillThere && !hostGone) {
+                hostGone = true;
+                say("The host left the room.");
+                mpLive = false;
+                roomEl.classList.add("is-hidden");
+                formEl.classList.remove("is-hidden");
+                panel.classList.remove("is-hidden");
+              }
+            }
+
             const n = list.length + 1;
             infoEl.textContent = n + " in the room" +
               (n < 2 ? " - waiting for friends…" : " - " + n + " player game");
@@ -325,6 +409,7 @@
               M.publishMeta({ seats: mpSeats });
               setSeatsFn(JSON.stringify(mpSeats), M.me());
             }
+            renderList(list);
             const joined = Object.keys(mpSeats).length;
             startBtn.disabled = !mpHost || joined < 2;
             if (!mpHost) {
@@ -343,13 +428,16 @@
 
           M.watchMeta(function (m) {
             if (!m) return;
-            if (m.seats) setSeatsFn(JSON.stringify(m.seats), M.me());
+            if (m.seats) {
+              if (!mpHost) mpSeats = m.seats;     // the host owns the seating
+              setSeatsFn(JSON.stringify(m.seats), M.me());
+              renderList(null);
+            }
             if (m.started && !mpHost && m.snap) {
               applyNetFn(m.snap);
               panel.classList.add("is-hidden");   // get out of the way
             }
             if (m.started && mpHost) setNetFn(true, true, 0);
-            if (m.seats) setSeatsFn(JSON.stringify(m.seats), M.me());
           });
 
           // the host is always seat 0; a guest waits for the room to say
