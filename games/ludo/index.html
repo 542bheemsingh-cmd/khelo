@@ -226,6 +226,17 @@
     function fit() {
       var aw = screenBox.clientWidth, ah = screenBox.clientHeight;
       if (!aw || !ah) return;
+      // match the canvas to the box, so the board is not shrunk by letterboxing
+      var boxAspect = aw / ah;
+      // the board is a square plus a 322px panel, so cap the width at that:
+      // a wider canvas would only add empty space beside the board
+      GW = Math.max(620, Math.min(1500,
+               Math.min(Math.round(GH * boxAspect), GH + 360)));
+      if (canvas.width !== GW || canvas.height !== GH) {
+        canvas.width = GW;
+        canvas.height = GH;
+        if (setSizeFn) setSizeFn(GW, GH);
+      }
       var s = Math.min(aw / GW, ah / GH);
       canvas.style.width = Math.floor(GW * s) + "px";
       canvas.style.height = Math.floor(GH * s) + "px";
@@ -234,6 +245,7 @@
 
     // ---- multiplayer ------------------------------------------------------
     var MP = null, mpLive = false, mpHost = true, mpSeats = {};
+    var setSizeFn = null;
     var snapshotFn = null, applyNetFn = null, netActionFn = null;
     var setSeatsFn = null, setNetFn = null, startGameFn = null;
 
@@ -347,6 +359,7 @@
       var source = await (await fetch("game.py", { cache: "no-store" })).text();
       await pyodide.runPythonAsync(source);
 
+      setSizeFn = pyodide.globals.get("set_size");
       var update = pyodide.globals.get("update");
       var draw = pyodide.globals.get("draw");
       snapshotFn = pyodide.globals.get("snapshot");
