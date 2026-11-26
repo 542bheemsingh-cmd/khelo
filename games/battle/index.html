@@ -53,6 +53,7 @@
             <h2>Room code</h2>
             <div id="mp-roomcode" class="mp-code">-----</div>
             <p class="mp-note">Send this to your friends. The round starts when you say.</p>
+            <div class="mp-sep"></div>
             <p id="mp-roominfo" class="mp-status">Connecting…</p>
             <button id="mp-start" class="mp-btn mp-primary" type="button">Start the round</button>
             <button id="mp-leave" class="mp-btn mp-ghost" type="button">Leave room</button>
@@ -162,6 +163,8 @@
 
     const remoteRigs = {};
     let lastFrame = null, mpLive = false, lastZonePush = 0;
+    let roundStarted = false;
+    const netPlayers = {};
     let renderer, scene, camera, waterMesh, zoneMesh, zoneRing, playerRig,
         planeMesh, chuteMesh,
         botRigs = [],
@@ -668,6 +671,15 @@
         rig.add(bg); rig.add(fill);
         rig.userData.barBg = bg;
         rig.userData.barFill = fill;
+        const flash = new THREE.Mesh(
+          new THREE.SphereGeometry(0.42, 6, 5),
+          new THREE.MeshBasicMaterial({ color: 0xffd77a, transparent: true,
+                                        opacity: 0.95, depthWrite: false }));
+        flash.position.set(1.25, 3.0, 2.3);
+        flash.visible = false;
+        rig.add(flash);
+        rig.userData.flash = flash;
+        rig.userData.flashT = 0;
         scene.add(rig);
         remoteRigs[id] = rig;
         return rig;
@@ -950,6 +962,12 @@
           rig.position.set(r[1], r[2], r[3]);
           rig.rotation.y = r[4];
           const u = rig.userData;
+          if (u.flashT > 0) {
+            u.flashT -= 0.016;
+            u.flash.visible = u.flashT > 0;
+          } else if (u.flash.visible) {
+            u.flash.visible = false;
+          }
           u.barBg.visible = on;
           u.barFill.visible = on;
           if (on) {
@@ -1484,6 +1502,7 @@
         const roomEl = document.getElementById("mp-room");
         const codeEl = document.getElementById("mp-roomcode");
         const infoEl = document.getElementById("mp-roominfo");
+        const startBtn = document.getElementById("mp-start");
 
         async function begin(want) {
           try {
@@ -1494,14 +1513,34 @@
             roomEl.classList.remove("is-hidden");
 
             MP.watchPlayers((list) => {
+              // somebody else fired: flash their gun
+              for (const p of list) {
+                const prev = netPlayers[p.id];
+                if (prev && p.fs > prev.fs) {
+                  const rig = remoteRigs[p.id];
+                  if (rig) rig.userData.flashT = 0.14;
+                }
+                netPlayers[p.id] = p;
+              }
               setNetFn(JSON.stringify(list), MP.me());
               infoEl.textContent = list.length
                 ? (list.length + 1) + " in the room"
                 : "Waiting for friends…";
+              startBtn.disabled = !MP.hosting() || list.length === 0;
+              startBtn.textContent = MP.hosting()
+                ? (list.length ? "Start the round" : "Waiting for a friend…")
+                : "Waiting for the host…";
             });
             MP.watchHits((h) => { if (h.dmg > 0) netDmgFn(h.dmg); });
             MP.watchMeta((m) => {
-              if (m && m.zone && !MP.hosting()) setZoneFn(JSON.stringify(m.zone));
+              if (!m) return;
+              if (m.zone && !MP.hosting()) setZoneFn(JSON.stringify(m.zone));
+              // everybody starts together, on the same flight
+              if (m.state === "playing" && !roundStarted) {
+                roundStarted = true;
+                panel.classList.add("is-hidden");
+                startFn(m.seed || undefined);
+              }
             });
             setMpFn(true);
             mpLive = true;
@@ -1510,13 +1549,29 @@
           }
         }
 
-        document.getElementById("mp-start").addEventListener("click", () => {
+        codeEl.addEventListener("click", async () => {
+          const code = codeEl.textContent.trim();
+          try {
+            await navigator.clipboard.writeText(code);
+            infoEl.textContent = "Copied " + code;
+          } catch (e) {
+            infoEl.textContent = "Code: " + code;
+          }
+        });
+
+        startBtn.addEventListener("click", () => {
+          if (!MP.hosting()) return;
+          roundStarted = true;
           panel.classList.add("is-hidden");
+          MP.publishMeta({ state: "playing",
+                           seed: Math.floor(Math.random() * 900000) + 1000 });
           startFn();
         });
         document.getElementById("mp-leave").addEventListener("click", async () => {
           try { await MP.leave(); } catch (e) {}
           mpLive = false;
+          roundStarted = false;
+          for (const id in netPlayers) delete netPlayers[id];
           roomEl.classList.add("is-hidden");
           formEl.classList.remove("is-hidden");
           say("");
@@ -1547,7 +1602,8 @@
               x: lastFrame.p[0], y: lastFrame.p[1], z: lastFrame.p[2],
               yaw: lastFrame.p[3], alive: lastFrame.p[4] > 0,
               hp: lastFrame.p[5], weapon: lastFrame.wp || 0,
-              kills: lastFrame.kills || 0, mode: lastFrame.mode
+              kills: lastFrame.kills || 0, mode: lastFrame.mode,
+              fs: lastFrame.fs || 0
             });
           }
         }
