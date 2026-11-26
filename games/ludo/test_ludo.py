@@ -692,6 +692,51 @@ check("the host is seat 0", game.net_seat == 0)
 game.set_net_ludo(False, True, -1)
 check("leaving the room clears the turn rule", game.my_turn())
 
+# --- one legal move plays itself ----------------------------------------
+print()
+print("--- only one way to go ---")
+game.start_game("single", 4)
+game.tokens[0]["pos"] = 0            # one token out, the rest still in the yard
+game.anims[:] = []
+game.dice = 2
+game._after_roll()
+check("a single move is offered", len(game.moves) == 1)
+check("the move is armed to play itself", game.auto_move_t > 0)
+
+before = game.tokens[0]["pos"]
+for _ in range(200):
+    game.update(1 / 60)
+check("the token moved on its own", game.tokens[0]["pos"] != before)
+check("the clock is cleared afterwards", game.auto_move_t == 0.0)
+
+# several moves means the player chooses
+game.start_game("single", 4)
+game.anims[:] = []
+game.dice = 6
+game._after_roll()
+check("a six offers several moves", len(game.moves) > 1)
+check("nothing plays itself when there is a choice", game.auto_move_t == 0.0)
+
+# tapping a token cancels any pending automatic move
+game.start_game("single", 4)
+game.tokens[0]["pos"] = 0
+game.anims[:] = []
+game.dice = 2
+game._after_roll()
+check("the automatic move is armed", game.auto_move_t > 0)
+game._choose(game.moves[0][0], game.moves[0][1])
+check("a tap clears it", game.auto_move_t == 0.0)
+
+# and in a room the guest must not move on its own, or it would double up
+game.set_net_ludo(True, False, 1)
+game.start_game("single", 2)
+game.tokens[0]["pos"] = 0
+game.anims[:] = []
+game.dice = 2
+game._after_roll()
+check("a guest never moves by itself", game.auto_move_t == 0.0)
+game.set_net_ludo(False, True, 0)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
