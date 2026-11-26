@@ -257,7 +257,14 @@
     var setSeatsFn = null, setNetFn = null, startGameFn = null;
 
     async function mpLoad() {
-      if (!MP) MP = await import("./mp.js");
+      if (!MP) {
+        try {
+          MP = await import("./mp.js");
+        } catch (e) {
+          throw new Error("Could not load multiplayer. Check your internet " +
+                          "connection and try again.");
+        }
+      }
       return MP;
     }
     window.netMe = function () { return MP ? MP.me() : ""; };
