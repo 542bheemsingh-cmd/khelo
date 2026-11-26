@@ -32,6 +32,15 @@ js.devicePixelRatio = 2
 js.document = types.SimpleNamespace(getElementById=lambda _id: FakeCanvas())
 js.window = types.SimpleNamespace()
 js.playSound = lambda n: CALLS.append(("sound", n))
+# an off-screen canvas, so the board cache can actually be exercised
+js.newCanvas = lambda w, h: FakeCanvas()
+# a stand-in 3D die, so the blit path runs like it does in the browser
+class _Die:
+    canvas = FakeCanvas()
+    calls = 0
+    def frame(self, p, face):
+        _Die.calls += 1
+js.dice3d = _Die()
 _STORE = {}
 js.localStorage = types.SimpleNamespace(
     getItem=lambda k: _STORE.get(k),
@@ -947,7 +956,7 @@ print()
 print("--- board and feel ---")
 game.apply_mode("classic")
 game.start_game("single", 4)
-CALLS.clear(); game.draw()
+CALLS.clear(); game._draw_board_live()
 check("the board draws rounded tiles", sum(1 for c in CALLS if c[0] == "arcTo") > 40)
 check("the start squares show a direction",
       sum(1 for c in CALLS if c[0] == "stroke") > 4)
@@ -1060,6 +1069,53 @@ check("a cue plays its sound", any(c[0] == "sound" for c in CALLS))
 game.RULES["haptics"] = False
 check("and can be switched off", not game.RULES["haptics"])
 game.RULES["haptics"] = True
+
+# --- the board cache must never show a stale board ----------------------
+print()
+print("--- board cache ---")
+game.apply_mode("classic")
+game.set_size(560, 1155)
+game.start_game("single", 4)
+
+game._board_cache = None            # start from cold, like a fresh page
+CALLS.clear(); game._draw_board()   # first call paints the board
+first = len(CALLS)
+CALLS.clear(); game._draw_board()   # second call should just blit it
+second = len(CALLS)
+check("the first draw paints the board", first > 200)
+check("the next draw reuses the cache", second <= 2)
+
+# a new theme must invalidate it, or the old colours stay on screen
+game.RULES["theme"] = "mint"
+CALLS.clear(); game._draw_board()
+check("changing the theme repaints the board", len(CALLS) > 200)
+CALLS.clear(); game._draw_board()
+check("and caches again", len(CALLS) <= 2)
+game.RULES["theme"] = "classic"
+
+# so must a resize
+game.set_size(700, 1200)
+CALLS.clear(); game._draw_board()
+check("a resize repaints the board", len(CALLS) > 200)
+game.set_size(560, 1155)
+
+# high contrast too
+game.RULES["high_contrast"] = True
+CALLS.clear(); game._draw_board()
+check("high contrast repaints the board", len(CALLS) > 200)
+game.RULES["high_contrast"] = False
+CALLS.clear(); game._draw_board()
+
+# the settled die is only painted once
+game.rolling = 0.0
+game.roll_t = 1.0
+game.dice = 3
+game._die_painted = None
+CALLS.clear()
+game._draw_hud()
+game._draw_hud()
+game._draw_hud()
+check("a resting die is drawn once, not every frame", game._die_painted == 3)
 
 # --- screen-adaptive UI -----------------------------------------------------
 print()
