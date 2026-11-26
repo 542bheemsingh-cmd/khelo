@@ -119,6 +119,7 @@ export function pushState(s) {
     alive: s.alive ? 1 : 0,
     weapon: s.weapon | 0,
     kills: s.kills | 0,
+    fs: s.fs | 0,
     mode: s.mode || "play",
     t: now
   });
@@ -140,6 +141,7 @@ export function watchPlayers(cb) {
         alive: !!v.alive,
         weapon: v.weapon | 0,
         kills: v.kills | 0,
+        fs: v.fs | 0,
         mode: v.mode || "play",
         t: +v.t || 0
       });
