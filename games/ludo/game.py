@@ -326,8 +326,8 @@ net_seat = -1
 net_seats = {}
 
 ROLL_DUR = 2.0          # the die takes its time
-AUTO_MOVE_AFTER = 0.55  # a beat after the die lands, if there is only one move
-auto_move_t = 0.0
+# -1 means nothing pending; 0 means "play it on the next frame"
+auto_move_t = -1.0
 
 # The die is not fair. A 6 is twice as likely as a plain number, 1 and 4 are a
 # little likelier than the rest, and 2, 3 and 5 share what is left equally:
@@ -379,7 +379,7 @@ def start_game(m=None, count=None):
     dice = dice_show = 6
     rolling = 0.0
     roll_t = 1.0
-    auto_move_t = 0.0
+    auto_move_t = -1.0
     moves = []
     anims[:] = []
     can_roll = True
@@ -647,7 +647,7 @@ def _after_roll():
     _sound("click")
     # with a single legal move there is nothing to choose, so just play it
     if len(moves) == 1 and (not net_on or net_host):
-        globals()["auto_move_t"] = AUTO_MOVE_AFTER
+        globals()["auto_move_t"] = 0.0
 
 
 def _pass_turn():
@@ -681,7 +681,7 @@ def _captures_at(cell, moving_color):
 
 
 def _choose(t, target):
-    globals()["auto_move_t"] = 0.0
+    globals()["auto_move_t"] = -1.0
     global moves
     if anims:
         return
@@ -933,11 +933,13 @@ def update(dt):
             p["y"] = -20
             p["x"] = _rng.uniform(0, W)
 
-    if auto_move_t > 0:
-        auto_move_t = max(0.0, auto_move_t - dt)
-        if auto_move_t <= 0 and len(moves) == 1 and not anims:
-            t0, target0 = moves[0]
-            _choose(t0, target0)
+    if auto_move_t >= 0.0:
+        auto_move_t -= dt
+        if auto_move_t <= 0.0:
+            auto_move_t = -1.0
+            if len(moves) == 1 and not anims:
+                t0, target0 = moves[0]
+                _choose(t0, target0)
 
     if rolling > 0:
         rolling -= dt
