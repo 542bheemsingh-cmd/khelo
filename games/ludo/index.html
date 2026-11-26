@@ -492,7 +492,8 @@
         return window.matchMedia("(orientation: portrait) and (max-width: 900px)").matches;
       }
       function update() {
-        box.classList.toggle("is-on", portrait() && !dismissed() && !document.fullscreenElement);
+        // the board has a proper portrait layout, so there is nothing to rotate
+        box.classList.remove("is-on");
       }
       btn.addEventListener("click", function () {
         try { sessionStorage.setItem("khelo_rotate_ok", "1"); } catch (e) {}
