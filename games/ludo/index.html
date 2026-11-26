@@ -255,7 +255,7 @@
 
     // ---- multiplayer ------------------------------------------------------
     var MP = null, mpLive = false, mpHost = true, mpSeats = {}, seatsLocked = false;
-    var mpNames = {}, hostGone = false, myName = "";
+    var mpNames = {}, hostGone = false, myName = "", sawHost = false;
 
     var SEAT_COLOUR = {
       Red: "#ff3b5c", Green: "#22c55e", Yellow: "#fbbf24", Blue: "#3b82f6"
@@ -381,19 +381,23 @@
             mpNames = {};
             list.forEach(function (p) { mpNames[p.id] = p.name; });
 
-            // if the host's seat disappears the round can never move again
-            if (!mpHost && MP.host() && list.length) {
+            // once the host's entry is gone the round can never move again,
+            // and the list can be empty at that moment, so track it separately
+            if (!mpHost && MP.host()) {
               var stillThere = false;
               for (var i = 0; i < list.length; i++) {
                 if (list[i].id === MP.host()) stillThere = true;
               }
-              if (!stillThere && !hostGone) {
+              if (stillThere) sawHost = true;
+              if (sawHost && !stillThere && !hostGone) {
                 hostGone = true;
-                say("The host left the room.");
                 mpLive = false;
+                mpHost = true;              // stop asking the absent host
+                say("The host left the room.");
                 roomEl.classList.add("is-hidden");
                 formEl.classList.remove("is-hidden");
                 panel.classList.remove("is-hidden");
+                state = "mode";
               }
             }
 
@@ -459,13 +463,19 @@
         seatsLocked = true;                 // colours are fixed from here on
         startGameFn("single", seats);
         var M = await mpLoad();
-        M.publishMeta({ started: true, snap: snapshotFn() });
+        roundStarted = true;
+        lastSnap = snapshotFn();
+        M.publishMeta({ started: true, snap: lastSnap });
       });
 
       document.getElementById("mp-leave").addEventListener("click", async function () {
         try { var M = await mpLoad(); await M.leave(); } catch (e) {}
         mpLive = false;
         seatsLocked = false;
+        roundStarted = false;
+        lastSnap = "";
+        hostGone = false;
+        sawHost = false;
         mpSeats = {};
         roomEl.classList.add("is-hidden");
         formEl.classList.remove("is-hidden");
@@ -505,7 +515,7 @@
       multiplayer();
 
       var last = performance.now();
-      var lastPush = 0, lastSnap = "";
+      var lastPush = 0, lastSnap = "", roundStarted = false;
       function frame(now) {
         var dt = (now - last) / 1000;
         last = now;
@@ -513,7 +523,7 @@
         draw();
 
         // the host is the authority: it shares the board a few times a second
-        if (mpLive && mpHost && Date.now() - lastPush > 110) {
+        if (mpLive && mpHost && roundStarted && Date.now() - lastPush > 110) {
           lastPush = Date.now();
           var snap = snapshotFn();
           if (snap !== lastSnap) {
