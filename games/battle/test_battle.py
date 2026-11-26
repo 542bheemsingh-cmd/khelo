@@ -84,6 +84,8 @@ js.devicePixelRatio = 2
 js.document = types.SimpleNamespace(getElementById=lambda i: _El())
 js.playSound = lambda n: SOUNDS.append(n)
 js.world3d = WORLD
+NET_HITS = []
+js.netHit = lambda i, d: NET_HITS.append((i, d))
 _STORE = {}
 js.localStorage = types.SimpleNamespace(
     getItem=lambda k: _STORE.get(k),
@@ -1062,6 +1064,45 @@ check("the rematch restarts the round", tags.count("again") == 2)
 # and a new round puts the clock back
 game.start_game(seed=91)
 check("a fresh round resets the rematch clock", game.over_t == 0.0)
+
+# --- firing at a real person must not hurt you --------------------------
+print()
+print("--- multiplayer shooting ---")
+game.set_mp(True)
+game.start_game(seed=95)
+for _ in range(6000):
+    game.update(1 / 60)
+    if game.state == "play":
+        break
+check("no bots in a multiplayer round", len(game.bots) == 0)
+
+_ax, _az = open_spot(80.0, 95)
+game.player["x"], game.player["z"] = _ax, _az
+game.player["hp"] = 100.0
+game.player["yaw"] = 0.0
+game.cam_yaw = 0.0
+game.set_net(json.dumps([{
+    "id": "FRIEND1", "name": "Friend", "x": _ax, "z": _az + 30.0, "yaw": 0.0,
+    "hp": 100.0, "alive": True, "weapon": 0, "kills": 0}]), "ME")
+check("the friend is in the world", len(game.remotes) == 1)
+
+NET_HITS.clear()
+game.player["cool"] = 0.0
+game.reloading = 0.0
+game.mag = 30
+for _ in range(60):
+    game.player["cool"] = 0.0
+    game.fire()
+    game.update(1 / 60)
+check("our shot is reported to the other player",
+      any(h[0] == "FRIEND1" for h in NET_HITS))
+check("firing does not hurt the shooter", game.player["hp"] == 100.0)
+check("we are still alive after shooting", game.player["alive"] is True)
+
+# damage that is meant for us still lands
+game.net_damage(15)
+check("damage sent to us does land", game.player["hp"] == 85.0)
+game.set_mp(False)
 
 print()
 if fails:
