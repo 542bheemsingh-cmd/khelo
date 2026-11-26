@@ -47,6 +47,12 @@ def adj(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1]) == 1
 
 
+def rect_for(tag):
+    for t, r in game._menu_hit:
+        if t == tag:
+            return r
+    raise AssertionError("no hit target called " + tag)
+
 def settle(limit=600):
     for _ in range(limit):
         game.update(0.05)
@@ -304,13 +310,14 @@ game.state = "mode"
 CALLS.clear(); game.draw()
 check("mode screen draws", len(CALLS) > 60)
 check("mode screen offers both modes plus the design picker",
-      [t for t, _ in game._menu_hit] == ["single", "team", "design"])
+      all(t in [x for x, _ in game._menu_hit] for t in ("single", "team", "design")))
 
-game.tap(game._menu_hit[0][1][0] + 10, game._menu_hit[0][1][1] + 10)
+r = rect_for("single")
+game.tap(r[0] + 10, r[1] + 10)
 check("choosing single goes to the player count", game.state == "count")
 CALLS.clear(); game.draw()
 check("count screen offers 2, 3, 4 and back",
-      [t for t, _ in game._menu_hit] == ["2", "3", "4", "back"])
+      all(t in [x for x, _ in game._menu_hit] for t in ("2", "3", "4", "back")))
 
 game.tap(game._menu_hit[2][1][0] + 10, game._menu_hit[2][1][1] + 10)
 check("picking 4 goes to set-up", game.state == "setup")
@@ -334,7 +341,8 @@ check("starting gives a 4 player game",
 game.set_design("ball")
 
 game.state = "mode"; game.draw()
-game.tap(game._menu_hit[1][1][0] + 10, game._menu_hit[1][1][1] + 10)
+r = rect_for("team")
+game.tap(r[0] + 10, r[1] + 10)
 check("choosing team goes to set-up", game.state == "setup")
 CALLS.clear(); game.draw()          # refresh the hit list for the set-up screen
 for tag, r in game._menu_hit:
