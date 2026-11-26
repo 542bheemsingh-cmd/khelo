@@ -408,6 +408,43 @@ game._pass_turn()
 check("rolling a six keeps the same player", game.cur() == who)
 check("rolling a six does not print the next player's name", game.message == "keep")
 
+# --- the board fits whatever screen it is given --------------------------
+print()
+print("--- screen layouts ---")
+
+# a phone held upright
+game.set_size(560, 1155)
+portrait_board = game.BOARD
+check("portrait gives the board most of the width",
+      portrait_board >= 560 * 0.90)
+check("portrait puts the panel below the board",
+      game.HUD_Y > game.BY + portrait_board - 1)
+check("portrait keeps the panel on screen",
+      game.HUD_X + game.HUD_W <= 560 + 1)
+check("the roll button fits inside the panel",
+      game.ROLL_RECT[1] + game.ROLL_RECT[3] <= game.HUD_Y + game.HUD_H + 1)
+
+# the same phone turned sideways
+game.set_size(1155, 560)
+land_board = game.BOARD
+check("landscape puts the panel to the right of the board",
+      game.HUD_X > game.BX + land_board - 1)
+check("landscape uses the full height", land_board >= 560 * 0.90)
+check("landscape keeps the panel on screen",
+      game.HUD_X + game.HUD_W <= 1155 + 1)
+
+# a small phone must still get a usable board
+game.set_size(360, 640)
+check("a small phone still gets a big board", game.BOARD >= 300)
+game.set_size(390, 844)
+check("the roll button is always on screen",
+      game.ROLL_RECT[1] + game.ROLL_RECT[3] <= game.HUD_Y + game.HUD_H + 1)
+
+# a silly size must not break it
+game.set_size(10, 10)
+check("a silly size is ignored", game.BOARD > 100)
+game.set_size(900, 560)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
