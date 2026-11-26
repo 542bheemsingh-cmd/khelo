@@ -466,7 +466,7 @@ TIERS = [
 ]
 
 BOT_COUNT = 12
-PLAYER_SPEED = 15.0
+PLAYER_SPEED = 20.0
 BOT_SPEED = 9.5
 FIRE_COOL = 0.16
 BULLET_SPEED = 210.0
@@ -494,6 +494,7 @@ TOUCH_UI = False
 STICK = {"x": 0.0, "y": 0.0, "on": False}
 move_x = 0.0
 move_z = 0.0
+shots_out = 0             # how many shots we have fired, for the other players
 pvx = 0.0                 # the soldier has weight: it speeds up and slows down
 pvz = 0.0
 hitmark = 0.0             # a little cross on the crosshair when a shot lands
@@ -980,6 +981,8 @@ def fire():
 
     player["cool"] = w["cool"]
     mag -= 1
+    global shots_out
+    shots_out += 1
     shake = max(shake, 0.45 if weapon == "shotgun" else 0.16)
 
     base = cam_yaw
@@ -1436,6 +1439,7 @@ def _frame_json():
               1 if p["alive"] else 0, round(p["hp"], 1),
               round(math.hypot(pvx, pvz), 2)],
         "b": b,
+        "fs": shots_out,
         "rp": ([[r["id"], round(r["x"], 2), round(height_at(r["x"], r["z"]), 2),
                  round(r["z"], 2), round(r["yaw"], 3), round(r["hp"], 0),
                  1 if r["alive"] else 0, r["weapon"], r["name"]]
@@ -2056,14 +2060,15 @@ def _draw_over():
 
     c.fillStyle = "#ffd23f"
     c.font = "800 %dpx %s" % (_fs(17), FONT)
-    c.fillText("#%d of %d" % (max(1, placement), BOT_COUNT + 1), W / 2, cy + 124)
+    field = (len(remotes) + 1) if mp_on else (BOT_COUNT + 1)
+    c.fillText("#%d of %d" % (max(1, placement), field), W / 2, cy + 124)
 
     # your record so far
     c.fillStyle = "#8fa3c9"
     c.font = "700 %dpx %s" % (_fs(11), FONT)
     c.fillText("%d matches  \u00b7  %d wins  \u00b7  best %d kills  \u00b7  best #%d"
                % (stats["matches"], stats["wins"], stats["best_kills"],
-                  stats["best_place"] or BOT_COUNT + 1),
+                  stats["best_place"] or field),
                W / 2, cy + 150)
 
     bw = min(200, (cw - 60) / 2)
