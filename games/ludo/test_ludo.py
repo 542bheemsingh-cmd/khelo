@@ -479,6 +479,97 @@ check("no hints when there is nothing to move", with_hints - without >= 2)
 
 game.moves = kept
 
+# --- every button on every screen actually does something ----------------
+print()
+print("--- buttons ---")
+
+def tap_tag(tag):
+    r = rect_for(tag)
+    game.tap(r[0] + r[2] / 2, r[1] + r[3] / 2)
+
+def centre(rect):
+    game.tap(rect[0] + rect[2] / 2, rect[1] + rect[3] / 2)
+
+game.set_size(560, 1155)
+game.state = "mode"
+game.draw()
+
+check("the mode screen has a games chip", "games" in [t for t, _ in game._menu_hit])
+tap_tag("single")
+check("Play (single) opens the player count", game.state == "count")
+game.draw()
+tap_tag("back")
+check("count Back returns to the mode screen", game.state == "mode")
+
+game.draw()
+tap_tag("team")
+check("Play (team) opens set-up", game.state == "setup" and game.mode == "team")
+game.draw()
+tap_tag("back")
+check("set-up Back from a team game returns to the mode screen",
+      game.state == "mode")
+
+game.draw()
+tap_tag("design")
+check("Token design opens set-up", game.state == "setup")
+
+# back out to the mode screen, then in again through a single game
+game.draw()
+tap_tag("back")
+check("set-up Back returns to the mode screen", game.state == "mode")
+game.draw()
+tap_tag("single")
+check("Play (single) opens the count again", game.state == "count")
+game.draw()
+tap_tag("3")
+check("picking 3 players remembers it", game.player_count == 3)
+game.draw()
+
+# every design is selectable
+for d in game.DESIGNS:
+    tap_tag("d:" + d)
+    check("the %s design can be chosen" % d, game.design == d)
+
+game.draw()
+tap_tag("start")
+check("Start game begins a round", game.state == "play")
+
+# the roll button and the die both roll
+game.draw()
+game.can_roll = True
+game.rolling = 0.0
+game.anims[:] = []
+before = game.dice
+centre(game.ROLL_RECT)
+for _ in range(4):
+    game.update(1 / 60)
+check("the roll button rolls", game.rolling > 0 or game.dice != before
+      or game.moves or not game.can_roll)
+
+game.rolling = 0.0
+game.anims[:] = []
+game.can_roll = True
+centre(game.DIE_RECT)
+check("tapping the die also rolls", game.rolling > 0 or not game.can_roll)
+
+# the menu chip is drawn AND works
+game.draw()
+centre(game.BACK_RECT)
+check("the Menu chip leaves the round", game.state == "mode")
+
+# the win screen's buttons
+game.start_game("single", 2)
+game.winner = game.RED
+game.state = "over"
+game.draw()
+tap_tag("again")
+check("Play again starts a new round", game.state == "play")
+game.winner = game.RED
+game.state = "over"
+game.draw()
+tap_tag("menu")
+check("Main menu returns to the mode screen", game.state == "mode")
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
