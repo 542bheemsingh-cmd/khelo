@@ -96,6 +96,9 @@ def set_size(w, h):
     CELL = board / 15.0
     BOARD = board
 
+    global BACK_RECT
+    BACK_RECT = (HUD_X + HUD_W - 92.0, HUD_Y + 8.0, 84.0, 28.0)
+
     die = max(64.0, min(HUD_W * 0.42, HUD_H * 0.27))
     dx = HUD_X + (HUD_W - die) / 2.0
     dy = HUD_Y + max(96.0, HUD_H * 0.19)
@@ -707,6 +710,7 @@ def _burst(x, y, col):
 # ---------------------------------------------------------------------------
 # HUD rects - the drawing and the tap handling both read these, so a button can
 # never be drawn somewhere the finger cannot reach.
+BACK_RECT = (16.0, 16.0, 110.0, 38.0)
 HUD_X, HUD_Y = 552, 20
 HUD_W, HUD_H = 322, 519
 DIE_RECT = (HUD_X + 85, BY + 74, 152, 152)
@@ -726,6 +730,8 @@ def tap(x, y):
                     state = "setup"
                 elif tag == "design":
                     state = "setup"
+                elif tag == "games":
+                    _leave_game()
                 return
         return
 
@@ -795,7 +801,7 @@ def tap(x, y):
     if _in(ROLL_RECT, x, y) or _in(DIE_RECT, x, y):
         roll()
         return
-    if _in((16, 16, 110, 38), x, y):
+    if _in(BACK_RECT, x, y):
         state = "mode"
         _sound("click")
         return
@@ -1330,6 +1336,14 @@ def _draw_move_hints():
         ctx.globalAlpha = 1.0
 
 
+def _leave_game():
+    """Back to the mode screen from anywhere in a round."""
+    global state, winner
+    winner = None
+    anims[:] = []
+    state = "mode"
+
+
 def _draw_hud():
     x, y0, hw, hh = HUD_X, HUD_Y, HUD_W, HUD_H
     _panel(x, y0, hw, hh, "rgba(11, 18, 38, 0.92)",
@@ -1396,6 +1410,10 @@ def _draw_hud():
         ctx.fillText("%d home \u00b7 %d out" % (home, out),
                      x + hw * 0.9, ry + row_h * 0.68)
         ry += row_h + 3
+
+    # a way out of a round, drawn where it cannot cover the board
+    bx, by_, bw_, bh_ = BACK_RECT
+    _button(bx, by_, bw_, bh_, "\u2190 Menu", False, size=max(10, int(11 * k)))
 
     if message:
         _wrap(message, mid, ry + 12 * k, hw * 0.88,
