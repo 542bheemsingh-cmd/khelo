@@ -443,6 +443,9 @@ def snapshot():
         "winner": winner,
         "state": state,
         "names": {k: v for k, v in names.items()},
+        "teams": {str(k): v for k, v in teams.items()},
+        "design": design,
+        "player_count": player_count,
         "tokens": [[t["c"], t["i"], t["pos"]] for t in tokens],
     })
 
@@ -466,6 +469,11 @@ def apply_net(js):
     state = d.get("state", state)
     if d.get("names"):
         names.update(d["names"])
+    global teams, design
+    if d.get("teams"):
+        teams = {int(k): int(v) for k, v in d["teams"].items()}
+    if d.get("design"):
+        design = d["design"]
 
     # rebuild the tokens where the host says they are
     want = d.get("tokens") or []
@@ -475,7 +483,9 @@ def apply_net(js):
         t = have.get((c, i))
         if t is None:
             t = {"c": c, "i": i, "pos": -1}
-        if t["pos"] != pos:
+        # a token that has never been placed has no x/y yet, so check for that
+        # too - otherwise anything still in the yard is never drawn
+        if t["pos"] != pos or "x" not in t or "y" not in t:
             t["pos"] = pos
             t["x"], t["y"] = token_xy(c, i, pos)
         fresh.append(t)
