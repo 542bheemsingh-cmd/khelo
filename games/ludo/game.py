@@ -527,10 +527,16 @@ def net_apply_action(js):
 
 
 def set_net_ludo(on, host, seat):
+    """A seat of -1 means "not decided yet", so the room's seat list wins."""
     global net_on, net_host, net_seat
     net_on = bool(on)
     net_host = bool(host)
-    net_seat = int(seat or 0)
+    try:
+        n = int(seat)
+    except Exception:
+        n = -1
+    if n >= 0:
+        net_seat = n
 
 
 def set_seats(js, my_id=""):
