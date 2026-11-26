@@ -453,6 +453,32 @@ game.set_size(10, 10)
 check("a silly size is ignored", game.BOARD > 100)
 game.set_size(900, 560)
 
+# --- the board shows where you can go ------------------------------------
+print()
+print("--- move hints ---")
+game.set_size(560, 1155)
+game.start_game("single", 4)
+game.dice = 6
+game._after_roll()
+check("a 6 offers at least one move", len(game.moves) > 0)
+
+game.state = "play"
+game.anims[:] = []          # an earlier test may have left one running
+kept = list(game.moves)
+CALLS.clear()
+game.draw()
+with_hints = sum(1 for c in CALLS if c[0] == "arc")
+
+# with nothing to move, the rings are gone
+game.moves = []
+CALLS.clear()
+game.draw()
+without = sum(1 for c in CALLS if c[0] == "arc")
+check("the board draws a ring for each move", with_hints > without)
+check("no hints when there is nothing to move", with_hints - without >= 2)
+
+game.moves = kept
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
