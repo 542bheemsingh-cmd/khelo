@@ -273,3 +273,8 @@ html.fs-on #hud { border-radius: 0; }
   text-shadow: 0 0 18px rgba(126, 240, 192, 0.35);
 }
 .is-hidden { display: none !important; }
+
+.mp-btn:disabled { opacity: 0.45; cursor: default; }
+.mp-code { cursor: pointer; user-select: none; }
+.mp-code:active { opacity: 0.7; }
+.mp-sep { height: 1px; background: rgba(150, 180, 240, 0.18); margin: 4px 0; }
