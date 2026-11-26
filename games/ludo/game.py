@@ -494,7 +494,8 @@ def rules_json():
     return json.dumps(RULES)
 
 
-STATS = {"games": 0, "wins": 0, "by_mode": {}}
+STATS = {"games": 0, "wins": 0, "streak": 0, "best": 0,
+         "captures": 0, "sixes": 0, "by_mode": {}}
 
 
 def _load_stats():
@@ -502,8 +503,8 @@ def _load_stats():
         v = js.localStorage.getItem("khelo_ludo_stats")
         if v:
             d = json.loads(v)
-            STATS["games"] = int(d.get("games", 0))
-            STATS["wins"] = int(d.get("wins", 0))
+            for k in ("games", "wins", "streak", "best", "captures", "sixes"):
+                STATS[k] = int(d.get(k, 0))
             STATS["by_mode"] = dict(d.get("by_mode", {}))
     except Exception:
         pass
@@ -532,7 +533,15 @@ def _bump_stats(won):
     STATS["games"] += 1
     if won:
         STATS["wins"] += 1
+        STATS["streak"] += 1
+        STATS["best"] = max(STATS["best"], STATS["streak"])
         STATS["by_mode"][rule_mode] = STATS["by_mode"].get(rule_mode, 0) + 1
+    else:
+        STATS["streak"] = 0
+    _save_stats()
+
+
+def _save_stats():
     try:
         js.localStorage.setItem("khelo_ludo_stats", json.dumps(STATS))
     except Exception:
@@ -889,6 +898,8 @@ def roll():
         return
     dice = _roll_face()
     _mark_rolled()
+    if dice == 6:
+        STATS["sixes"] += 1
     sixes_in_a_row = sixes_in_a_row + 1 if dice == 6 else 0
     rolling = ROLL_DUR
     roll_t = 0.0
@@ -1015,6 +1026,7 @@ def _finish_move(a):
                 _burst(h["x"], h["y"], PAL[h["c"]]["main"])
                 globals()["shake"] = 1.0
             captured_any[c] = captured_any.get(c, 0) + 1
+            STATS["captures"] += 1
             if RULES["capture_bonus"]:
                 extra = True
         if hits:
@@ -1111,10 +1123,12 @@ def tap(x, y):
                     state = "rules"
                 elif tag == "help":
                     state = "help"
+                elif tag == "stats":
+                    state = "stats"
                 return
         return
 
-    if state == "help":
+    if state in ("help", "stats"):
         for tag, r in _menu_hit:
             if _in(r, x, y):
                 _sound("click")
@@ -1459,7 +1473,49 @@ def _poly(x, y, r, n, rot=0.0):
 # ---------------------------------------------------------------------------
 # Drawing the board
 # ---------------------------------------------------------------------------
+_board_cache = None
+_board_key = None
+
+
+def _board_signature():
+    return (round(W, 1), round(H, 1), round(CELL, 3), round(BX, 2),
+            round(BY, 2), RULES.get("theme"), bool(RULES.get("high_contrast")),
+            int(DPR))
+
+
 def _draw_board():
+    """Paint the board into a cache once, then blit it every frame.
+
+    The board is the expensive part - a hundred rounded tiles, gradients and
+    outlines - and none of it moves. Re-drawing it 60 times a second was
+    costing far more than the frame budget.
+    """
+    global _board_cache, _board_key, ctx
+    sig = _board_signature()
+    if _board_cache is not None and _board_key == sig:
+        ctx.drawImage(_board_cache, 0, 0, W, H)
+        return
+    off = None
+    try:
+        off = js.newCanvas(int(round(W * DPR)), int(round(H * DPR)))
+    except Exception:
+        off = None
+    if off is None:
+        _draw_board_live()
+        return
+    real = ctx
+    ctx = _Ctx(off.getContext("2d"))
+    ctx.scale(DPR, DPR)
+    try:
+        _draw_board_live()
+    finally:
+        ctx = real
+    _board_cache = off
+    _board_key = sig
+    ctx.drawImage(off, 0, 0, W, H)
+
+
+def _draw_board_live():
     _panel(BX - 12, BY - 12, BOARD + 24, BOARD + 24,
            "rgba(9, 15, 32, 0.95)", "rgba(150, 180, 240, 0.18)", 16)
 
@@ -1956,11 +2012,22 @@ def _die_face(cx, cy, s, n):
         ctx.fill()
 
 
+_die_painted = None       # which face is already sitting in the 3d canvas
+
+
 def _blit_dice3d(x, y, w, h):
-    """Draw the three.js die onto the board. False if it is not available."""
+    """Draw the three.js die onto the board. False if it is not available.
+
+    Rendering the 3D die is the single most expensive thing in a frame, and a
+    die that has come to rest looks the same every time - so only ask three.js
+    for a new picture while it is actually moving.
+    """
+    global _die_painted
     try:
-        # roll_t runs 0..1 during the roll and rests at 1 when settled
-        js.dice3d.frame(float(roll_t), int(dice))
+        moving = rolling > 0
+        if moving or _die_painted != dice:
+            js.dice3d.frame(float(roll_t), int(dice))
+            _die_painted = None if moving else dice
         ctx.drawImage(js.dice3d.canvas, x, y, w, h)
         return True
     except Exception:
@@ -2197,6 +2264,8 @@ def _draw_mode():
 
     _button(pad, pad, 96, 36, "\u2190 Games", size=13)
     _menu_hit.append(("games", (pad, pad, 96, 36)))
+    _button(W - pad - 76, pad, 76, 36, "Stats", size=12)
+    _menu_hit.append(("stats", (W - pad - 76, pad, 76, 36)))
 
     _title("KHELO LUDO", 78 if narrow else 74, 28 if narrow else 40)
     _wrap("Pick a way to play - every card is a different rule set.",
@@ -2280,6 +2349,77 @@ def _draw_mode():
         won = STATS["wins"]
         _wrap("%d games played \u00b7 %d won" % (STATS["games"], won),
               W / 2, py + 116, min(400, W - 30), 11, "#6f82a8")
+
+
+def _draw_stats():
+    global _menu_hit
+    _menu_hit = []
+    _bg()
+    pad = 14.0
+    narrow = W < 520
+    _button(pad, pad, 96, 36, "\u2190 Back", size=13)
+    _menu_hit.append(("back", (pad, pad, 96, 36)))
+    _title("YOUR RECORD", 76 if narrow else 72, 24 if narrow else 32)
+
+    played = STATS["games"]
+    won = STATS["wins"]
+    rate = int(round(100.0 * won / played)) if played else 0
+    tiles = [
+        ("Games", str(played), "#4aa8ff"),
+        ("Won", str(won), "#22c55e"),
+        ("Win rate", "%d%%" % rate, "#fbbf24"),
+        ("Streak", str(STATS["streak"]), "#ff3b5c"),
+        ("Best streak", str(STATS["best"]), "#a855f7"),
+        ("Captures", str(STATS["captures"]), "#ff8a3d"),
+        ("Sixes", str(STATS["sixes"]), "#7fd1ff"),
+    ]
+
+    gap = max(10.0, W * 0.022)
+    cols = 2 if narrow else 3
+    tw = (W - 2 * pad - (cols - 1) * gap) / cols
+    th = min(84.0, tw * 0.55)
+    top = 104.0
+    k = min(1.0, tw / 200.0)
+    for i, (label, value, col) in enumerate(tiles):
+        x = pad + (i % cols) * (tw + gap)
+        y = top + (i // cols) * (th + gap)
+        _panel(x, y, tw, th, "rgba(20, 30, 56, 0.9)", "rgba(150,180,240,0.16)", 12)
+        ctx.textAlign = "left"
+        ctx.fillStyle = "#8fa3c9"
+        ctx.font = "700 %dpx %s" % (max(9, int(11 * k)), FONT)
+        ctx.fillText(label.upper(), x + 12, y + th * 0.30)
+        ctx.fillStyle = col
+        ctx.font = "800 %dpx %s" % (max(18, int(30 * k)), FONT)
+        ctx.fillText(value, x + 12, y + th * 0.74)
+
+    # wins per mode
+    rows = int(math.ceil(len(tiles) / float(cols)))
+    my = top + rows * (th + gap) + 16
+    _wrap("Wins by mode", W / 2, my, min(400, W - 30), 12, "#8fa3c9")
+    my += 16
+    if STATS["by_mode"]:
+        for m in MODES:
+            n = STATS["by_mode"].get(m, 0)
+            if not n:
+                continue
+            _panel(pad, my, W - 2 * pad, 30, "rgba(20, 30, 56, 0.7)",
+                   "rgba(150,180,240,0.10)", 9)
+            ctx.textAlign = "left"
+            ctx.fillStyle = "#dbe6fb"
+            ctx.font = "700 12px %s" % FONT
+            ctx.fillText(MODE_LABEL[m], pad + 12, my + 20)
+            ctx.textAlign = "right"
+            ctx.fillStyle = "#ffd23f"
+            ctx.font = "800 12px %s" % FONT
+            ctx.fillText(str(n), W - pad - 12, my + 20)
+            my += 34
+    else:
+        _wrap("No finished games yet.", W / 2, my + 10, W - 30, 11, "#6f82a8")
+
+    _button(W / 2 - min(110.0, W * 0.3), H - 50, min(220.0, W * 0.6), 40,
+            "Back", True, size=14)
+    _menu_hit.append(("back", (W / 2 - min(110.0, W * 0.3), H - 50,
+                               min(220.0, W * 0.6), 40)))
 
 
 HELP_ROWS = [
@@ -2645,6 +2785,9 @@ def draw():
         return
     if state == "help":
         _draw_help()
+        return
+    if state == "stats":
+        _draw_stats()
         return
 
     _bg()
