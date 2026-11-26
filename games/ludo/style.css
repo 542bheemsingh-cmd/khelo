@@ -252,3 +252,17 @@ html.fs-on #game { border-radius: 10px; }
   text-align: center; padding: 10px 0 12px; color: #7ef0c0; cursor: pointer; }
 .mp-sep { height: 1px; background: rgba(150, 180, 240, 0.18); margin: 4px 0; }
 .ctrl-text { font-size: 12px; font-weight: 800; }
+
+/* who is in the room */
+.mp-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; }
+.mp-list:empty { display: none; }
+.mp-who { display: flex; align-items: center; gap: 9px; padding: 8px 11px;
+  border-radius: 10px; background: rgba(20, 30, 56, 0.75);
+  border: 1px solid rgba(150, 180, 240, 0.16); font-size: 14px; color: #eaf2ff; }
+.mp-who .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+.mp-who .who-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.mp-who .who-tag { font-size: 11px; font-weight: 800; letter-spacing: .04em;
+  color: #8fa3c9; text-transform: uppercase; }
+.mp-who.is-me { border-color: rgba(255, 183, 3, 0.55); }
+.mp-who.is-host .who-tag { color: #ffb703; }
