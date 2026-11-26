@@ -268,8 +268,9 @@
       return MP;
     }
     window.netMe = function () { return MP ? MP.me() : ""; };
-    // the host listens for guest actions
+    // a guest's tap goes to the host over Firebase; the host applies it itself
     window.netAction = function (payload) {
+      if (MP && mpLive && !mpHost) { MP.sendAction(payload); return; }
       if (netActionFn) netActionFn(payload);
     };
 
@@ -333,6 +334,11 @@
               startBtn.textContent = "Start " + Math.min(4, joined) + " players";
             }
           });
+
+          if (mpHost) {
+            // the host applies whatever the guests ask for
+            M.watchActions(function (payload) { netActionFn(payload); });
+          }
 
           M.watchMeta(function (m) {
             if (!m) return;
