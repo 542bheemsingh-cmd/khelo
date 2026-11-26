@@ -1229,7 +1229,7 @@ def update(dt):
                             pass
                         hit = True
                         break
-        if s["owner"] == "p" and not hit:
+        if s["owner"] == "p":
             for b in bots:
                 if b["alive"] and math.hypot(b["x"] - s["x"], b["z"] - s["z"]) < 6.0:
                     b["hp"] -= s["dmg"]
@@ -1386,6 +1386,7 @@ def set_mp(on):
 
 def net_damage(dmg):
     """Damage somebody else reported hitting us."""
+    global shake, hurt_dir
     p = player
     if not p.get("alive") or state != "play":
         return
