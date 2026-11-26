@@ -326,6 +326,8 @@ net_seat = -1
 net_seats = {}
 
 ROLL_DUR = 2.0          # the die takes its time
+AUTO_MOVE_AFTER = 0.55  # a beat after the die lands, if there is only one move
+auto_move_t = 0.0
 
 # The die is not fair. A 6 is twice as likely as a plain number, 1 and 4 are a
 # little likelier than the rest, and 2, 3 and 5 share what is left equally:
@@ -353,6 +355,7 @@ def _sound(name):
 def start_game(m=None, count=None):
     global state, mode, player_count, players, teams, turn, tokens
     global dice, dice_show, moves, can_roll, message, winner, rolling, roll_t
+    global auto_move_t
     if m is not None:
         mode = m
     if count is not None:
@@ -376,6 +379,7 @@ def start_game(m=None, count=None):
     dice = dice_show = 6
     rolling = 0.0
     roll_t = 1.0
+    auto_move_t = 0.0
     moves = []
     anims[:] = []
     can_roll = True
@@ -636,8 +640,14 @@ def _after_roll():
         _pass_turn()
         return
     can_roll = False
-    message = "%s rolled %d - tap a token." % (names[c], dice)
+    if len(moves) == 1:
+        message = "%s rolled %d." % (names[c], dice)
+    else:
+        message = "%s rolled %d - tap a token." % (names[c], dice)
     _sound("click")
+    # with a single legal move there is nothing to choose, so just play it
+    if len(moves) == 1 and (not net_on or net_host):
+        globals()["auto_move_t"] = AUTO_MOVE_AFTER
 
 
 def _pass_turn():
@@ -671,6 +681,7 @@ def _captures_at(cell, moving_color):
 
 
 def _choose(t, target):
+    globals()["auto_move_t"] = 0.0
     global moves
     if anims:
         return
@@ -902,7 +913,7 @@ def _stack_offsets():
 
 
 def update(dt):
-    global rolling, roll_t, _t, dice_show, message, can_roll
+    global rolling, roll_t, _t, dice_show, message, can_roll, auto_move_t
     dt = min(max(float(dt), 0.0), 0.05)
     _t += dt
 
@@ -919,6 +930,12 @@ def update(dt):
         if p["y"] > H + 20:
             p["y"] = -20
             p["x"] = _rng.uniform(0, W)
+
+    if auto_move_t > 0:
+        auto_move_t = max(0.0, auto_move_t - dt)
+        if auto_move_t <= 0 and len(moves) == 1 and not anims:
+            t0, target0 = moves[0]
+            _choose(t0, target0)
 
     if rolling > 0:
         rolling -= dt
