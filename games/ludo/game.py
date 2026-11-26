@@ -1388,7 +1388,8 @@ def _draw_hud():
     ctx.textAlign = "center"
     ctx.fillStyle = "#8fa3c9"
     ctx.font = "800 %dpx %s" % (max(9, int(11 * k)), FONT)
-    ctx.fillText("TURN", mid, y0 + 22)
+    mine = (not net_on) or my_turn()
+    ctx.fillText("YOUR TURN" if (net_on and mine) else "TURN", mid, y0 + 22)
     if c is not None:
         ctx.fillStyle = PAL[c]["main"]
         ctx.font = "800 %dpx %s" % (max(16, int(24 * k)), FONT)
@@ -1402,9 +1403,11 @@ def _draw_hud():
     _draw_die()
 
     if state == "play":
-        ready = can_roll and rolling <= 0 and not anims
+        ready = can_roll and rolling <= 0 and not anims and mine
         if ready:
             label = "ROLL"
+        elif not mine:
+            label = names[cur()] + "'s turn"
         elif rolling > 0 or not moves:
             label = "\u2026"
         else:
