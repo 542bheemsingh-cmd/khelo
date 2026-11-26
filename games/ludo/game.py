@@ -317,6 +317,7 @@ RULES = {
     "high_contrast": False, # heavier outlines, brighter text
     "theme": "classic",     # classic | night | mint
     "turn_timer": 0,        # 0 = off, otherwise seconds before it rolls for you
+    "haptics": True,        # a short buzz on the moments that matter
 }
 
 MODES = {
@@ -343,6 +344,7 @@ MODE_NOTE = {
 sixes_in_a_row = 0        # a third six voids the turn
 rule_mode = "classic"     # which preset the mode screen has chosen
 _rules_loaded = False
+seen_roll = False         # has this player ever rolled? drives the first hint
 captured_any = {}         # colour -> how many it has captured
 mode = "single"           # single | team
 player_count = 4
@@ -400,11 +402,20 @@ DICE_PCT = {
 }
 
 
+HAPTIC = {"click": 8, "dice": 18, "capture": 40, "home": 26, "win": 60,
+          "deny": 14, "turn": 16, "start": 20}
+
+
 def _sound(name):
     try:
         js.playSound(name)
     except Exception:
         pass
+    if RULES.get("haptics"):
+        try:
+            js.vibrate(int(HAPTIC.get(name, 10)))
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +509,25 @@ def _load_stats():
         pass
 
 
+def _mark_rolled():
+    global seen_roll
+    if seen_roll:
+        return
+    seen_roll = True
+    try:
+        js.localStorage.setItem("khelo_ludo_rolled", "1")
+    except Exception:
+        pass
+
+
+def _load_seen():
+    global seen_roll
+    try:
+        seen_roll = js.localStorage.getItem("khelo_ludo_rolled") == "1"
+    except Exception:
+        seen_roll = False
+
+
 def _bump_stats(won):
     STATS["games"] += 1
     if won:
@@ -576,7 +606,7 @@ def apply_mode(m):
         "safe_squares": True, "blocks": False, "kill_to_enter": False,
         "capture_forced": False, "tokens": 4, "first_home_wins": False,
         "marks": True, "reduced_motion": False, "high_contrast": False,
-        "theme": "classic", "turn_timer": 0,
+        "theme": "classic", "turn_timer": 0, "haptics": True,
     }
     RULES.update(MODES[m])
 
@@ -858,6 +888,7 @@ def roll():
     if state != "play" or anims or rolling > 0 or not can_roll:
         return
     dice = _roll_face()
+    _mark_rolled()
     sixes_in_a_row = sixes_in_a_row + 1 if dice == 6 else 0
     rolling = ROLL_DUR
     roll_t = 0.0
@@ -920,6 +951,8 @@ def _pass_turn():
     moves = []
     can_roll = True
     message = "%s to roll." % names[cur()]
+    if net_on and my_turn():
+        _sound("turn")
 
 
 def _captures_at(cell, moving_color):
@@ -1076,6 +1109,16 @@ def tap(x, y):
                     start_game()
                 elif tag == "custom":
                     state = "rules"
+                elif tag == "help":
+                    state = "help"
+                return
+        return
+
+    if state == "help":
+        for tag, r in _menu_hit:
+            if _in(r, x, y):
+                _sound("click")
+                state = "mode"
                 return
         return
 
@@ -2100,6 +2143,21 @@ def _draw_hud():
                      x + hw * 0.9, ry + row_h * 0.68)
         ry += row_h + 3
 
+    # first time through: point at the one thing to do
+    if state == "play" and can_roll and rolling <= 0 and not seen_roll and mine:
+        gl = 0.5 + 0.5 * math.sin(_t * 3.4)
+        ctx.textAlign = "center"
+        ctx.fillStyle = "rgba(255, 210, 63, %.2f)" % (0.65 + gl * 0.35)
+        ctx.font = "800 %dpx %s" % (max(10, int(12 * k)), FONT)
+        ctx.fillText("tap to roll \u2193", mid, ROLL_RECT[1] - 10 * k)
+        ctx.beginPath()
+        ctx.arc(ROLL_RECT[0] + ROLL_RECT[2] / 2,
+                ROLL_RECT[1] + ROLL_RECT[3] / 2,
+                ROLL_RECT[2] * (0.54 + gl * 0.03), 0, 6.2832)
+        ctx.lineWidth = max(2.0, 3.0 * k)
+        ctx.strokeStyle = "rgba(255, 210, 63, %.2f)" % (0.30 + gl * 0.30)
+        ctx.stroke()
+
     # a way out of a round, drawn where it cannot cover the board
     bx, by_, bw_, bh_ = BACK_RECT
     _button(bx, by_, bw_, bh_, "\u2190 Menu", False, size=max(10, int(11 * k)))
@@ -2131,6 +2189,7 @@ def _draw_mode():
     if not _rules_loaded:
         load_rules()
         _load_stats()
+        _load_seen()
     _menu_hit = []
     _bg()
     pad = 14.0
@@ -2211,14 +2270,118 @@ def _draw_mode():
             "Play", True, tint[rule_mode], size=18)
     _menu_hit.append(("play", (W / 2 - min(120.0, W * 0.32), py,
                                min(240.0, W * 0.64), 50)))
-    dw = min(220.0, W - 2 * pad)
-    _button(W / 2 - dw / 2, py + 58, dw, 40, "Custom rules", False, size=13)
-    _menu_hit.append(("custom", (W / 2 - dw / 2, py + 58, dw, 40)))
+    dw = min(170.0, (W - 3 * pad) / 2.0)
+    _button(W / 2 - dw - 5, py + 58, dw, 40, "Custom rules", False, size=13)
+    _menu_hit.append(("custom", (W / 2 - dw - 5, py + 58, dw, 40)))
+    _button(W / 2 + 5, py + 58, dw, 40, "How to play", False, size=13)
+    _menu_hit.append(("help", (W / 2 + 5, py + 58, dw, 40)))
 
     if STATS["games"]:
         won = STATS["wins"]
         _wrap("%d games played \u00b7 %d won" % (STATS["games"], won),
               W / 2, py + 116, min(400, W - 30), 11, "#6f82a8")
+
+
+HELP_ROWS = [
+    ("die6", "Roll a 6 to bring a token out"),
+    ("hit", "Land on an opponent and it goes back home"),
+    ("star", "A star square is safe - nobody can be taken there"),
+    ("again", "A 6, a capture or a home run earns another roll"),
+    ("ring", "A pulsing ring shows where a token can go"),
+    ("home", "Get every token to the centre to win"),
+]
+
+
+def _help_icon(kind, cx, cy, r):
+    if kind == "die6":
+        _rrect(cx - r, cy - r, r * 2, r * 2, r * 0.28)
+        ctx.fillStyle = "#f2f6ff"
+        ctx.fill()
+        for dx in (-0.45, 0.45):
+            for dy in (-0.45, 0.0, 0.45):
+                ctx.beginPath()
+                ctx.arc(cx + dx * r, cy + dy * r, r * 0.13, 0, 6.2832)
+                ctx.fillStyle = "#22304d"
+                ctx.fill()
+    elif kind == "hit":
+        ctx.beginPath()
+        ctx.arc(cx - r * 0.35, cy, r * 0.42, 0, 6.2832)
+        ctx.fillStyle = PAL[RED]["main"]
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(cx + r * 0.45, cy, r * 0.42, 0, 6.2832)
+        ctx.fillStyle = PAL[YELLOW]["main"]
+        ctx.fill()
+        ctx.beginPath()
+        ctx.moveTo(cx + r * 0.02, cy - r * 0.30)
+        ctx.lineTo(cx + r * 0.30, cy)
+        ctx.lineTo(cx + r * 0.02, cy + r * 0.30)
+        ctx.lineWidth = max(1.6, r * 0.16)
+        ctx.strokeStyle = "#ffffff"
+        ctx.lineCap = "round"
+        ctx.stroke()
+    elif kind == "star":
+        _star(cx, cy, r * 0.80, "#e8eefc")
+    elif kind == "again":
+        ctx.beginPath()
+        ctx.arc(cx, cy, r * 0.72, 0.5, 5.4)
+        ctx.lineWidth = max(2.0, r * 0.22)
+        ctx.strokeStyle = "#7fd1ff"
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx + r * 0.58, cy - r * 0.62)
+        ctx.lineTo(cx + r * 0.86, cy - r * 0.10)
+        ctx.lineTo(cx + r * 0.26, cy - r * 0.12)
+        ctx.closePath()
+        ctx.fillStyle = "#7fd1ff"
+        ctx.fill()
+    elif kind == "ring":
+        ctx.beginPath()
+        ctx.arc(cx, cy, r * 0.62, 0, 6.2832)
+        ctx.lineWidth = max(2.0, r * 0.20)
+        ctx.strokeStyle = "rgba(255,255,255,0.85)"
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(cx, cy, r * 0.26, 0, 6.2832)
+        ctx.fillStyle = PAL[GREEN]["main"]
+        ctx.fill()
+    else:
+        cx0, cy0 = cx - r, cy - r
+        ctx.beginPath()
+        ctx.moveTo(cx0, cy0)
+        ctx.lineTo(cx0 + r * 2, cy0)
+        ctx.lineTo(cx, cy + r)
+        ctx.closePath()
+        ctx.fillStyle = PAL[RED]["main"]
+        ctx.fill()
+
+
+def _draw_help():
+    global _menu_hit
+    _menu_hit = []
+    _bg()
+    pad = 14.0
+    narrow = W < 520
+    _button(pad, pad, 96, 36, "\u2190 Back", size=13)
+    _menu_hit.append(("back", (pad, pad, 96, 36)))
+    _title("HOW TO PLAY", 76 if narrow else 72, 24 if narrow else 32)
+    _wrap("Six things, and you can play.", W / 2, 98, min(640, W - 30), 12)
+
+    top = 122.0
+    bottom = H - 62
+    row_h = max(34.0, min(64.0, (bottom - top) / len(HELP_ROWS)))
+    for i, (kind, text) in enumerate(HELP_ROWS):
+        y = top + i * row_h
+        _panel(pad, y + 2, W - 2 * pad, row_h - 4,
+               "rgba(20, 30, 56, 0.82)", "rgba(150,180,240,0.12)", 10)
+        _help_icon(kind, pad + 30, y + row_h / 2, row_h * 0.26)
+        _wrap(text, pad + 56, y + row_h * 0.58, W - 2 * pad - 70,
+              max(10, int(min(13, row_h * 0.26))), "#dbe6fb", center=False)
+
+    _button(W / 2 - min(110.0, W * 0.3), H - 50, min(220.0, W * 0.6), 40,
+            "Got it", True, size=14)
+    _menu_hit.append(("back", (W / 2 - min(110.0, W * 0.3), H - 50,
+                               min(220.0, W * 0.6), 40)))
 
 
 DIALS = [
@@ -2239,6 +2402,7 @@ DIALS = [
     ("high_contrast", "High contrast", "On", "Off"),
     ("theme", "Board style", None, None),
     ("turn_timer", "Turn timer", "Off", "30 seconds"),
+    ("haptics", "Vibration", "On", "Off"),
 ]
 
 
@@ -2478,6 +2642,9 @@ def draw():
         return
     if state == "rules":
         _draw_rules()
+        return
+    if state == "help":
+        _draw_help()
         return
 
     _bg()
