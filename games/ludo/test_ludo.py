@@ -35,6 +35,7 @@ js.playSound = lambda n: CALLS.append(("sound", n))
 sys.modules["js"] = js
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import json  # noqa: E402
 import game  # noqa: E402
 
 fails = []
@@ -569,6 +570,63 @@ game.state = "over"
 game.draw()
 tap_tag("menu")
 check("Main menu returns to the mode screen", game.state == "mode")
+
+# --- only the player whose turn it is can act -----------------------------
+print()
+print("--- whose turn ---")
+game.start_game("single", 3)
+game.set_net_ludo(True, True, 0)          # we are the host, seat 0
+game.turn = 0
+check("seat 0 acts on turn 0", game.my_turn())
+game.turn = 1
+check("seat 0 does not act on turn 1", not game.my_turn())
+game.turn = 2
+check("seat 0 does not act on turn 2", not game.my_turn())
+
+game.set_net_ludo(True, False, 2)         # a guest in seat 2
+game.turn = 2
+check("seat 2 acts on turn 2", game.my_turn())
+game.turn = 0
+check("seat 2 does not act on turn 0", not game.my_turn())
+
+game.set_net_ludo(False, True, 0)
+check("with no room, it is always your turn", game.my_turn())
+
+# a guest asking out of turn is ignored by the host
+game.set_net_ludo(True, True, 0)
+game.set_seats(json.dumps({"ME": 0, "FRIEND": 1}), "ME")
+game.start_game("single", 2)
+game.turn = 0
+before = game.turn
+game.net_apply_action(json.dumps({"a": "roll", "from": "FRIEND"}))
+check("an out-of-turn roll is refused", game.turn == before and not game.rolling > 0)
+
+game.turn = 1
+game.can_roll = True
+game.net_apply_action(json.dumps({"a": "roll", "from": "FRIEND"}))
+check("the right player's roll goes through", game.rolling > 0 or not game.can_roll)
+
+# an action with no sender at all is refused
+game.start_game("single", 2)
+game.turn = 0
+game.can_roll = True
+game.rolling = 0.0
+game.net_apply_action(json.dumps({"a": "roll"}))
+check("a roll from nobody is refused", game.rolling == 0.0 and game.can_roll)
+
+# the host's own tap does nothing out of turn
+game.set_net_ludo(True, True, 0)
+game.start_game("single", 2)
+game.turn = 1
+game.can_roll = True
+game.rolling = 0.0
+centre(game.ROLL_RECT)
+check("the host cannot roll for the other player", game.rolling == 0.0)
+
+game.turn = 0
+centre(game.ROLL_RECT)
+check("the host can roll on its own turn", game.rolling > 0 or not game.can_roll)
+game.set_net_ludo(False, True, 0)
 
 # --- screen-adaptive UI -----------------------------------------------------
 print()
