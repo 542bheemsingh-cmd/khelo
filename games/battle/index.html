@@ -26,7 +26,7 @@
       <button id="mute" class="ctrl" type="button" aria-pressed="false" title="Toggle sound" aria-label="Toggle sound">
         <span id="mute-icon" aria-hidden="true">&#128266;</span>
       </button>
-      <button id="mp-open" class="ctrl" type="button" title="Play with friends" aria-label="Play with friends">&#128101;</button>
+      <button id="mp-open" class="ctrl ctrl-text" type="button" title="Play with friends" aria-label="Play with friends">MP</button>
       <button id="fs" class="ctrl" type="button" aria-pressed="false" title="Full screen" aria-label="Full screen">&#9974;</button>
     </div>
 
@@ -1197,6 +1197,7 @@
        ================================================================== */
     let tapFn = null, primaryFn = null, moveFn = null, lookFn = null, fireFn = null,
         stickFn = null, drawFn = null, updateFn = null, sendFn = null, sizeFn = null,
+        startFn = null, setNetFn = null, setMpFn = null, netDmgFn = null,
         sprintFn = null, crouchFn = null, reloadFn = null, swapFn = null, pauseFn = null,
         pyodide = null, running = false, playing = false, crouchOn = false;
 
