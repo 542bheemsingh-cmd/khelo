@@ -628,6 +628,50 @@ centre(game.ROLL_RECT)
 check("the host can roll on its own turn", game.rolling > 0 or not game.can_roll)
 game.set_net_ludo(False, True, 0)
 
+# --- a guest ends up with exactly the host's board -----------------------
+print()
+print("--- host and guest agree ---")
+game.set_size(560, 1155)
+game.start_game("team", 4)
+game.set_design("hex")
+game.dice = 4
+game._after_roll()
+for _ in range(30):
+    game.update(1 / 60)
+
+host = {
+    "mode": game.mode, "players": list(game.players), "turn": game.turn,
+    "dice": game.dice, "moves": len(game.moves), "can_roll": game.can_roll,
+    "state": game.state, "design": game.design, "teams": dict(game.teams),
+    "tokens": [(t["c"], t["i"], t["pos"]) for t in game.tokens],
+}
+snap = game.snapshot()
+
+# wipe the slate and adopt the host's board, like a guest would
+game.start_game("single", 2)
+game.set_design("ball")
+game.apply_net(snap)
+
+check("the guest gets the same mode", game.mode == host["mode"])
+check("the guest gets the same colours", list(game.players) == host["players"])
+check("the guest gets the same turn", game.turn == host["turn"])
+check("the guest gets the same dice", game.dice == host["dice"])
+check("the guest gets the same number of moves", len(game.moves) == host["moves"])
+check("the guest gets the same roll state", game.can_roll == host["can_roll"])
+check("the guest gets the same screen", game.state == host["state"])
+check("the guest gets the same token design", game.design == host["design"])
+check("the guest gets the same teams", dict(game.teams) == host["teams"])
+check("the guest gets every token in the same place",
+      [(t["c"], t["i"], t["pos"]) for t in game.tokens] == host["tokens"])
+check("the guest's tokens sit on the board where they should",
+      all(abs(t["x"] - game.token_xy(t["c"], t["i"], t["pos"])[0]) < 0.01
+          for t in game.tokens))
+
+# a broken snapshot must not break the guest
+before_state = game.state
+game.apply_net("not json at all")
+check("a broken snapshot is ignored", game.state == before_state)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
