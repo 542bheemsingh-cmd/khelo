@@ -55,8 +55,14 @@ MIN_TOUCH = 0.0   # logical pixels that land on 48 CSS pixels
 
 
 def set_size(w, h):
-    """The page tells us how much room there is; the board takes as much as it can."""
-    global W, H, CELL, BX, BY, BOARD, HUD_X, DIE_RECT, ROLL_RECT
+    """Lay the board out for the screen we actually have.
+
+    Landscape: board on the left, panel on the right.
+    Portrait:  board across the top, panel underneath. A phone held upright
+               is mostly height, so a side panel would squeeze the board flat.
+    """
+    global W, H, CELL, BX, BY, BOARD, HUD_X, HUD_Y, HUD_W, HUD_H
+    global DIE_RECT, ROLL_RECT
     try:
         nw, nh = float(w), float(h)
     except Exception:
@@ -64,24 +70,38 @@ def set_size(w, h):
     if nw < 200 or nh < 200:
         return
     W, H = nw, nh
-    pad = max(8.0, H * 0.018)
-    # the side panel is drawn 322 wide, so leave exactly that much room
-    hud_w = 338.0
-    board = min(H - 2 * pad, W - hud_w - 3 * pad)
-    board = max(180.0, board)
+    pad = max(8.0, min(nw, nh) * 0.022)
+
+    if nh >= nw * 1.08:
+        # portrait
+        board = min(nw - 2 * pad, nh * 0.58)
+        board = max(180.0, board)
+        BX = (nw - board) / 2.0
+        BY = pad
+        HUD_X = pad
+        HUD_Y = BY + board + pad
+        HUD_W = nw - 2 * pad
+        HUD_H = nh - HUD_Y - pad
+    else:
+        # landscape
+        board = min(nh - 2 * pad, nw - 338.0 - 3 * pad)
+        board = max(180.0, board)
+        BX = pad
+        BY = (nh - board) / 2.0
+        HUD_X = BX + board + pad
+        HUD_Y = BY - pad * 1.2
+        HUD_W = 322.0 + pad * 2.0
+        HUD_H = board + pad * 2.4
+
     CELL = board / 15.0
     BOARD = board
-    BX = pad
-    BY = (H - board) / 2.0
-    HUD_X = BX + board + pad
 
-    die = min(hud_w - 28.0, H * 0.30)
-    die = max(70.0, die)
-    dx = HUD_X + (hud_w - die) / 2.0
-    dy = BY + H * 0.11
+    die = max(64.0, min(HUD_W * 0.42, HUD_H * 0.27))
+    dx = HUD_X + (HUD_W - die) / 2.0
+    dy = HUD_Y + max(96.0, HUD_H * 0.19)
     DIE_RECT = (dx, dy, die, die)
-    ROLL_RECT = (HUD_X + 14.0, dy + die + max(14.0, H * 0.035),
-                 hud_w - 28.0, max(40.0, H * 0.085))
+    ROLL_RECT = (HUD_X + HUD_W * 0.07, dy + die + HUD_H * 0.045,
+                 HUD_W * 0.86, max(38.0, min(52.0, HUD_H * 0.085)))
 
 
 def set_ui(scale):
@@ -687,7 +707,8 @@ def _burst(x, y, col):
 # ---------------------------------------------------------------------------
 # HUD rects - the drawing and the tap handling both read these, so a button can
 # never be drawn somewhere the finger cannot reach.
-HUD_X = 552
+HUD_X, HUD_Y = 552, 20
+HUD_W, HUD_H = 322, 519
 DIE_RECT = (HUD_X + 85, BY + 74, 152, 152)
 ROLL_RECT = (HUD_X + 76, BY + 262, 170, 44)
 
@@ -1288,60 +1309,72 @@ def _draw_die():
 # HUD panel
 # ---------------------------------------------------------------------------
 def _draw_hud():
-    x = HUD_X
-    _panel(x, BY - 12, 322, BOARD + 24, "rgba(11, 18, 38, 0.92)",
+    x, y0, hw, hh = HUD_X, HUD_Y, HUD_W, HUD_H
+    _panel(x, y0, hw, hh, "rgba(11, 18, 38, 0.92)",
            "rgba(150, 180, 240, 0.20)", 16)
+
+    k = min(1.30, hw / 322.0)            # scale the type, but never blow it up
+    mid = x + hw / 2.0
 
     c = cur() if state == "play" else None
     ctx.textAlign = "center"
     ctx.fillStyle = "#8fa3c9"
-    ctx.font = "800 11px %s" % FONT
-    ctx.fillText("TURN", x + 161, BY + 12)
+    ctx.font = "800 %dpx %s" % (max(9, int(11 * k)), FONT)
+    ctx.fillText("TURN", mid, y0 + 22)
     if c is not None:
         ctx.fillStyle = PAL[c]["main"]
-        ctx.font = "800 24px %s" % FONT
-        ctx.fillText(names[c], x + 161, BY + 40)
+        ctx.font = "800 %dpx %s" % (max(16, int(24 * k)), FONT)
+        ctx.fillText(names[c], mid, y0 + 52)
         if mode == "team" and teams:
             ctx.fillStyle = "#8fa3c9"
-            ctx.font = "700 12px %s" % FONT
-            ctx.fillText("Team A" if teams.get(c, 0) == 0 else "Team B", x + 161, BY + 58)
+            ctx.font = "700 %dpx %s" % (max(9, int(12 * k)), FONT)
+            ctx.fillText("Team A" if teams.get(c, 0) == 0 else "Team B",
+                         mid, y0 + 72)
 
     _draw_die()
 
     if state == "play":
         ready = can_roll and rolling <= 0 and not anims
         _button(*ROLL_RECT[:2], ROLL_RECT[2], ROLL_RECT[3],
-                "ROLL" if ready else "\u2026", ready, PAL[c]["main"], size=17)
+                "ROLL" if ready else "\u2026", ready, PAL[c]["main"],
+                size=max(13, int(17 * k)))
         if not ready and rolling <= 0 and not anims and moves:
-            _wrap("tap a token", x + 161, BY + 322, 260, 12, "#8fa3c9")
+            _wrap("tap a token", mid, ROLL_RECT[1] + ROLL_RECT[3] + 16 * k,
+                  hw * 0.8, max(9, int(12 * k)), "#8fa3c9")
 
-    y = BY + 344
+    # one row per player, filling whatever room is left above the message
+    ry = ROLL_RECT[1] + ROLL_RECT[3] + hh * 0.075
+    foot = hh * 0.11 if message else hh * 0.04
+    room = (y0 + hh - foot) - ry
+    row_h = max(20.0, min(30.0 * k, room / max(1, len(players)) - 3))
     for i, col in enumerate(players):
         active = (state == "play" and i == turn % len(players))
-        _panel(x + 18, y, 286, 30,
+        _panel(x + hw * 0.055, ry, hw * 0.89, row_h,
                PAL[col]["soft"] if active else "rgba(20, 30, 56, 0.6)",
                PAL[col]["main"] if active else "rgba(150,180,240,0.14)", 9)
         ctx.beginPath()
-        ctx.arc(x + 38, y + 15, 8, 0, 6.2832)
+        ctx.arc(x + hw * 0.115, ry + row_h / 2, row_h * 0.27, 0, 6.2832)
         ctx.fillStyle = PAL[col]["main"]
         ctx.fill()
         ctx.textAlign = "left"
         ctx.fillStyle = "#eaf2ff"
-        ctx.font = "700 12px %s" % FONT
+        ctx.font = "700 %dpx %s" % (max(9, int(12 * k)), FONT)
         label = names[col]
         if mode == "team" and teams:
             label += "  (A)" if teams.get(col, 0) == 0 else "  (B)"
-        ctx.fillText(label, x + 56, y + 20)
+        ctx.fillText(label, x + hw * 0.175, ry + row_h * 0.68)
         home = sum(1 for t in my_tokens(col) if t["pos"] >= HOME_POS)
         out = sum(1 for t in my_tokens(col) if 0 <= t["pos"] < HOME_POS)
         ctx.textAlign = "right"
         ctx.fillStyle = "#9fb3d9"
-        ctx.font = "700 11px %s" % FONT
-        ctx.fillText("%d home \u00b7 %d out" % (home, out), x + 292, y + 20)
-        y += 33
+        ctx.font = "700 %dpx %s" % (max(8, int(11 * k)), FONT)
+        ctx.fillText("%d home \u00b7 %d out" % (home, out),
+                     x + hw * 0.9, ry + row_h * 0.68)
+        ry += row_h + 3
 
     if message:
-        _wrap(message, x + 161, y + 9, 286, 12, "#cfe0ff")
+        _wrap(message, mid, ry + 12 * k, hw * 0.88,
+              max(9, int(12 * k)), "#cfe0ff")
 
 
 # ---------------------------------------------------------------------------
