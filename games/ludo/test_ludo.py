@@ -736,6 +736,48 @@ game._after_roll()
 check("a guest never moves by itself", game.auto_move_t < 0)
 game.set_net_ludo(False, True, 0)
 
+# --- a player who leaves does not hold up the room ----------------------
+print()
+print("--- seats that emptied ---")
+game.set_net_ludo(True, True, 1)
+game.start_game("single", 2)
+game.set_present(json.dumps([1]))
+game.turn = 1
+game.dice = 3
+game._pass_turn()
+check("the dice skips a colour nobody is playing", game.turn == 1)
+
+game.set_present(json.dumps([0, 1]))
+game.turn = 0
+game._pass_turn()
+check("with everyone there the dice moves on", game.turn == 1)
+
+# three players, the middle one gone
+game.start_game("single", 3)
+game.set_present(json.dumps([0, 2]))
+game.turn = 0
+game.dice = 5
+game._pass_turn()
+check("a three player room skips the empty middle seat", game.turn == 2)
+
+# an empty list means "no idea", so nothing is skipped
+game.set_present(json.dumps([]))
+game.turn = 0
+game._pass_turn()
+check("an unknown room does not skip anybody", game.turn == 1)
+game.set_net_ludo(False, True, 0)
+
+# the dice sitting with somebody who left must move on by itself
+game.set_net_ludo(True, True, 1)
+game.start_game("single", 2)
+game.turn = 0
+game.can_roll = False
+game.set_present(json.dumps([1]))
+check("the dice leaves an empty seat straight away", game.turn == 1)
+check("and that seat is allowed to roll", game.can_roll and game.my_turn())
+
+game.set_net_ludo(False, True, 0)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
