@@ -1807,14 +1807,6 @@ def _draw_token(t, highlight=False, movable=False, label=True, rad=None):
     ctx.fill()
 
     SHAPES[design](x, y, r, p)
-    if RULES.get("marks"):
-        # a dark disc first, so the white mark reads on any colour
-        my = y + r * 0.04
-        ctx.beginPath()
-        ctx.arc(x, my, r * 0.46, 0, 6.2832)
-        ctx.fillStyle = "rgba(8, 12, 24, 0.55)"
-        ctx.fill()
-        _player_mark(x, my, r * 0.32, c, "#ffffff")
 
     if movable:
         ctx.beginPath()
