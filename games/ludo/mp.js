@@ -45,8 +45,14 @@ function randomId(n) {
 
 async function load() {
   if (db) return;
-  const appMod = await import(`${SDK}/firebase-app.js`);
-  const dbMod = await import(`${SDK}/firebase-database.js`);
+  let appMod, dbMod;
+  try {
+    appMod = await import(`${SDK}/firebase-app.js`);
+    dbMod = await import(`${SDK}/firebase-database.js`);
+  } catch (e) {
+    throw new Error("Firebase could not be loaded. Check your internet " +
+                    "connection, then try again.");
+  }
   const app = appMod.initializeApp(FIREBASE_CONFIG);
   db = dbMod.getDatabase(app);
   api = dbMod;
