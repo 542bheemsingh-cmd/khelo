@@ -266,3 +266,10 @@ html.fs-on #game { border-radius: 10px; }
   color: #8fa3c9; text-transform: uppercase; }
 .mp-who.is-me { border-color: rgba(255, 183, 3, 0.55); }
 .mp-who.is-host .who-tag { color: #ffb703; }
+
+/* the socket dropped - say so instead of looking frozen */
+.mp-net { position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 12; padding: 7px 14px; border-radius: 999px;
+  background: rgba(255, 59, 92, 0.92); color: #fff;
+  font-size: 12px; font-weight: 800; letter-spacing: .03em;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
