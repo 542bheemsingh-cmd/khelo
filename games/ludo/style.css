@@ -228,7 +228,7 @@ html.fs-on #game { border-radius: 10px; }
 
 /* ---------------- multiplayer lobby ---------------- */
 .mp-panel { position: absolute; inset: 0; display: grid; place-items: center;
-  background: rgba(4, 10, 24, 0.82); z-index: 6; padding: 16px; }
+  background: rgba(4, 10, 24, 0.82); z-index: 9; padding: 16px; }
 .mp-panel.is-hidden { display: none; }
 .is-hidden { display: none !important; }
 .mp-card { width: min(360px, 100%); background: rgba(12, 20, 42, 0.98);
