@@ -1,0 +1,36 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.child('meta').child('host').val() === auth.uid)",
+        "meta": {
+          ".write": "auth != null",
+          "snap": {
+            ".validate": "newData.isString() && newData.val().length < 80000"
+          },
+          "seats": {
+            ".validate": "newData.hasChildren() && newData.numChildren() <= 4"
+          }
+        },
+        "players": {
+          "$uid": {
+            ".write": "auth != null && (auth.uid === $uid || data.parent().parent().child('meta').child('host').val() === auth.uid)",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "seat": {
+              ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 3"
+            }
+          }
+        },
+        "actions": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChild('payload') && newData.child('payload').isString() && newData.child('payload').val().length < 500"
+          }
+        }
+      }
+    }
+  }
+}
