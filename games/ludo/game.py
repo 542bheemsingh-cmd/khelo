@@ -779,7 +779,7 @@ def tap(x, y):
             return
         if anims or not moves:
             return
-        best, bestd = None, 26
+        best, bestd = None, max(26.0, 30.0 * UI)
         offs = _stack_offsets()
         for t, target in moves:
             tx, ty = token_xy(t["c"], t["i"], t["pos"])
@@ -802,7 +802,7 @@ def tap(x, y):
 
     if anims or not moves:
         return
-    best, bestd = None, 26
+    best, bestd = None, max(26.0, 30.0 * UI)
     offs = _stack_offsets()
     for t, target in moves:
         tx, ty = token_xy(t["c"], t["i"], t["pos"])
@@ -1308,6 +1308,28 @@ def _draw_die():
 # ---------------------------------------------------------------------------
 # HUD panel
 # ---------------------------------------------------------------------------
+def _draw_move_hints():
+    """A pulsing ring on every square you could move to, so the choice is obvious."""
+    if state != "play" or anims or not moves:
+        return
+    if net_on and not net_host:
+        pass                                  # guests see the host's board anyway
+    pulse = 0.5 + 0.5 * math.sin(_t * 4.5)
+    for t, target in moves:
+        x, y = token_xy(t["c"], t["i"], target)
+        a = 0.45 + 0.45 * pulse
+        # a white halo first, so the ring reads on any square colour
+        for col, w in (("rgba(255,255,255,%.2f)" % a, max(3.0, CELL * 0.15)),
+                       (PAL[t["c"]]["main"], max(2.0, CELL * 0.085))):
+            ctx.beginPath()
+            ctx.arc(x, y, CELL * 0.44, 0, 6.2832)
+            ctx.lineWidth = w
+            ctx.strokeStyle = col
+            ctx.globalAlpha = 1.0 if col.startswith("rgba") else a
+            ctx.stroke()
+        ctx.globalAlpha = 1.0
+
+
 def _draw_hud():
     x, y0, hw, hh = HUD_X, HUD_Y, HUD_W, HUD_H
     _panel(x, y0, hw, hh, "rgba(11, 18, 38, 0.92)",
@@ -1335,12 +1357,15 @@ def _draw_hud():
 
     if state == "play":
         ready = can_roll and rolling <= 0 and not anims
+        if ready:
+            label = "ROLL"
+        elif rolling > 0 or not moves:
+            label = "\u2026"
+        else:
+            label = "TAP A TOKEN"
         _button(*ROLL_RECT[:2], ROLL_RECT[2], ROLL_RECT[3],
-                "ROLL" if ready else "\u2026", ready, PAL[c]["main"],
-                size=max(13, int(17 * k)))
-        if not ready and rolling <= 0 and not anims and moves:
-            _wrap("tap a token", mid, ROLL_RECT[1] + ROLL_RECT[3] + 16 * k,
-                  hw * 0.8, max(9, int(12 * k)), "#8fa3c9")
+                label, ready, PAL[c]["main"],
+                size=max(11, int((12 if label != "ROLL" else 17) * k)))
 
     # one row per player, filling whatever room is left above the message
     ry = ROLL_RECT[1] + ROLL_RECT[3] + hh * 0.075
@@ -1624,6 +1649,7 @@ def draw():
 
     _bg()
     _draw_board()
+    _draw_move_hints()
     _draw_tokens()
     _draw_hud()
 
