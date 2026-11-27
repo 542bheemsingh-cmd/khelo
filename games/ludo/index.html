@@ -578,11 +578,21 @@
 
       var last = performance.now();
       var lastPush = 0, lastSnap = "", roundStarted = false;
+      var frameWarned = false;
       function frame(now) {
         var dt = (now - last) / 1000;
         last = now;
-        update(dt);
-        draw();
+        try {
+          update(dt);
+          draw();
+        } catch (err) {
+          // one bad frame must never stop the loop for good - a frozen screen
+          // is worse than a glitchy one
+          if (!frameWarned) {
+            frameWarned = true;
+            console.error("frame failed", err);
+          }
+        }
 
         // the host is the authority: it shares the board a few times a second
         if (mpLive && mpHost && roundStarted && Date.now() - lastPush > 110) {
