@@ -1062,10 +1062,12 @@ def _finish_move(a):
         message = "%s got a token home!" % names[c]
 
     if _won(c):
+        # count the round once, even if two animations land in the same frame
+        if state != "over":
+            _bump_stats(True)
         winner = c
         state = "over"
         _sound("win")
-        _bump_stats(True)
         # confetti is lovely and it is also motion; let people turn it off
         _confetti[:] = [] if RULES.get("reduced_motion") else [
             {"x": _rng.uniform(0, W), "y": _rng.uniform(-H, 0),
