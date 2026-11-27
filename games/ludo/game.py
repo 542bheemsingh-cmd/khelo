@@ -678,9 +678,14 @@ def apply_net(js):
         d = json.loads(js)
     except Exception:
         return
+    if not isinstance(d, dict):
+        return                      # "null", "[]" and friends are not snapshots
     global rolling, roll_t, dice_show
     mode = d.get("mode", mode)
-    players = list(d.get("players", players))
+    new_players = list(d.get("players") or [])
+    if not new_players:
+        return                      # an empty snapshot would blank the board
+    players = new_players
     turn = int(d.get("turn", turn))
     was_dice = dice
     dice = int(d.get("dice", dice))
@@ -836,6 +841,8 @@ def my_turn():
 
 
 def cur():
+    if not players:
+        return RED                  # nothing to draw a turn for, but do not crash
     return players[turn % len(players)]
 
 
@@ -2729,6 +2736,8 @@ def _draw_setup():
 
 def _draw_over():
     global _menu_hit
+    if winner is None or winner not in PAL:
+        return
     _menu_hit = []
     for p in _confetti:
         ctx.beginPath()
@@ -2828,4 +2837,9 @@ def draw():
         ctx.globalAlpha = 1.0
 
     if state == "over":
+        if winner is None or winner not in PAL:
+            # nothing to celebrate: fall back rather than crash the frame loop
+            globals()["state"] = "mode"
+            _draw_mode()
+            return
         _draw_over()
