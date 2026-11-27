@@ -1158,6 +1158,46 @@ game.set_present(json.dumps([]))
 check("with no room, it just advances", game._next_seat(0) == 1)
 game.set_net_ludo(False, True, 0)
 
+# --- nothing a room sends may crash the screen -------------------------
+print()
+print("--- bad snapshots ---")
+game.set_net_ludo(True, False, 1)
+game.start_game("single", 2)
+game.apply_net(json.dumps({"mode": "single", "players": [], "turn": 0,
+                           "dice": 6, "state": "play", "tokens": [],
+                           "moves": [], "names": {}}))
+check("an empty snapshot is ignored", len(game.players) == 2)
+CALLS.clear(); game.draw()
+check("and the screen still draws", len(CALLS) > 50)
+
+# rubbish of every shape
+for junk in ("", "null", "[]", "{}", '"a string"', "123", "not json"):
+    game.apply_net(junk)
+check("rubbish does not break the board", len(game.players) == 2)
+
+# a win screen with no winner must not throw
+game.start_game("single", 2)
+game.winner = None
+game.state = "over"
+try:
+    game.draw()
+    ok = True
+except Exception:
+    ok = False
+check("the win screen survives a missing winner", ok)
+
+# and cur() can never divide by zero
+saved = list(game.players)
+game.players = []
+try:
+    game.cur()
+    ok = True
+except Exception:
+    ok = False
+game.players = saved
+check("cur() cannot divide by zero", ok)
+game.set_net_ludo(False, True, 0)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
