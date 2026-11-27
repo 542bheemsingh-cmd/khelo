@@ -1117,6 +1117,47 @@ game._draw_hud()
 game._draw_hud()
 check("a resting die is drawn once, not every frame", game._die_painted == 3)
 
+# --- a finished move must skip a seat that emptied ----------------------
+print()
+print("--- an empty seat never gets the dice ---")
+game.set_net_ludo(True, True, 0)
+game.start_game("single", 3)
+game.set_present(json.dumps([0, 2]))       # the middle player walked out
+game.anims[:] = []
+game.turn = 0
+game.tokens[0]["pos"] = 0
+game.dice = 2
+game._after_roll()
+t0, q0 = game.moves[0]
+game._choose(t0, q0)
+for _ in range(400):
+    game.update(1 / 60)
+    if not game.anims:
+        break
+check("a move that ends skips the empty seat", game.turn == 2)
+
+# and with everybody present it just moves on by one
+game.set_present(json.dumps([0, 1, 2]))
+game.anims[:] = []
+game.turn = 0
+game.tokens[1]["pos"] = 0
+game.dice = 2
+game._after_roll()
+t1, q1 = game.moves[0]
+game._choose(t1, q1)
+for _ in range(400):
+    game.update(1 / 60)
+    if not game.anims:
+        break
+check("with a full room the dice goes to the next seat", game.turn == 1)
+
+# _next_seat is the single place that decides
+game.set_present(json.dumps([1]))
+check("the helper skips forward to the only seat left", game._next_seat(0) == 1)
+game.set_present(json.dumps([]))
+check("with no room, it just advances", game._next_seat(0) == 1)
+game.set_net_ludo(False, True, 0)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
