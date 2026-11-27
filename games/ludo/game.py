@@ -944,6 +944,23 @@ def _after_roll():
         globals()["auto_move_t"] = 0.0
 
 
+def _next_seat(n):
+    """The seat after `n`, skipping any that nobody is sitting in.
+
+    A player who walks out must not be handed the dice - that would freeze the
+    room, because their device is gone and nobody else is allowed to roll.
+    """
+    if not players:
+        return n
+    n = (n + 1) % len(players)
+    if net_on and net_present:
+        for _ in range(len(players)):
+            if n in net_present:
+                break
+            n = (n + 1) % len(players)
+    return n
+
+
 def _pass_turn():
     global turn, can_roll, moves, message, sixes_in_a_row, turn_clock
     sixes_in_a_row = 0
@@ -952,13 +969,7 @@ def _pass_turn():
         can_roll = True          # a 6 always earns another go
         moves = []
         return
-    turn = (turn + 1) % len(players)
-    # somebody may have left; do not hand the dice to an empty seat
-    if net_on and net_present:
-        for _ in range(len(players)):
-            if turn in net_present:
-                break
-            turn = (turn + 1) % len(players)
+    turn = _next_seat(turn)
     moves = []
     can_roll = True
     message = "%s to roll." % names[cur()]
@@ -1061,7 +1072,7 @@ def _finish_move(a):
         can_roll = True
         moves = []
     else:
-        turn = (turn + 1) % len(players)
+        turn = _next_seat(turn)
         can_roll = True
         moves = []
         message = "%s to roll." % names[cur()]
