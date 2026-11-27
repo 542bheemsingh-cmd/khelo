@@ -172,6 +172,62 @@ def main():
     check("the guest can move its own tokens", guest_moved)
     check("the round reaches a winner", host.state == "over" and host.winner is not None)
     check("both devices stayed in step for the whole round", not problems)
+    # ---- a player walking out must not freeze the room -------------------
+    print()
+    print("--- somebody leaves mid-game ---")
+    h3 = load("host3", "HOST")
+    h3.set_size(560, 1155)
+    h3.set_net_ludo(True, True, 0)
+    seats3 = json.dumps({"HOST": 0, "B": 1, "C": 2})
+    h3.set_seats(seats3, "HOST")
+    h3.start_game("single", 3)
+    c3 = load("guest3", "C")
+    c3.set_size(560, 1155)
+    c3.set_net_ludo(True, False, -1)
+    c3.set_seats(seats3, "C")
+    c3.apply_net(h3.snapshot())
+
+    h3.set_present(json.dumps([0, 2]))        # B is gone
+    check("the room remembers who is left", h3.net_present == [0, 2])
+
+    stuck = False
+    for _ in range(200):
+        if h3.state != "play":
+            break
+        whose = h3.turn % len(h3.players)
+        if whose == 1:
+            stuck = True                      # the empty seat got the dice
+            break
+        me = h3 if whose == 0 else c3
+        if me.can_roll and me.rolling <= 0 and not me.anims:
+            SENT.clear()
+            tap_roll(me)
+            if me is c3:
+                if not SENT:
+                    break
+                for _who, payload in SENT:
+                    h3.net_apply_action(payload)
+            settle(h3); c3.apply_net(h3.snapshot()); settle(c3)
+        if me is c3:
+            c3.apply_net(h3.snapshot())
+        if me.moves:
+            SENT.clear()
+            tap_first_token(me)
+            if me is c3:
+                if not SENT:
+                    break
+                for _who, payload in SENT:
+                    h3.net_apply_action(payload)
+            settle(h3); settle(c3)
+        else:
+            settle(h3); settle(c3)
+        c3.apply_net(h3.snapshot())
+        if c3.turn != h3.turn:
+            break
+
+    check("the empty seat is never handed the dice", not stuck)
+
+
     # ---- a guest should see the same motion, not a snap -------------------
     print()
     print("--- what the guest sees ---")
