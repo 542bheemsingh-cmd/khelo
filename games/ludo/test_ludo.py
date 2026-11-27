@@ -1198,6 +1198,42 @@ game.players = saved
 check("cur() cannot divide by zero", ok)
 game.set_net_ludo(False, True, 0)
 
+# --- a finished round is counted once, not twice -----------------------
+print()
+print("--- the record book ---")
+game.apply_mode("classic")
+game.start_game("single", 2)
+game.STATS.update({"games": 0, "wins": 0, "streak": 0, "best": 0,
+                   "captures": 0, "sixes": 0, "by_mode": {}})
+red = [t for t in game.tokens if t["c"] == game.RED]
+for t in red[:3]:
+    t["pos"] = game.HOME_POS
+red[3]["pos"] = game.HOME_POS - 1
+game.turn = 0
+game.anims[:] = []
+game.dice = 1
+game._after_roll()
+game._choose(*game.moves[0])
+for _ in range(800):
+    game.update(1 / 60)
+    if not game.anims and game.state == "over":
+        break
+check("a win counts as one game", game.STATS["games"] == 1)
+check("and one win", game.STATS["wins"] == 1)
+check("and a streak of one", game.STATS["streak"] == 1)
+
+# a stray finish after the whistle must not add another
+game._finish_move({"t": red[0], "dice": 3, "kind": "move",
+                   "cells": [], "i": 0, "p": 0})
+check("a stray finish does not count the game again", game.STATS["games"] == 1)
+
+# losing breaks the streak
+game.STATS["streak"] = 4
+game.STATS["best"] = 4
+game._bump_stats(False)
+check("a loss breaks the streak", game.STATS["streak"] == 0)
+check("but the best streak is kept", game.STATS["best"] == 4)
+
 # --- screen-adaptive UI -----------------------------------------------------
 print()
 print("--- screen-adaptive UI ---")
