@@ -4,198 +4,171 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070b18">
-  <meta name="description" content="Khelo - a little arcade of browser games, all written in Python and running in your browser.">
+  <meta name="description" content="Khelo - six little browser games, every one written in Python and running right here.">
   <title>Khelo - Play Python Games</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="glow" aria-hidden="true"></div>
 
-  <header class="topbar">
-    <a class="brand" href="./"><span>K</span>KHELO</a>
-    <span class="tagline">Browser games, written in Python</span>
+  <header class="top">
+    <a class="brand" href="./"><span class="mark">K</span>KHELO</a>
+    <div class="top-right">
+      <span class="pill">6 games</span>
+      <span class="pill hide-sm">No installs</span>
+    </div>
   </header>
 
   <main class="wrap">
     <section class="hero">
-      <p class="eyebrow">Pick a game</p>
-      <h1>Small games. Big fun.</h1>
+      <p class="eyebrow">A tiny arcade</p>
+      <h1>Small games.<br><em>Big fun.</em></h1>
       <p class="lede">
-        Every game on this page is written in <strong>Python</strong> and runs right here in
-        your browser through <strong>Pyodide</strong> — no installs, no server.
+        Six little games, every one written in <b>Python</b> and running
+        right here in your browser. No installs, no server, nothing to sign up for.
       </p>
     </section>
 
-    <!-- Add a new game by copying a <a class="card"> block and pointing it at
-         its folder under games/. -->
+    <div class="filters" role="group" aria-label="Filter games">
+      <button class="chip is-on" type="button" data-f="all">All</button>
+      <button class="chip" type="button" data-f="board">Board</button>
+      <button class="chip" type="button" data-f="arcade">Arcade</button>
+      <button class="chip" type="button" data-f="physics">Physics</button>
+      <button class="chip" type="button" data-f="brain">Brain</button>
+      <button class="chip" type="button" data-f="word">Word</button>
+      <button class="chip" type="button" data-f="3d">3D</button>
+    </div>
+
     <section class="grid" aria-label="Games">
 
-      <a class="card" href="games/fly/" style="--accent:#36e7ff">
-        <div class="thumb thumb-fly" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <ellipse cx="30" cy="34" rx="17" ry="14" fill="#ffd23f"/>
-            <path d="M45 28l13 6-13 6z" fill="#ff7b00"/>
-            <circle cx="38" cy="26" r="7.5" fill="#fff"/>
-            <circle cx="40.5" cy="26" r="3" fill="#111827"/>
-            <path d="M22 30q-9 7-16 2 7-9 16-6z" fill="#ffb703"/>
-          </svg>
+      <a class="card wide" href="games/ludo/" data-cat="board"
+         style="--accent:#ffb703;--i:0">
+        <div class="art" aria-hidden="true">
+          <span class="art-grid"></span>
+          <span class="art-icon"><svg viewBox="0 0 64 64"> <rect x="5" y="5" width="23" height="23" rx="6" fill="#ff3b5c"/> <rect x="36" y="5" width="23" height="23" rx="6" fill="#22c55e"/> <rect x="36" y="36" width="23" height="23" rx="6" fill="#fbbf24"/> <rect x="5" y="36" width="23" height="23" rx="6" fill="#3b82f6"/> <circle cx="32" cy="32" r="9" fill="#0b1224"/> <circle cx="32" cy="32" r="3.4" fill="#ffffff"/> </svg></span>
         </div>
-        <div class="card-body">
-          <div class="card-head">
-            <h2>Khelo Fly</h2>
-            <span class="chip">Arcade</span>
-          </div>
-          <p>Flappy-Bird-style flying. Tap to flap, dodge the pipes, and chase your best score as the gaps tighten.</p>
-          <div class="meta">
-            <span>Tap / Space</span>
-            <span>Best score saved</span>
-          </div>
-          <span class="play">Play <b>&#8594;</b></span>
-        </div>
-      </a>
-
-      <a class="card" href="games/hillclimb/" style="--accent:#ffb703">
-        <div class="thumb thumb-climb" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <path d="M6 40h52v7H6z" fill="#e63946"/>
-            <path d="M13 40l6-13h18l7 13z" fill="#e63946"/>
-            <path d="M20 33l4-6h10l4 6z" fill="#c1121f"/>
-            <circle cx="19" cy="49" r="6.5" fill="#1c2233"/>
-            <circle cx="47" cy="49" r="6.5" fill="#1c2233"/>
-            <circle cx="19" cy="49" r="2.6" fill="#7b8798"/>
-            <circle cx="47" cy="49" r="2.6" fill="#7b8798"/>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-head">
-            <h2>Khelo Climb</h2>
-            <span class="chip">Physics</span>
-          </div>
-          <p>Hill-climb driving. Hold the gas to conquer the slopes — but land on your head and it's over.</p>
-          <div class="meta">
-            <span>Arrows / D-A</span>
-            <span>Fuel + distance</span>
-          </div>
-          <span class="play">Play <b>&#8594;</b></span>
-        </div>
-      </a>
-
-      <a class="card" href="games/puzzle/" style="--accent:#7ef0c0">
-        <div class="thumb thumb-puzzle" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <rect x="8" y="8" width="21" height="21" rx="5" fill="#7ef0c0"/>
-            <rect x="35" y="8" width="21" height="21" rx="5" fill="#4fd8a6"/>
-            <rect x="8" y="35" width="21" height="21" rx="5" fill="#4fd8a6"/>
-            <circle cx="45.5" cy="45.5" r="10.5" fill="#7ef0c0"/>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-head">
-            <h2>Khelo Puzzles</h2>
-            <span class="chip">Brain</span>
-          </div>
-          <p>10 levels, a different puzzle each time — Lights Out, Hanoi, Nonogram, Sudoku, N-Queens and more. Each one is harder than the last.</p>
-          <div class="meta">
-            <span>Click / type</span>
-            <span>Hints included</span>
-          </div>
-          <span class="play">Play <b>&#8594;</b></span>
-        </div>
-      </a>
-
-      <a class="card" href="games/ludo/" style="--accent:#ffb703">
-        <div class="thumb thumb-ludo" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <rect x="5" y="5" width="23" height="23" rx="6" fill="#ff3b5c"/>
-            <rect x="36" y="5" width="23" height="23" rx="6" fill="#22c55e"/>
-            <rect x="36" y="36" width="23" height="23" rx="6" fill="#fbbf24"/>
-            <rect x="5" y="36" width="23" height="23" rx="6" fill="#3b82f6"/>
-            <circle cx="32" cy="32" r="9" fill="#0b1224"/>
-            <circle cx="32" cy="32" r="3.4" fill="#ffffff"/>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-head">
-            <h2>Khelo Ludo</h2>
-            <span class="chip">Board</span>
+        <div class="body">
+          <div class="head">
+            <h3>Khelo Ludo</h3>
+            <span class="tag">Board</span>
           </div>
           <p>The classic race home. Roll a 6 to get a token out, chase the ring, and send your rivals back to their yard. Play 2, 3 or 4 players &mdash; or 2 against 2.</p>
-          <div class="meta">
-            <span>2-4 players</span>
-            <span>Single or teams</span>
-          </div>
-          <span class="play">Play <b>&#8594;</b></span>
+          <div class="meta"><span>2-4 players</span><span>Single or teams</span></div>
+          <span class="go">Play <b>&#8594;</b></span>
         </div>
       </a>
-
-      <a class="card" href="games/word/" style="--accent:#7ef0c0">
-        <div class="thumb thumb-word" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <rect x="4" y="6" width="16" height="16" rx="4" fill="#22c55e"/>
-            <rect x="24" y="6" width="16" height="16" rx="4" fill="#39445c"/>
-            <rect x="44" y="6" width="16" height="16" rx="4" fill="#39445c"/>
-            <rect x="4" y="26" width="16" height="16" rx="4" fill="#39445c"/>
-            <rect x="24" y="26" width="16" height="16" rx="4" fill="#fbbf24"/>
-            <rect x="44" y="26" width="16" height="16" rx="4" fill="#39445c"/>
-            <rect x="4" y="46" width="16" height="16" rx="4" fill="#39445c"/>
-            <rect x="24" y="46" width="16" height="16" rx="4" fill="#39445c"/>
-            <rect x="44" y="46" width="16" height="16" rx="4" fill="#22c55e"/>
-          </svg>
+      <a class="card" href="games/fly/" data-cat="arcade"
+         style="--accent:#36e7ff;--i:1">
+        <div class="art" aria-hidden="true">
+          <span class="art-grid"></span>
+          <span class="art-icon"><svg viewBox="0 0 64 64"> <ellipse cx="30" cy="34" rx="17" ry="14" fill="#ffd23f"/> <path d="M45 28l13 6-13 6z" fill="#ff7b00"/> <circle cx="38" cy="26" r="7.5" fill="#fff"/> <circle cx="40.5" cy="26" r="3" fill="#111827"/> <path d="M22 30q-9 7-16 2 7-9 16-6z" fill="#ffb703"/> </svg></span>
         </div>
-        <div class="card-body">
-          <div class="card-head">
-            <h2>Khelo Word</h2>
-            <span class="chip">Daily</span>
+        <div class="body">
+          <div class="head">
+            <h3>Khelo Fly</h3>
+            <span class="tag">Arcade</span>
+          </div>
+          <p>Flappy-Bird-style flying. Tap to flap, dodge the pipes, and chase your best score as the gaps tighten.</p>
+          <div class="meta"><span>Tap / Space</span><span>Best score saved</span></div>
+          <span class="go">Play <b>&#8594;</b></span>
+        </div>
+      </a>
+      <a class="card" href="games/hillclimb/" data-cat="physics"
+         style="--accent:#ffb703;--i:2">
+        <div class="art" aria-hidden="true">
+          <span class="art-grid"></span>
+          <span class="art-icon"><svg viewBox="0 0 64 64"> <path d="M6 40h52v7H6z" fill="#e63946"/> <path d="M13 40l6-13h18l7 13z" fill="#e63946"/> <path d="M20 33l4-6h10l4 6z" fill="#c1121f"/> <circle cx="19" cy="49" r="6.5" fill="#1c2233"/> <circle cx="47" cy="49" r="6.5" fill="#1c2233"/> <circle cx="19" cy="49" r="2.6" fill="#7b8798"/> <circle cx="47" cy="49" r="2.6" fill="#7b8798"/> </svg></span>
+        </div>
+        <div class="body">
+          <div class="head">
+            <h3>Khelo Climb</h3>
+            <span class="tag">Physics</span>
+          </div>
+          <p>Hill-climb driving. Hold the gas to conquer the slopes — but land on your head and it's over.</p>
+          <div class="meta"><span>Arrows / D-A</span><span>Fuel + distance</span></div>
+          <span class="go">Play <b>&#8594;</b></span>
+        </div>
+      </a>
+      <a class="card" href="games/puzzle/" data-cat="brain"
+         style="--accent:#7ef0c0;--i:3">
+        <div class="art" aria-hidden="true">
+          <span class="art-grid"></span>
+          <span class="art-icon"><svg viewBox="0 0 64 64"> <rect x="8" y="8" width="21" height="21" rx="5" fill="#7ef0c0"/> <rect x="35" y="8" width="21" height="21" rx="5" fill="#4fd8a6"/> <rect x="8" y="35" width="21" height="21" rx="5" fill="#4fd8a6"/> <circle cx="45.5" cy="45.5" r="10.5" fill="#7ef0c0"/> </svg></span>
+        </div>
+        <div class="body">
+          <div class="head">
+            <h3>Khelo Puzzles</h3>
+            <span class="tag">Brain</span>
+          </div>
+          <p>10 levels, a different puzzle each time — Lights Out, Hanoi, Nonogram, Sudoku, N-Queens and more. Each one is harder than the last.</p>
+          <div class="meta"><span>Click / type</span><span>Hints included</span></div>
+          <span class="go">Play <b>&#8594;</b></span>
+        </div>
+      </a>
+      <a class="card" href="games/word/" data-cat="word"
+         style="--accent:#7ef0c0;--i:4">
+        <div class="art" aria-hidden="true">
+          <span class="art-grid"></span>
+          <span class="art-icon"><svg viewBox="0 0 64 64"> <rect x="4" y="6" width="16" height="16" rx="4" fill="#22c55e"/> <rect x="24" y="6" width="16" height="16" rx="4" fill="#39445c"/> <rect x="44" y="6" width="16" height="16" rx="4" fill="#39445c"/> <rect x="4" y="26" width="16" height="16" rx="4" fill="#39445c"/> <rect x="24" y="26" width="16" height="16" rx="4" fill="#fbbf24"/> <rect x="44" y="26" width="16" height="16" rx="4" fill="#39445c"/> <rect x="4" y="46" width="16" height="16" rx="4" fill="#39445c"/> <rect x="24" y="46" width="16" height="16" rx="4" fill="#39445c"/> <rect x="44" y="46" width="16" height="16" rx="4" fill="#22c55e"/> </svg></span>
+        </div>
+        <div class="body">
+          <div class="head">
+            <h3>Khelo Word</h3>
+            <span class="tag">Daily</span>
           </div>
           <p>The five letter word game. Six guesses, and every tile tells you what it found &mdash; green for the right place, amber for the wrong one. A new word every day, or practise as much as you like.</p>
-          <div class="meta">
-            <span>Daily + practice</span>
-            <span>Streaks &amp; sharing</span>
-          </div>
-          <span class="play">Play <b>&#8594;</b></span>
+          <div class="meta"><span>Daily + practice</span><span>Streaks &amp;amp; sharing</span></div>
+          <span class="go">Play <b>&#8594;</b></span>
         </div>
       </a>
-
-      <a class="card" href="games/battle/" style="--accent:#ffb703">
-        <div class="thumb thumb-battle" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <path d="M22.8 7.0 L27.9 7.0 L25.2 9.9 L26.3 12.4 L24.3 12.7 L25.0 15.1 L28.9 17.1 L27.3 19.9 L31.9 22.4 L41.1 24.6 L42.2 21.2 L43.1 23.8 L48.2 23.7 L47.5 21.9 L55.2 18.8 L57.6 21.4 L57.1 23.2 L53.6 24.1 L49.7 33.2 L48.6 29.7 L47.4 31.3 L46.6 30.0 L48.9 27.2 L44.3 26.7 L41.8 24.1 L43.0 33.8 L41.2 32.6 L38.3 37.0 L27.6 45.3 L26.9 55.7 L22.8 60.0 L15.7 44.6 L14.7 32.6 L11.1 35.6 L7.8 32.5 L10.4 31.2 L6.4 29.9 L11.6 28.4 L8.9 23.0 L13.0 21.5 L19.0 13.3 L16.0 11.6 L16.9 7.7 L14.1 5.6 L18.6 4.0 Z" fill="#2f6b45" stroke="#9ff0c0" stroke-width="1.6" stroke-linejoin="round"/>
-            <circle cx="32" cy="32" r="17" fill="none" stroke="#4aa8ff" stroke-width="1.6" stroke-dasharray="4 3"/>
-            <circle cx="30" cy="30" r="2.6" fill="#ff5c7a"/>
-            <circle cx="36" cy="36" r="2.6" fill="#ff5c7a"/>
-            <circle cx="31" cy="38" r="3.0" fill="#7ef0c0"/>
-          </svg>
+      <a class="card wide" href="games/battle/" data-cat="3d"
+         style="--accent:#ffb703;--i:5">
+        <div class="art" aria-hidden="true">
+          <span class="art-grid"></span>
+          <span class="art-icon"><svg viewBox="0 0 64 64"> <path d="M22.8 7.0 L27.9 7.0 L25.2 9.9 L26.3 12.4 L24.3 12.7 L25.0 15.1 L28.9 17.1 L27.3 19.9 L31.9 22.4 L41.1 24.6 L42.2 21.2 L43.1 23.8 L48.2 23.7 L47.5 21.9 L55.2 18.8 L57.6 21.4 L57.1 23.2 L53.6 24.1 L49.7 33.2 L48.6 29.7 L47.4 31.3 L46.6 30.0 L48.9 27.2 L44.3 26.7 L41.8 24.1 L43.0 33.8 L41.2 32.6 L38.3 37.0 L27.6 45.3 L26.9 55.7 L22.8 60.0 L15.7 44.6 L14.7 32.6 L11.1 35.6 L7.8 32.5 L10.4 31.2 L6.4 29.9 L11.6 28.4 L8.9 23.0 L13.0 21.5 L19.0 13.3 L16.0 11.6 L16.9 7.7 L14.1 5.6 L18.6 4.0 Z" fill="#2f6b45" stroke="#9ff0c0" stroke-width="1.6" stroke-linejoin="round"/> <circle cx="32" cy="32" r="17" fill="none" stroke="#4aa8ff" stroke-width="1.6" stroke-dasharray="4 3"/> <circle cx="30" cy="30" r="2.6" fill="#ff5c7a"/> <circle cx="36" cy="36" r="2.6" fill="#ff5c7a"/> <circle cx="31" cy="38" r="3.0" fill="#7ef0c0"/> </svg></span>
         </div>
-        <div class="card-body">
-          <div class="card-head">
-            <h2>Khelo Battleground</h2>
-            <span class="chip">3D</span>
+        <div class="body">
+          <div class="head">
+            <h3>Khelo Battleground</h3>
+            <span class="tag">3D</span>
           </div>
           <p>A third-person battle royale on a 3D map shaped like India. Drop in with nine bots, run the hills, and stay inside the closing blue zone. Last one standing wins.</p>
-          <div class="meta">
-            <span>3D world</span>
-            <span>10 players</span>
-          </div>
-          <span class="play">Play <b>&#8594;</b></span>
+          <div class="meta"><span>3D world</span><span>10 players</span></div>
+          <span class="go">Play <b>&#8594;</b></span>
         </div>
       </a>
 
     </section>
 
-    <section class="note">
-      <h3>How it works</h3>
-      <p>
-        Each game is a folder under <code>games/</code> containing a <code>game.py</code>
-        (all the logic) and an <code>index.html</code> that loads Pyodide and runs it.
-        Because it's all static files, the whole arcade hosts on GitHub Pages.
-      </p>
-    </section>
+    <p class="empty" hidden>Nothing in that corner yet.</p>
   </main>
 
   <footer class="foot">
-    <span>Built with Python + Pyodide</span>
-    <span>·</span>
-    <a href="https://github.com/542bheemsingh-cmd/khelo">Source on GitHub</a>
+    <span>Built with Python, Pyodide and a lot of coffee.</span>
+    <span class="foot-dot">&#9679;</span>
+    <span>Everything runs on your device.</span>
   </footer>
+
+  <script>
+    (function () {
+      var buttons = document.querySelectorAll(".filters .chip");
+      var cards = document.querySelectorAll(".grid .card");
+      var empty = document.querySelector(".empty");
+
+      buttons.forEach(function (b) {
+        b.addEventListener("click", function () {
+          buttons.forEach(function (o) { o.classList.remove("is-on"); });
+          b.classList.add("is-on");
+          var want = b.dataset.f, shown = 0;
+          cards.forEach(function (c) {
+            var hit = (want === "all" || c.dataset.cat === want);
+            c.classList.toggle("is-off", !hit);
+            if (hit) shown++;
+          });
+          empty.hidden = shown > 0;
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
