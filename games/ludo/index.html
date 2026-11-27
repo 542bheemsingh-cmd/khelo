@@ -425,6 +425,16 @@
                   roundStarted = true;
                   lastSnap = "";
                   setNetFn(true, true, mySeat >= 0 ? mySeat : 0);
+                  // the old host's seat is empty now, so tell the game who
+                  // is still here - otherwise the dice lands on a ghost
+                  if (setPresentFn) {
+                    var here2 = [];
+                    if (mySeat >= 0) here2.push(mySeat);
+                    list.forEach(function (p) {
+                      if (mpSeats[p.id] !== undefined) here2.push(mpSeats[p.id]);
+                    });
+                    if (here2.length) setPresentFn(JSON.stringify(here2));
+                  }
                   say("The host left - you are the host now.");
                 } else {
                   say("The host left. Waiting for the new host…");
